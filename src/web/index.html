@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en-GB">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Launchhouse</title>
+  </head>
+  <body>
+    <!--
+      WHAT THIS IS. The one page the whole app is served from.
+
+      WHY IT EXISTS. Vite builds from this file, so it is the root of the browser bundle.
+      There is one element and one script on purpose: everything else is written by React,
+      which escapes text by construction, and nothing a founder or a model writes can reach
+      the document except through it.
+
+      WHY THE NOSCRIPT LINE. A founder with JavaScript blocked by a corporate policy sees a
+      blank page otherwise, and a blank page on the morning of the event looks like an
+      outage. One sentence turns that into something a mentor can act on.
+    -->
+    <div id="app"></div>
+    <noscript>
+      <p style="font: 16px/1.5 system-ui, sans-serif; margin: 3rem auto; max-width: 34rem">
+        Launchhouse needs JavaScript switched on. If your browser or your workplace blocks it, tell a mentor and we
+        will get you in another way.
+      </p>
+    </noscript>
+    <script type="module" src="/main.tsx"></script>
+  </body>
+</html>

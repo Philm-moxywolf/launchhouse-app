@@ -1,0 +1,25 @@
+// tsconfig.web.json
+//
+// WHAT THIS IS. The TypeScript configuration for src/web, the React 19 single page app
+// that Vite builds into dist/web.
+//
+// WHY IT EXISTS. Node and Vite disagree about module resolution. The server uses
+// "nodenext" and needs file extensions on relative imports; a bundler does not. Trying to
+// serve both from one config produces either false errors in the browser code or a server
+// that fails to import at runtime, and the second one is only found on the deployment.
+//
+// WHAT READS IT. `npm run typecheck` and the editor. Vite does its own transpiling and
+// does not typecheck, which is exactly why this file has to be checked separately in CI.
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "types": ["vite/client"],
+    "jsx": "react-jsx",
+    "noEmit": true
+  },
+  "include": ["src/web/**/*.ts", "src/web/**/*.tsx"],
+  "exclude": ["node_modules", "dist", "vendor"]
+}

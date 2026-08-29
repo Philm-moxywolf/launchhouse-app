@@ -1,0 +1,69 @@
+// tsconfig.json
+//
+// WHAT THIS IS. The TypeScript configuration for everything that runs on the server:
+// src/server, scripts/ and tests/. The browser half has its own file, tsconfig.web.json,
+// because Vite resolves modules differently from Node and one file cannot describe both.
+//
+// WHY IT EXISTS. Strict mode is the cheapest defence this codebase has. The failures it
+// prevents are the ones that only appear with a real founder in the room: an undefined
+// founder id read as a string, a nullable track compared against "b2b", a number that is
+// actually a string arriving from a query parameter. None of those throw on a laptop with
+// seeded data. All of them throw at 9am on 25 September.
+//
+// WHAT READS IT. `npm run typecheck`, `tsx`, `node --test`, `eslint` (via typescript-eslint),
+// and every editor anyone on the team opens.
+//
+// WHY NO EMIT. The server is run by `tsx`, not by compiled output, so `tsc` is used purely
+// as a checker. One less build artefact to get stale, and one less path to be wrong about
+// on the deployment. `vite build` is the only thing that emits, and it emits the browser
+// bundle to dist/web.
+{
+  "compilerOptions": {
+    "target": "ES2023",
+    "lib": ["ES2023"],
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "moduleDetection": "force",
+    "types": ["node"],
+
+    // strict is the baseline. The three below it are the ones that earn their keep in this
+    // codebase specifically:
+    //
+    //   noUncheckedIndexedAccess  every parser here reads founder written markdown line by
+    //     line. lines[i] is genuinely sometimes absent, and the crash lands on a founder
+    //     rather than on us. This flag is what turns that into a compile error.
+    //   noImplicitReturns and noFallthroughCasesInSwitch  the track fork is a switch on a
+    //     database column. A missing return or a fallthrough in that switch hands a founder
+    //     the other track's material, which is rule 1 broken.
+    //   useUnknownInCatchVariables  err.message on an unknown throw is how a handler
+    //     crashes while handling a crash.
+    //
+    // exactOptionalPropertyTypes and erasableSyntaxOnly are deliberately NOT on. Both are
+    // defensible and neither pays for the friction it adds across a codebase being written
+    // by several people at once against a fixed date. Unused locals are left to eslint,
+    // which does not fail a typecheck while somebody is halfway through a function.
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "allowUnreachableCode": false,
+    "allowUnusedLabels": false,
+    "useUnknownInCatchVariables": true,
+    "verbatimModuleSyntax": true,
+
+    // tsx runs the server directly from TypeScript, so a relative import may name the .ts
+    // file it actually is. Without this, "nodenext" insists on a .js extension for a file
+    // that is not compiled and does not exist.
+    "allowImportingTsExtensions": true,
+
+    "isolatedModules": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "noEmit": true
+  },
+  "include": ["src/server/**/*.ts", "scripts/**/*.ts", "tests/**/*.ts", "app/**/*.ts", "drizzle.config.ts", "vite.config.ts"],
+  "exclude": ["node_modules", "dist", "vendor", "src/web"]
+}

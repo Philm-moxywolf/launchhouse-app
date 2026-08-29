@@ -1,0 +1,60 @@
+{
+  "name": "launchhouse-app",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "The Launchhouse runtime. Private. Consumes the public growth-engine content repo and never edits it.",
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=22.0.0 <23"
+  },
+  "scripts": {
+    "dev": "TZ=UTC tsx watch src/server/index.ts",
+    "dev:web": "vite",
+    "start": "TZ=UTC tsx src/server/index.ts",
+    "build": "npm run typecheck && npm run build:web",
+    "build:web": "vite build",
+    "typecheck": "tsc -p tsconfig.json --noEmit && { [ -d src/web ] && tsc -p tsconfig.web.json --noEmit || echo 'src/web is not present yet, skipping the browser typecheck'; }",
+    "test": "node --import tsx --test --test-timeout=30000 \"tests/**/*.test.ts\" \"src/**/*.test.ts\" \"app/**/*.test.ts\"",
+    "test:watch": "node --import tsx --test --watch --test-timeout=30000 \"tests/**/*.test.ts\" \"src/**/*.test.ts\" \"app/**/*.test.ts\"",
+    "lint": "eslint .",
+    "probe": "tsx scripts/probe-deployment.ts",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "tsx src/server/db/migrate.ts",
+    "db:studio": "drizzle-kit studio",
+    "skills:gen": "tsx scripts/gen-skill-prompts.ts",
+    "engine:bump": "tsx scripts/bump-engine.ts",
+    "seed": "tsx scripts/seed.ts",
+    "purge:tokens": "tsx scripts/purge-tokens.ts",
+    "prove:turn": "tsx scripts/prove-turn.ts",
+    "prove:init": "tsx scripts/prove-init.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.3.250",
+    "@fastify/cookie": "^11.1.2",
+    "@fastify/static": "^10.1.3",
+    "drizzle-orm": "^0.45.2",
+    "fastify": "^5.12.1",
+    "luxon": "^3.7.2",
+    "pino": "^10.3.1",
+    "postgres": "^3.4.9",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/luxon": "^3.7.5",
+    "@types/node": "^22.20.1",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.5",
+    "@vitejs/plugin-react": "^5.0.4",
+    "drizzle-kit": "^0.31.10",
+    "eslint": "^10.0.1",
+    "pino-pretty": "^13.1.3",
+    "tsx": "^4.23.12",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.68.0",
+    "vite": "^7.3.6"
+  }
+}

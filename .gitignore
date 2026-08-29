@@ -1,0 +1,64 @@
+# .gitignore
+#
+# WHY THIS FILE MATTERS MORE HERE THAN USUAL. Section 8 of the build document, mechanism 4:
+# founder shaped output never enters a repo. This repository is private, but private is not
+# the same as safe. A founder workspace holds 25 to 35 real people per founder, with names,
+# companies, titles and email addresses, and none of those people agreed to be in a git
+# history. A commit is forever, and a private repo can be shared, cloned, or made public by
+# somebody who does not know what is in it.
+#
+# The content repo already gitignores /growth-engine/ for exactly this reason. Same rule,
+# same reason, one level up.
+
+# ---- Founder data. Nothing under here is ever committed. --------------------------------
+/tmp/
+/workspace/
+# Anchored with a leading slash. Unanchored, this also matched vendor/growth-engine,
+# which is the pinned content submodule and must be tracked. The content repo had the
+# identical bug: it excluded the whole plugin from git and shipped an install with no ge.
+/growth-engine/
+/runs/
+*.founder.json
+backup/
+*.tar.gz.enc
+
+# ---- Secrets ----------------------------------------------------------------------------
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+!src/**/*.key.ts
+secrets/
+
+# ---- Probe output. Holds hostnames and boot markers, not secrets, but it is scratch. -----
+.probe-state/
+probe-report-*.txt
+
+# ---- Build output -----------------------------------------------------------------------
+dist/
+build/
+*.tsbuildinfo
+
+# ---- Dependencies -----------------------------------------------------------------------
+node_modules/
+.pnpm-store/
+
+# ---- Tooling and editors ----------------------------------------------------------------
+coverage/
+.vitest/
+.eslintcache
+.DS_Store
+*.log
+npm-debug.log*
+.vscode/
+.idea/
+
+# ---- Replit ------------------------------------------------------------------------------
+# The workspace's own scratch. .replit and replit.nix ARE committed: they are the machine
+# definition and the team needs them under review.
+.replit.local
+.config/
+.upm/
+.breakpoints
+replit_zip_error_log.txt

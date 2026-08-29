@@ -1,0 +1,16 @@
+// src/web/tsconfig.json
+//
+// WHAT THIS IS. A pointer, so an editor opening a file in this folder picks up the browser
+// configuration rather than the server one.
+//
+// WHY IT EXISTS. The repository root holds tsconfig.json for the server, and it excludes
+// this folder. An editor resolving the nearest tsconfig from a file in src/web would find
+// that one and report every piece of JSX and every DOM type as an error. Three people have
+// to be able to open this folder and see the truth.
+//
+// WHAT READS IT. Editors, and nothing else. The build runs `tsc -p tsconfig.web.json` from
+// the repository root, which is the file this one extends, so there is one set of options
+// and no second answer.
+{
+  "extends": "../../tsconfig.web.json"
+}

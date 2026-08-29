@@ -1,0 +1,434 @@
+/**
+ * app/content/ghl-walk.ts
+ *
+ * WHAT IT IS
+ * Every string in the GoHighLevel token walk. Six screens, the success page,
+ * the failure table, and the revoke notice.
+ *
+ * WHY IT EXISTS
+ * This is the hardest thing a non-technical founder does in the whole
+ * programme, and the words are the part that decides whether they get through
+ * it. Copy that lives inside components gets edited by whoever is nearest the
+ * component, at the moment they are thinking about layout. Here it can be read
+ * end to end, out loud, by somebody who has never opened the code, and changed
+ * without touching a line of logic. Every screen names the founder's doubt
+ * first, answers it, and ends on one action, because a founder who is unsure
+ * whether they are about to do something dangerous stops and posts in Slack.
+ *
+ * WHAT CALLS IT
+ * The setup wizard screens, the verifier's failure rendering, and the mentor
+ * board, which prints the evidence strings below word for word.
+ *
+ * WHAT IT READS AND WRITES
+ * Nothing. It is data. The seven scopes, the token prefix and the two menu
+ * routes are imported from the contracts directory and are never written out
+ * again here.
+ *
+ * WHAT IS UNVERIFIED, AND STAYS THAT WAY UNTIL THE SPIKES RUN
+ * Four things, each marked at its use below. Which status code GoHighLevel
+ * returns for a scope refusal. Whether a real token starts with the prefix we
+ * check for. The name of the contacts read. And where GoHighLevel keeps the two
+ * screens a founder has to reach. Nothing here invents an endpoint, a field or a
+ * status code.
+ *
+ * HOW THE COPY HANDLES A MENU THAT HAS MOVED
+ * A vendor moves a menu item whenever it likes, and nobody on this project has
+ * opened that menu. So no sentence here states a route as a fact. Each one says
+ * when we last looked, then says what to search the page for, and the hard stop
+ * on step 2 names both causes rather than telling a founder their plan is wrong
+ * when the truth may be that a screen moved. The rest of the walk points at
+ * where the founder has already been, which is the one instruction a menu change
+ * cannot break.
+ */
+
+import { GHL_SCOPES, GHL_SCOPE_REASONS, SCOPE_FOR_VERIFY_CALL } from "./scopes.ts";
+import type { GhlScope } from "./scopes.ts";
+import {
+  GHL_MENU_PATHS_UNVERIFIED,
+  GHL_MENU_PATH_HEDGE,
+  GHL_TOKEN_PREFIX_GUESS,
+  GHL_TOKEN_PREFIX_IS_A_GUESS,
+} from "../../src/server/integrations/contracts/ghl.ts";
+
+export { GHL_TOKEN_PREFIX_GUESS };
+
+/** State of one step, as the mentor board reads it. */
+export type StepState = "not_started" | "in_progress" | "done" | "skipped" | "failed";
+
+export interface WalkButton {
+  readonly label: string;
+  /** What pressing it does, in one phrase, for whoever wires the screen. */
+  readonly meaning: string;
+}
+
+export interface WalkStep {
+  /** Its own URL, so a mentor can send a founder straight to one step in Slack. */
+  readonly slug: string;
+  readonly number: number;
+  readonly title: string;
+  /** The doubt a founder arrives with. Said first, always. */
+  readonly doubt: string;
+  /** The answer, then the instruction. One idea per line. */
+  readonly body: readonly string[];
+  readonly buttons: readonly WalkButton[];
+  /** The receipt check this step writes, per REPLIT-BUILD.md section 6. */
+  readonly checkName: string | null;
+}
+
+export const GHL_WALK_TOTAL_STEPS = 6;
+
+/** "Step 3 of 6". Nobody walks in the dark. */
+export function progressLabel(step: number): string {
+  return `Step ${step} of ${GHL_WALK_TOTAL_STEPS}`;
+}
+
+/**
+ * Shown above every step.
+ *
+ * The cohort buys GoHighLevel together on 23 September, so on 5 September most
+ * founders cannot do any of this. A progress bar that says they are behind
+ * when they are not is how you teach 130 people to ignore the progress bar.
+ */
+export const GHL_WALK_INTRO = {
+  title: "Connect GoHighLevel",
+  doubt: "You may not have bought GoHighLevel yet. On most days before the clinic, that is the normal answer.",
+  body: [
+    "Nothing here blocks you. You do not need this until session 3.",
+    "It is six screens with one thing to do on each. If you already have GoHighLevel open, it takes about ten minutes.",
+  ],
+  action: "Start",
+} as const;
+
+export const GHL_WALK_STEPS: readonly WalkStep[] = [
+  {
+    slug: "have-it",
+    number: 1,
+    title: "Do you have GoHighLevel yet",
+    doubt:
+      "If you have not bought it, you are not behind. The cohort buys together at the clinic on 23 September so that nobody's trial runs out during the weekend.",
+    body: [
+      "GoHighLevel is the tool that publishes your posts and holds your contacts.",
+      "Have you got it already?",
+    ],
+    buttons: [
+      { label: "Yes, I can log in", meaning: "go to step 2" },
+      {
+        label: "Not yet",
+        meaning: "record a skip and go back to the checklist. Nothing turns red.",
+      },
+      {
+        label: "I am not sure",
+        meaning:
+          "show one line and stay here: look in your inbox for an email from GoHighLevel with a login link. If there is nothing, you have not bought it yet, and that is fine.",
+      },
+    ],
+    checkName: null,
+  },
+  {
+    slug: "plan",
+    number: 2,
+    title: "Check your plan can do this",
+    doubt:
+      "GoHighLevel sells several plans and not all of them carry the screen we need. Better to find that out now than at the clinic with 65 people in the room.",
+    body: [
+      "Log in to GoHighLevel. You are looking for a screen called Private Integrations. It is the one that makes the key.",
+      `${GHL_MENU_PATH_HEDGE}, the route was ${GHL_MENU_PATHS_UNVERIFIED.privateIntegrations}, down the left hand menu.`,
+      "Menus move, and ours may be out of date. If it is not there, search the page for the word Private: hold Ctrl and press F, or Command and F on a Mac.",
+      "Can you find Private Integrations anywhere in GoHighLevel?",
+    ],
+    buttons: [
+      { label: "Yes, I can see it", meaning: "go to step 3" },
+      { label: "No, I cannot find it", meaning: "record a fail and show the hard stop below" },
+    ],
+    checkName: "ghl_plan",
+  },
+  {
+    slug: "location-id",
+    number: 3,
+    title: "Find your Location ID",
+    doubt:
+      "This looks like a password. It is not a password. It is more like a house number: it says which business we are talking about, and it is no use to anyone on its own.",
+    body: [
+      "Your Location ID is on your business profile in GoHighLevel.",
+      `${GHL_MENU_PATH_HEDGE}, the route was ${GHL_MENU_PATHS_UNVERIFIED.businessProfile}, with the ID near the top.`,
+      "If your menu looks different, search the page for the words Location ID. The label is what to look for, not the route.",
+      "Copy it and paste it in the box.",
+      "We leave this one visible on purpose. Hiding something that is not secret would teach you to treat the real key on the next screen with the same shrug.",
+    ],
+    buttons: [{ label: "Save and carry on", meaning: "record the Location ID and go to step 4" }],
+    checkName: "ghl_location",
+  },
+  {
+    slug: "make-token",
+    number: 4,
+    title: "Make the token",
+    doubt:
+      "This is the fiddly screen: a few clicks and seven boxes to tick. Take it slowly. Do not type any of the seven by hand.",
+    body: [
+      "Go back to the Private Integrations screen you found on step 2.",
+      `If you have closed it since, ${GHL_MENU_PATH_HEDGE.toLowerCase()} the route was ${GHL_MENU_PATHS_UNVERIFIED.privateIntegrations}.`,
+      "On that screen, choose Create new integration and name it Launchhouse.",
+      "Then tick the seven boxes below. Use the copy button on each row. A box typed by hand at 10pm comes out slightly wrong and then you are hunting for something that does not exist.",
+      "Do this inside your sub account, not at agency level. A token made at agency level does not reach your business.",
+      "GoHighLevel shows you the token once and never again. Keep that tab open until the next screen says it worked.",
+    ],
+    buttons: [{ label: "I have made it", meaning: "go to step 5" }],
+    checkName: null,
+  },
+  {
+    slug: "paste-token",
+    number: 5,
+    title: "Paste the token",
+    doubt:
+      "You are pasting a key into somebody else's website, which is exactly the moment to be careful. Here is what happens to it.",
+    body: [
+      "We use it for two things: putting your posts into Social Planner, and adding the contacts you build.",
+      "It never appears on this screen again, and we delete every token after the event.",
+      "Paste it in the box and press Connect.",
+    ],
+    buttons: [{ label: "Connect", meaning: "store the token and run the three checks on step 6" }],
+    checkName: "ghl_token",
+  },
+  {
+    slug: "verify",
+    number: 6,
+    title: "We test it, in front of you",
+    doubt:
+      "A green tick could be a bug. So you do not get a tick. You get the name of your own page read back to you, which a bug cannot fake.",
+    body: [
+      "Three checks, in order. This takes a few seconds.",
+      "Checking the token works, and that it belongs to the Location ID you gave us.",
+      "Reading the list of accounts you can post to.",
+      "Checking we can read your contacts.",
+    ],
+    buttons: [{ label: "Done", meaning: "record the checks and go back to the checklist" }],
+    checkName: "ghl_accounts",
+  },
+];
+
+/**
+ * The seven scope rows on step 4, each with a copy button, a checkbox and the
+ * reason it is asked for.
+ *
+ * Built from `scopes.ts` rather than written out, so the screen, the failure
+ * copy and the docs cannot end up naming different scopes. That is the drift
+ * that already happened once between `00-scope.md` and `spike-findings.md`.
+ */
+export const GHL_WALK_SCOPE_ROWS: readonly { scope: GhlScope; reason: string }[] = GHL_SCOPES.map(
+  (scope) => ({ scope, reason: GHL_SCOPE_REASONS[scope] }),
+);
+
+/**
+ * Under the seven rows.
+ *
+ * Founders otherwise believe the checkbox on our page did something. It did
+ * not. It keeps their place while they tick the real ones in GoHighLevel.
+ */
+export const GHL_WALK_SCOPE_NOTE =
+  "Ticking these here just keeps your place. We check the real permissions in a moment.";
+
+/**
+ * Step 2, "No". A hard stop with a real next action.
+ *
+ * Recorded as `failed`, not `skipped`. The difference is the whole point of
+ * having both: not having bought GoHighLevel on 6 September is fine and waits.
+ * A plan that cannot make a token needs a human today, and the mentor board
+ * sorts on it.
+ */
+export const GHL_WALK_NO_PRIVATE_INTEGRATIONS = {
+  title: "We cannot find the screen that makes the key",
+  body: [
+    "Two things cause this. Your plan may not carry Private Integrations, or GoHighLevel may have moved the screen since we wrote this.",
+    "It is not something you can fix by guessing. Do not buy an upgrade yet. If your plan turns out to be the problem, we will tell you which one to buy, and buying the wrong one is the expensive version of this.",
+    "Post in the Slack channel. Say you cannot find Private Integrations, and say what your Settings menu does list. Someone will sort it with you today.",
+  ],
+  action: "I have posted in Slack",
+  state: "failed" as StepState,
+  evidence: "cannot find Private Integrations, plan or menu unknown",
+};
+
+/** Step 1, "Not yet". A skip, and the screen says so in those words. */
+export const GHL_WALK_NOT_BOUGHT = {
+  title: "Nothing to do yet",
+  body: [
+    "You are not behind. You buy GoHighLevel at the clinic on 23 September, with everybody else.",
+    "We will bring you back here then.",
+  ],
+  action: "Back to my checklist",
+  state: "skipped" as StepState,
+  evidence: "not bought yet, due at the clinic on 23 September",
+};
+
+/**
+ * Step 5's shape check.
+ *
+ * UNVERIFIED. The prefix is inferred from our own code,
+ * `scripts/cmd/receipt.sh:110` and `accounts.sh:127`, both of which refuse any
+ * value matching it after lowercasing, on the grounds that it looks like a
+ * token. Nothing has ever compared it against a real one. If real tokens do
+ * not carry the prefix this is one line to delete, so it warns and lets the
+ * founder continue rather than blocking them.
+ *
+ * The prefix itself comes from the contracts directory, and the sentence below
+ * is built from it, so the check and the words a founder reads cannot disagree
+ * about what we are looking for.
+ */
+export const GHL_WALK_TOKEN_SHAPE_WARNING =
+  `That does not look like a GoHighLevel token. They normally start with ${GHL_TOKEN_PREFIX_GUESS}. ` +
+  "Check you copied the whole thing, then try again.";
+export const GHL_WALK_TOKEN_SHAPE_WARNING_IS_A_GUESS = GHL_TOKEN_PREFIX_IS_A_GUESS;
+
+/**
+ * Step 6, the success page.
+ *
+ * Naming the page and the Instagram handle back to them is the proof. A tick
+ * could be a bug. A page name they recognise cannot be. The fields are filled
+ * from the reads, never from anything the founder typed.
+ */
+export const GHL_WALK_CONNECTED = {
+  title: "Connected.",
+  lines: {
+    location: "Location:",
+    posting: "Posting to:",
+    contacts: "Contacts:",
+    tokenMade: "Token made:",
+  },
+  contactsReadable: "readable",
+  action: "Done",
+};
+
+export interface WalkFailure {
+  /** What the verifier saw. Never shown to the founder. */
+  readonly seen: string;
+  /** What the founder reads. No status code on its own, ever. */
+  readonly founderReads: string;
+  /** The one next click. */
+  readonly action: string;
+  /** Which step to send them back to, when the fix is upstream. */
+  readonly backTo?: string;
+}
+
+/**
+ * Every failure state, with a cause in plain words and one next click.
+ *
+ * A status code on its own tells a founder nothing and tells a mentor almost
+ * nothing. Each row names the most likely cause, because the most likely cause
+ * is right most of the time and being told a probable reason beats being told
+ * a number.
+ */
+export const GHL_WALK_FAILURES: readonly WalkFailure[] = [
+  {
+    seen: "401 on the first call",
+    founderReads:
+      "GoHighLevel did not accept that token. The usual reason is that only part of it got copied, or it was made at agency level instead of inside your sub account.",
+    action: "Make a new one",
+    backTo: "make-token",
+  },
+  {
+    seen: "the token works but the Location ID does not belong to it",
+    founderReads:
+      "That token works, but it does not belong to the sub account with that Location ID. One of the two came from a different place.",
+    action: "Check the Location ID",
+    backTo: "location-id",
+  },
+  {
+    // The accounts read is the call this most often happens on, so the table
+    // shows that one. The scope is taken from the map in scopes.ts rather than
+    // written out, because the seven strings live in exactly one file and a
+    // second copy here is the drift that already happened once between
+    // 00-scope.md and spike-findings.md.
+    seen: "a call failed after auth had already succeeded, so a scope is probably missing",
+    founderReads: scopeRefusalCopy(SCOPE_FOR_VERIFY_CALL.accounts),
+    action: "Back to step 4, with that row highlighted",
+    backTo: "make-token",
+  },
+  {
+    seen: "the accounts read returned an empty list",
+    founderReads:
+      "Your token works. There is nothing connected to post to yet. In GoHighLevel, open Social Planner and connect your Facebook Page.",
+    action: "I have done that, check again",
+  },
+  {
+    seen: "429",
+    founderReads: "GoHighLevel is asking us to slow down. Nothing is wrong with your token.",
+    action: "Try again in 60 seconds",
+  },
+  {
+    seen: "5xx or a timeout",
+    founderReads: "GoHighLevel did not answer. This is their side, not yours.",
+    action: "Try again",
+  },
+];
+
+/**
+ * The scope refusal sentence, built from whichever scope the failing call
+ * needed.
+ *
+ * WHY IT IS A FUNCTION. Which status code means a scope refusal is not known.
+ * It might be 401, or 403, or a 200 with an error in the body. Until that is
+ * verified, the verifier treats any non success on a call whose auth already
+ * succeeded as a probable scope problem and names the scope that call needed.
+ * That is the right guess and it is honest about being one, so the copy has to
+ * take the scope as an argument rather than hardcode a single row.
+ */
+export function scopeRefusalCopy(scope: GhlScope): string {
+  return (
+    `The token is good, but the box for \`${scope}\` was not ticked. ` +
+    "You cannot add a permission to a token that already exists, so make a new one."
+  );
+}
+
+/**
+ * Retrying after a failure.
+ *
+ * The founder never re-enters the token. Asking somebody to paste a credential
+ * a second time because a Facebook Page was not connected is how you lose them.
+ */
+export const GHL_WALK_RETRY =
+  "Check again. We use the token you already gave us, so there is nothing to paste twice.";
+
+/**
+ * Coming back to step 5 after closing the tab.
+ *
+ * The Location ID survives a resume. The token does not, because we never held
+ * it in a form we could put back on screen. Saying so is the only safe answer,
+ * and it is better than a blank box with no explanation.
+ */
+export const GHL_WALK_RESUME_AT_PASTE =
+  "We did not get a working connection last time, so make a new token and paste it here.";
+
+/**
+ * Disconnecting, and the order matters.
+ *
+ * Deleting our copy revokes nothing. A founder who believes it does walks away
+ * thinking a live key has been switched off.
+ */
+export const GHL_WALK_REVOKE = {
+  title: "Disconnect GoHighLevel",
+  body: [
+    "Disconnecting deletes our copy. It does not switch the token off.",
+    "To actually cancel it, go back to the Private Integrations screen in GoHighLevel, the one where you made it, and delete the integration called Launchhouse.",
+    `${GHL_MENU_PATH_HEDGE}, the route was ${GHL_MENU_PATHS_UNVERIFIED.privateIntegrations}.`,
+    "Do that second, after disconnecting here.",
+  ],
+  action: "Disconnect",
+};
+
+/**
+ * The third read, which has no known call.
+ *
+ * The copy exists because the check has to happen: without it, a missing
+ * contacts permission is found in session 3 with the founder mid task, three
+ * weeks after the token was made. The call itself is a named gap. Do not guess
+ * the tool name, the path or the response shape.
+ */
+export const GHL_CONTACTS_READ_PENDING = {
+  pending: true,
+  spikeReference: "planning/spike-findings.md, and REPLIT-BUILD.md section 9 item A2",
+  why:
+    "The name of the contacts read is not known at all. The screen copy is written and the " +
+    "call is not. Until the spike lands, step 6 runs the first two reads and reports the " +
+    "third as not yet checked rather than reporting a pass it did not make.",
+  founderReadsWhilePending:
+    "We have checked two of the three. The contacts check is not switched on yet. We will run it for you before session 3 and tell you either way.",
+};

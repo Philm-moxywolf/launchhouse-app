@@ -1,0 +1,72 @@
+# .replit
+#
+# WHAT THIS IS. The machine definition for the Replit workspace: which language modules are
+# installed, what "Run" does, and which port is exposed.
+#
+# WHY IT EXISTS. Everything about how this app boots has to be under review, in the repo,
+# where somebody can read it. A setting that lives only in a web pane is a setting nobody
+# can diff, and this project has one VM and one weekend.
+#
+# WHAT READS IT. The Replit workspace. The Deployment reads its own configuration, which is
+# NOT in this file, and the note further down says why.
+
+run = "npm run start"
+entrypoint = "src/server/index.ts"
+
+# Node 22. Not a preference. The Agent SDK's reference implementation is the npm package, it
+# declares engines node >= 18, and it ships the Linux CLI binary the agent loop spawns as a
+# per platform optional dependency. An install that skipped optional dependencies fails at
+# the first query, not at install time, which is why the probe resolves that binary at boot.
+modules = ["nodejs-22"]
+
+[nix]
+channel = "stable-24_05"
+
+[env]
+# The server process runs in UTC and converts at exactly two edges: rendering a time to a
+# founder, and building a schedule value for GoHighLevel. A founder in Atlanta logging at
+# 22:00 on the 24th must not get a heading dated the 25th, and ops-log.md is append only so
+# it cannot be corrected afterwards. env.ts asserts this is UTC and refuses to start if it
+# is not.
+TZ = "UTC"
+
+# Nothing else is set here on purpose. A slim Node build would not know America/New_York,
+# and every scheduled post depends on that zone resolving, but the answer to that is a boot
+# assertion rather than an environment variable: env.ts constructs a formatter for New York
+# inside a try and refuses to start if it throws. An assertion cannot be silently wrong.
+
+[[ports]]
+localPort = 5000
+externalPort = 80
+
+# =========================================================================================
+# Deployment: configure it in the Deployments pane, not here.
+# =========================================================================================
+#
+# There is deliberately no [deployment] section in this file. The key names under it have
+# changed more than once, and a stale key written from memory produces a deployment that
+# looks configured and is not. Open the Deployments pane and set it there.
+#
+# Choose RESERVED VM, not Autoscale. Four reasons, all specific to this product:
+#
+#   1. A turn that reads three files and writes one runs 30 to 180 seconds. Autoscale bills
+#      per request second and enforces request timeouts.
+#   2. SSE connections are long lived and idle for minutes while a founder types. Autoscale
+#      scales to zero and cuts them.
+#   3. Each live session is a spawned CLI subprocess held between turns. That wants a stable
+#      machine, not one that may be replaced between two sentences of an interview.
+#   4. The queue and the live session map are in memory. One VM means one place that state
+#      lives, and one advisory lock holder.
+#
+# Starting size: 4 vCPU and 8 GB. That number is a guess until resident memory per live
+# subprocess has been measured on the real machine. Measure before the freeze.
+#
+# The honest cost of one VM is that it is a single point of failure. The mitigation is that
+# every durable thing is in Postgres, so a restart loses only in flight turns and those re
+# queue from the turns table on boot.
+#
+# Build command:  npm ci && npm run build
+# Run command:    npm run start
+#
+# For the deployment probe, and only for the probe, the run command is: npm run probe
+# See scripts/PROBE.md.
