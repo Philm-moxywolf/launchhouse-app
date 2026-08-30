@@ -75,6 +75,15 @@ function num(record: Record<string, unknown>, key: string): number | null {
   return typeof v === "number" && Number.isFinite(v) ? v : null;
 }
 
+/** The turn status the executor writes, in this file's vocabulary. See the turn_end case. */
+function statusAsReason(status: string | null): string | null {
+  if (status === "interrupted") return "stopped";
+  if (status === "done") return "done";
+  // Anything else is a status this file has never seen, and guessing at one would put the
+  // wrong sentence under a founder's answer. `unknown` is the honest reading.
+  return null;
+}
+
 /**
  * One raw event into one frame, or null.
  *
@@ -117,8 +126,24 @@ export function parseFrame(event: string, data: string, rawId: string | null): S
     }
     case "turn_end": {
       if (turnId === null) return null;
-      const reason = str(record, "reason");
-      const known = reason !== null && TURN_END_REASONS.includes(reason) ? (reason as TurnEndReason) : "unknown";
+      /*
+        TWO FIELD NAMES FOR ONE FACT, AND BOTH ARE READ. THE MISMATCH IS THE BUG.
+
+        This file was written against `reason`. `QueueTurnExecutor` in
+        src/server/routes/turn-executor.ts writes the authoritative turn_end and puts the
+        answer in `status`, with the values `done` and `interrupted`. So every turn_end that
+        actually reaches a browser parses as `unknown`: a founder who pressed Stop watched
+        their half answer settle with no "Stopped here" on it and no sentence under it,
+        because the reducer only writes both for reason `stopped`.
+
+        Reading `reason` first and `status` second is the safe way round. If the server is
+        corrected to send `reason`, this keeps working and the fallback simply stops being
+        reached. If it is not, a founder still gets the sentence today. `interrupted` is
+        translated because `stopped` is the founder's word for it and is what the notice
+        table is keyed on.
+      */
+      const named = str(record, "reason") ?? statusAsReason(str(record, "status"));
+      const known = named !== null && TURN_END_REASONS.includes(named) ? (named as TurnEndReason) : "unknown";
       return { kind: "turn_end", id: frameId, turnId, reason: known };
     }
     case "error": {

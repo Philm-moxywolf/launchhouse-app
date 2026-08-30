@@ -41,6 +41,7 @@ import { Working } from "./components/Working.tsx";
 import { SignIn } from "./routes/SignIn.tsx";
 import { FirstRun } from "./routes/FirstRun.tsx";
 import { Home } from "./routes/Home.tsx";
+import type { KeyStatus } from "./routes/Home.tsx";
 import { Thread } from "./routes/Thread.tsx";
 import { Files, FileView } from "./routes/Files.tsx";
 import { Gates } from "./routes/Gates.tsx";
@@ -175,16 +176,32 @@ function Screen({
   }
 }
 
+/**
+ * Home, and the one extra read that lets it say what is missing before anybody presses Start.
+ *
+ * WHY THE SETUP STATE IS FETCHED HERE. `/api/home` answers with progress and files and says
+ * nothing about the Anthropic key, and the readiness gate cannot tell this screen either: a
+ * missing key does not block a GET, so `/api/home` comes back a cheerful 200 with seven
+ * things to start and no hint that none of them can run. The key state is on `/api/setup`,
+ * so this asks for it.
+ *
+ * TWO READS AND ONLY ONE OF THEM CAN STOP THE SCREEN. A failed home read means there is no
+ * screen to draw. A failed setup read means one notice is less certain than it would like to
+ * be, and the screen says exactly that rather than hiding the whole page behind it or, worse,
+ * quietly assuming the key is fine.
+ */
 function HomeScreen({ founder }: { readonly founder: Founder }): ReactElement {
   const [home, setHome] = useState<HomeState | null>(null);
+  const [keyStatus, setKeyStatus] = useState<KeyStatus>("unknown");
   const [problem, setProblem] = useState<string | null>(null);
 
   useEffect(() => {
     let live = true;
-    void fetchHome().then((result) => {
+    void Promise.all([fetchHome(), fetchSetup()]).then(([homeRead, setupRead]) => {
       if (!live) return;
-      if (result.ok) setHome(result.value);
-      else setProblem(result.problem.text);
+      setKeyStatus(setupRead.ok ? (setupRead.value.anthropic.set ? "set" : "missing") : "unknown");
+      if (homeRead.ok) setHome(homeRead.value);
+      else setProblem(homeRead.problem.text);
     });
     return () => {
       live = false;
@@ -205,7 +222,7 @@ function HomeScreen({ founder }: { readonly founder: Founder }): ReactElement {
       </div>
     );
   }
-  return <Home founder={founder} home={home} />;
+  return <Home founder={founder} home={home} keyStatus={keyStatus} />;
 }
 
 /**

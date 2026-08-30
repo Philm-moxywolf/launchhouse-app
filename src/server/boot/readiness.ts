@@ -33,9 +33,13 @@
  * taking over a screen that belongs to auth.
  *
  * WHAT CALLS IT. src/server/index.ts, in main() and in buildServer(). Its own test.
- * WHAT IT READS. Only what it is handed. WHAT IT WRITES. Replies, and its own state.
+ * WHAT IT READS. What it is handed, plus one file test: browserBundleIsBuilt() below asks
+ * the disk whether dist/web/index.html exists, and only when a caller asks it to.
+ * WHAT IT WRITES. Replies, and its own state.
  */
 
+import { existsSync } from 'node:fs';
+import { isAbsolute, join, resolve } from 'node:path';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { escapeHtml, layout } from '../auth/pages.ts';
 import { onAnthropicKeyChanged } from '../agent/anthropic-key.ts';
@@ -46,11 +50,43 @@ export type BlockerId =
   | 'engine'
   | 'platformCli'
   | 'masterKey'
+  | 'browserBundle'
   | 'anthropicKey'
   | 'passphrase';
 
 /** Where a founder signs in. One constant, because the page and its link must not drift. */
 export const SIGN_IN_PATH = '/auth/signin';
+
+/**
+ * Where the built browser bundle lands. vite.config.ts writes here.
+ *
+ * WHY THE PATH IS RESOLVED IN THIS FILE. `registerBrowserBundle` in src/server/index.ts
+ * resolves the same path with the same three lines to decide whether to register the static
+ * handler. Two copies of one path is two chances to change one of them, and the symptom of
+ * changing one is a founder reading "your screens did not build" on a screen that built.
+ * This is the copy that should survive, and index.ts should call the function below.
+ */
+export const BROWSER_BUNDLE_DIR = 'dist/web';
+
+/** Absolute path to the built index.html, whatever directory the process was started in. */
+export function browserBundleIndexPath(cwd: string = process.cwd()): string {
+  const dir = isAbsolute(BROWSER_BUNDLE_DIR) ? BROWSER_BUNDLE_DIR : resolve(cwd, BROWSER_BUNDLE_DIR);
+  return join(dir, 'index.html');
+}
+
+/**
+ * Has the browser bundle been built.
+ *
+ * A FILE TEST AND NOT A FLAG. A flag would be set by whatever ran the build, and the thing
+ * that actually goes wrong is the build never running at all. `npm run build:web` is the
+ * only thing that writes this file, so its presence is the fact and nothing else is.
+ *
+ * NOTHING IN THIS FILE CALLS IT ON ITS OWN. See ReadinessFacts.browserBundleBuilt for why
+ * the fact is gathered by the caller rather than guessed at here.
+ */
+export function browserBundleIsBuilt(cwd: string = process.cwd()): boolean {
+  return existsSync(browserBundleIndexPath(cwd));
+}
 
 /**
  * One missing thing.
@@ -94,6 +130,27 @@ export interface ReadinessFacts {
   readonly platformCliRefusal: string | undefined;
   /** The founder sentence from a master key refusal, or undefined when there was none. */
   readonly masterKeyRefusal: string | undefined;
+  /**
+   * False when dist/web/index.html is not there, and ABSENT when nobody looked.
+   *
+   * WHY IT IS OPTIONAL AND WHY ABSENT MEANS "NO BLOCKER". Every other fact on this object is
+   * something a caller had to go and find out. This one could be found out from inside this
+   * file, with one `existsSync`, and that is exactly what it must not do. blockersFrom() is
+   * pure so it can be tested directly, and a ReadinessState that reached for the disk in its
+   * constructor would raise this blocker in any test process where the build had not run,
+   * which is most of them. A test suite whose result depends on whether somebody ran a build
+   * first is a test suite nobody trusts. So the caller gathers it, the same as the others.
+   *
+   * WHAT SETS IT. main() in src/server/index.ts, with `browserBundleIsBuilt()` above. That
+   * one line is the whole wiring.
+   *
+   * WHY THE BLOCKER EXISTS AT ALL when `prestart` in package.json now builds the bundle
+   * before every start: `prestart` deliberately does not fail the start, because a container
+   * that refuses to boot is the failure this whole file replaced. So a build that dies for
+   * want of memory still reaches here, and this is what turns that into a screen with words
+   * on it rather than three lines of HTML with one link that comes back to itself.
+   */
+  readonly browserBundleBuilt?: boolean;
   readonly anthropicKeySet: boolean;
   readonly passphraseSet: boolean;
 }
@@ -166,6 +223,36 @@ export function blockersFrom(facts: ReadinessFacts): Blocker[] {
     });
   }
 
+  /**
+   * BEFORE THE ENGINE AND BEFORE THE KEY, because it is what those two are fixed on.
+   *
+   * The Anthropic key blocker's action is "open Setup in the app". There is no Setup screen,
+   * no menu and no app without this file: the whole browser side of this product is one
+   * bundle, and everything a founder does after signing in is inside it. So a list that put
+   * the key first would be a list whose first instruction cannot be followed.
+   *
+   * IT DOES NOT BLOCK ANYTHING, AND THAT IS NOT AN OVERSIGHT. Nothing on the API side needs
+   * the bundle, and turns least of all: work that was queued when the container last stopped
+   * is finishable and has nothing to do with whether a screen was built. Refusing turns here
+   * would strand that work on the one boot that could have finished it.
+   *
+   * `handledElsewhere` is false, and that is the whole behaviour. index.ts serves its own
+   * page on GET / when the bundle is absent, and that page is the bug: three lines of HTML,
+   * one Sign in link that comes back to the same page, and nothing that says what happened.
+   * With false here this file takes that request over and answers with the list instead.
+   */
+  if (facts.browserBundleBuilt === false) {
+    out.push({
+      id: 'browserBundle',
+      heading: 'The screens did not build',
+      what: 'This app has two halves. The part that answers is running, and the part you look at is built from it when the app starts. That build did not finish, so there is nothing to show you yet.',
+      doThis: 'Open this project on Replit. Press Stop, wait for it to stop, then press Run. The screens are built on the way up. If you land back on this page a second time, show it to somebody from the Launchhouse team.',
+      handledElsewhere: false,
+      blocksTurns: false,
+      blocksEverything: false,
+    });
+  }
+
   if (!facts.engineReady) {
     out.push({
       id: 'engine',
@@ -204,10 +291,24 @@ export function blockersFrom(facts: ReadinessFacts): Blocker[] {
       id: 'anthropicKey',
       heading: 'Your Anthropic key is not set',
       what: 'Everything this app writes is written by Claude, and Claude needs an API key that belongs to you. An API key is a long password that lets this app use your account. There is not one here yet.',
-      // IT NAMES SIGNING IN FIRST. The old wording was "go to the setup screen", and the
-      // setup screen is behind sign in, so a founder who followed it went looking for a
-      // screen they could not reach yet from a page that had no links on it at all.
-      doThis: 'Sign in below with your passphrase, then paste your Anthropic API key into the setup screen. You get a key at console.anthropic.com.',
+      /**
+       * IT NAMES THE WORD ON THE BUTTON, AND IT NAMES NOTHING ELSE.
+       *
+       * This sentence is read in two places and the first wording only worked in one of
+       * them. On the start page, which is where it was written, "Sign in below with your
+       * passphrase, then paste your key into the setup screen" reads fine. But this same
+       * sentence is what `blockedBody` puts in the 503 that the two turn routes answer
+       * with, and that 503 is read by a founder who is ALREADY SIGNED IN, inside their own
+       * workspace, on a thread, in a red box above a Send button. They were told to sign in
+       * when they had; told to look "below" when there is no below; and pointed at "the
+       * setup screen", which is not what anything is called. The word in the menu bar is
+       * Setup, and the old sentence never said it.
+       *
+       * So it names the screen by the word on the link, says where that word is, and ends
+       * on the action. It is true whether it is read on the start page or in the app, which
+       * is the only test a sentence with two homes can pass.
+       */
+      doThis: 'Your key goes in the box on the Setup screen, and Setup is in the menu at the top of the app. If you do not have a key yet, make one at console.anthropic.com, then paste it in.',
       /**
        * TRUE, LIKE THE PASSPHRASE, AND FOR THE SAME REASON: SOMEBODY ELSE OWNS THIS SCREEN.
        *
@@ -260,11 +361,14 @@ export function blockersFrom(facts: ReadinessFacts): Blocker[] {
  * that exists to unstick people was itself a dead end.
  *
  * THE LINK IS CONDITIONAL, AND THE CONDITION IS THE POINT. Sign in is offered only when
- * nothing on the list blocks everything. The sign in PAGE renders without touching the
- * database on purpose, but the sign in BUTTON writes a session row, so offering the link
- * while the database is unreachable or unmigrated walks the founder straight into the 500
- * this work exists to remove. A link that leads to a broken screen is worse than no link,
- * because the founder blames themselves for following it.
+ * following it lands somewhere. Two things stop it. The first is anything that blocks
+ * everything: the sign in PAGE renders without touching the database on purpose, but the
+ * sign in BUTTON writes a session row, so offering the link while the database is
+ * unreachable or unmigrated walks the founder straight into the 500 this work exists to
+ * remove. The second is a missing browser bundle: sign in succeeds and redirects to GET /,
+ * GET / is this page, and the founder is back where they started. A link that leads to a
+ * broken screen is worse than no link, and a link that leads back to itself is worse still,
+ * because both times the founder blames themselves for following it.
  *
  * THE COPY IS WRITTEN FOR SOMEBODY WHO PRESSED REMIX FOUR MINUTES AGO. They do not know
  * what a migration is, whether this app is theirs or shared, or whether they have already
@@ -289,13 +393,26 @@ export function startHerePage(blockers: readonly Blocker[]): string {
       ? 'One thing is missing, and it is listed below.'
       : `${String(count)} things are missing, and they are listed below.`;
 
-  // Nothing on the list stops a session being written, so sign in works today.
-  const canSignIn = !blockers.some((b) => b.blocksEverything);
-  const next = canSignIn
-    ? `<p class="row"><a href="${SIGN_IN_PATH}">Sign in</a></p>
-<p class="quiet">Signing in works now. The rest of the list is done from inside the app or by somebody from the Launchhouse team.</p>`
-    : `<p class="row">Work down the list in order, then reload this page.</p>
-<p class="quiet">Signing in will not work until the list is empty, so there is no point trying it yet.</p>`;
+  /*
+    THREE ENDINGS, BECAUSE THERE ARE THREE ANSWERS TO "SHOULD I SIGN IN NOW".
+
+    A link that leads somewhere useful is the first. A link that leads to a 500 is the
+    second, and it is refused. The third is the one that was missing: with no browser
+    bundle, signing in WORKS and lands the founder back here, because sign in redirects to
+    GET / and GET / is this page. A working link into a loop is the worst of the three,
+    because the founder follows it, arrives where they started, and reads it as their own
+    mistake. So it is not offered, and the page says why in the same breath.
+  */
+  const nothingWorks = blockers.some((b) => b.blocksEverything);
+  const noScreensToReach = blockers.some((b) => b.id === 'browserBundle');
+  const next = nothingWorks
+    ? `<p class="row">Work down the list in order, then reload this page.</p>
+<p class="quiet">Signing in will not work until the list is empty, so there is no point trying it yet.</p>`
+    : noScreensToReach
+      ? `<p class="row">Work down the list in order, then reload this page.</p>
+<p class="quiet">There is no point signing in yet. The screens you would sign in to are the ones that did not build, so you would arrive back on this page.</p>`
+      : `<p class="row"><a href="${SIGN_IN_PATH}">Sign in</a></p>
+<p class="quiet">Signing in works now. The rest of the list is done from inside the app or by somebody from the Launchhouse team.</p>`;
 
   return layout(
     'Start here',

@@ -69,6 +69,26 @@ export interface ThreadView {
   readonly filesWritten: readonly WrittenFile[];
   /** Something the founder needs to read once. Not an error code, ever. */
   readonly notice: string | null;
+  /**
+   * Which failure the notice above is, or null when it is ordinary news.
+   *
+   * WHY IT IS A FIELD AND NOT A GUESS FROM THE WORDS. One slot carries both "Saved. It is in
+   * your files" and "That one did not finish", and the screen drew both the same way: a
+   * quiet grey box with a Got it button under it. A founder three minutes into a turn that
+   * has just died reads a grey box as an ordinary message, presses Got it, and is left
+   * looking at a screen with no answer on it and nothing that says why.
+   *
+   * WHY THREE VALUES AND NOT A BOOLEAN. The three failures need three different sentences
+   * and are not interchangeable. A message that never left the browser has lost nothing and
+   * needs sending again. A Stop that did not land means the answer is STILL COMING, which is
+   * the opposite of the other two. A turn that died is the one that needs the full three
+   * lines. One boolean would have put "that answer did not finish" over a message that never
+   * left, which is worse than saying nothing.
+   *
+   * Sniffing the text for words like "failed" would work until somebody rewrote a sentence.
+   * The reducer knows which action it just handled, so it says so.
+   */
+  readonly noticeFailure: NoticeFailure | null;
   readonly stopping: boolean;
   readonly connection: "unknown" | "up" | "down";
 }
@@ -81,6 +101,7 @@ export const EMPTY_THREAD: ThreadView = {
   lastEventId: null,
   filesWritten: [],
   notice: null,
+  noticeFailure: null,
   stopping: false,
   connection: "unknown",
 };
@@ -98,6 +119,88 @@ export type ThreadAction =
 
 /** The first thing shown when a turn opens, before the engine has said anything. */
 export const FIRST_STATUS = "Thinking about what you said.";
+
+/**
+ * What a founder reads while a turn is running and nothing has come back yet.
+ *
+ * WHY IT IS HERE AT ALL. The status line changes as the engine works, and between two of
+ * those changes it can sit still for a long time while a file is read or a long answer is
+ * composed. Nothing on the screen said how long any of this was meant to take, so the
+ * honest reading of a still screen was that the app had stopped. This says the number.
+ *
+ * IT GOES AWAY THE MOMENT WORDS APPEAR. See the Thread screen for the three conditions. A
+ * founder watching text arrive can see it is working, and a block still telling them to be
+ * patient at that point is something to scroll past.
+ *
+ * THE NUMBER IS THE ONE FROM THE MACHINE NOTES AND IS NOT INVENTED. `.replit` records that a
+ * turn which reads three files and writes one runs 30 to 180 seconds, which is where the
+ * three minutes comes from. If that measurement changes, this sentence changes with it.
+ *
+ * THE SECOND LINE IS THE QUESTION THEY ASK NEXT, and it is true because of how the stream
+ * is built: every frame is a `turn_events` row before it is sent, the turn runs on the
+ * server whether or not anybody is watching, and reopening the thread replays from the last
+ * id the browser saw. So closing the tab really does cost nothing.
+ */
+export const WHILE_IT_RUNS: readonly string[] = [
+  "A long answer takes up to three minutes. It reads your files before it writes anything, so the first minute often looks like nothing is happening.",
+  "You can leave this page open, or close the tab and come back. The work carries on either way and it is here when you return.",
+];
+
+/** The three ways something a founder was waiting on can fail on this screen. */
+export type NoticeFailure = "send" | "stop" | "turn";
+
+/**
+ * What a founder reads when one of the three fails.
+ *
+ * WHY THERE IS ANYTHING HERE AT ALL. Every other screen in this app was written twice over.
+ * This path had one server sentence and a grey box, and the founder reading it had three
+ * questions with only one of them answered. Have I lost my work. What do I do now. What if
+ * it happens again. The server sentence still goes first, because it is the only one that
+ * knows what actually happened. These answer what it leaves.
+ *
+ * THE FIRST LINE OF EACH IS THE WORK, BECAUSE THAT IS THE FIRST THOUGHT, and for the turn
+ * it is true rather than soothing: run-turn.ts writes files inside the transaction that ends
+ * the turn, so a turn that did not finish wrote nothing at all.
+ *
+ * THE LAST LINE OF THE TURN FAILURE NAMES THE COMMONEST CAUSE AND THE BUTTON THAT PROVES IT.
+ * An Anthropic account with no credit left fails every answer and looks exactly like the app
+ * being broken. "Check it again" is the real label on the real button on the Setup screen,
+ * so a founder can follow the sentence without translating it first.
+ */
+export const FAILURE_COPY: Readonly<
+  Record<NoticeFailure, { readonly title: string; readonly lines: readonly string[] }>
+> = {
+  /** The POST never got an answer. Nothing has happened anywhere, and that is the good news. */
+  send: {
+    title: "That message did not send",
+    lines: [
+      "Nothing has changed. It never left this page, so there is nothing half done at the other end.",
+      "Your message is above, marked as not sent. Send it again. If it will not go a second time, that is the wifi rather than anything you did.",
+    ],
+  },
+  /**
+   * The odd one out, and the reason a boolean was not enough.
+   *
+   * A Stop that did not land means the answer is STILL COMING. Telling this founder their
+   * work is safe and to try again would be telling them the opposite of what is true.
+   */
+  stop: {
+    title: "That did not stop",
+    lines: [
+      "The answer is still being written. Nothing is broken and nothing is lost.",
+      "Press Stop again. If it will not stop, leave it running: a long answer ends on its own and everything written up to that point is kept.",
+    ],
+  },
+  /** The one this whole block exists for. See the three questions above. */
+  turn: {
+    title: "That answer did not finish",
+    lines: [
+      "Nothing you have made has changed. Your files are written only when an answer finishes, so they are exactly as they were.",
+      "Send your message again. Anything the engine had already written is on the screen above, and it is on this screen only, so copy what you want to keep before you reload.",
+      "If it stops twice in a row, check your key before you try a third time. Open Setup, find Your Anthropic key, and press Check it again. An Anthropic account with no credit left fails every answer and looks exactly like the app being broken.",
+    ],
+  },
+};
 
 /**
  * What the founder reads when a turn ends for a reason that is not simply "done".
@@ -163,6 +266,7 @@ export function threadReducer(view: ThreadView, action: ThreadAction): ThreadVie
       return {
         ...view,
         notice: null,
+        noticeFailure: null,
         messages: [
           ...view.messages,
           { id: action.clientMsgId, role: "founder", text: action.text, state: "sending" },
@@ -173,6 +277,7 @@ export function threadReducer(view: ThreadView, action: ThreadAction): ThreadVie
       return {
         ...view,
         notice: action.text,
+        noticeFailure: "send",
         messages: view.messages.map((m) =>
           m.id === action.clientMsgId ? { ...m, state: "failed" as const } : m,
         ),
@@ -182,16 +287,19 @@ export function threadReducer(view: ThreadView, action: ThreadAction): ThreadVie
       return { ...view, stopping: true };
 
     case "stop-failed":
-      return { ...view, stopping: false, notice: action.text };
+      return { ...view, stopping: false, notice: action.text, noticeFailure: "stop" };
 
+    // Everything that reaches here is a founder's own action reporting back: a sample
+    // saved, a sample that could not be saved. The screen that dispatched it knows which,
+    // and none of them is a turn dying under somebody who was waiting for an answer.
     case "notice":
-      return { ...view, notice: action.text };
+      return { ...view, notice: action.text, noticeFailure: null };
 
     case "connection":
       return { ...view, connection: action.up ? "up" : "down" };
 
     case "dismiss-notice":
-      return { ...view, notice: null };
+      return { ...view, notice: null, noticeFailure: null };
 
     case "frame": {
       const frame = action.frame;
@@ -232,6 +340,9 @@ export function threadReducer(view: ThreadView, action: ThreadAction): ThreadVie
             ...committed,
             stopping: false,
             notice: notice ?? committed.notice,
+            // A turn that ended for a reason with a sentence is not a failure. Stopping was
+            // the founder's own doing, and a long turn pausing is an offer to carry on.
+            noticeFailure: notice === null ? committed.noticeFailure : null,
             messages: committed.messages.map((m) =>
               m.state === "sending" ? { ...m, state: "complete" as const } : m,
             ),
@@ -241,7 +352,7 @@ export function threadReducer(view: ThreadView, action: ThreadAction): ThreadVie
           // The partial text is kept. It is the founder's answer up to the point it broke,
           // and watching it vanish is worse than reading half of it.
           const committed = commitTurn(base, "stopped");
-          return { ...committed, stopping: false, notice: frame.text };
+          return { ...committed, stopping: false, notice: frame.text, noticeFailure: "turn" };
         }
       }
     }

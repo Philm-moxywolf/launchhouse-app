@@ -55,6 +55,22 @@ export interface Problem {
   readonly text: string;
   /** The HTTP status, for the mentor board and the logs. Never rendered on its own. */
   readonly status: number | null;
+  /**
+   * What the server said is missing, by id, when it refused because the app is not ready.
+   * Empty on every other refusal.
+   *
+   * WHY A SCREEN NEEDS THE IDS AND NOT ONLY THE SENTENCE. `src/server/boot/readiness.ts`
+   * refuses the two routes that start a turn with a 503 and a sentence. The sentence is
+   * good, and it is still only a sentence: a founder reading "your key goes in the box on
+   * the Setup screen" inside a red box has to go and find Setup themselves, from a screen
+   * where the box they are reading is the thing in the way. With the id, the screen can put
+   * the link directly under the sentence.
+   *
+   * IT NEVER DECIDES THE WORDS. The server writes those. This decides whether there is a
+   * button under them and which one, so a refusal about a missing engine gets no link to
+   * Setup, because Setup would not help.
+   */
+  readonly needs: readonly string[];
 }
 
 export type Result<T> = { readonly ok: true; readonly value: T } | { readonly ok: false; readonly problem: Problem };
@@ -74,8 +90,26 @@ export const PROBLEM_TEXT: Readonly<Record<ProblemKind, string>> = {
   server: "Something went wrong on our side. Nothing you have made is affected. Try again.",
 };
 
-function problem(kind: ProblemKind, status: number | null, text?: string): Problem {
-  return { kind, status, text: text ?? PROBLEM_TEXT[kind] };
+function problem(kind: ProblemKind, status: number | null, text?: string, needs: readonly string[] = []): Problem {
+  return { kind, status, text: text ?? PROBLEM_TEXT[kind], needs };
+}
+
+/**
+ * The blocker ids off a "not ready" refusal, or nothing.
+ *
+ * Every field is checked before it is read. This body comes off the wire, and a screen that
+ * assumed the shape would throw on a proxy page and take the sentence down with it, which is
+ * the failure this whole file exists to stop.
+ */
+function needsFrom(body: unknown): readonly string[] {
+  const list = asRecord(body)?.["blockers"];
+  if (!Array.isArray(list)) return [];
+  const ids: string[] = [];
+  for (const row of list) {
+    const id = asRecord(row)?.["id"];
+    if (typeof id === "string" && id !== "") ids.push(id);
+  }
+  return ids;
 }
 
 /** An object body, or null. A JSON array or a bare string is not an answer any route gives. */
@@ -137,7 +171,7 @@ async function toResult<T>(res: Response, expects: Expects): Promise<Result<T>> 
     typeof body === "object" && body !== null && typeof (body as { message?: unknown }).message === "string"
       ? (body as { message: string }).message
       : undefined;
-  return { ok: false, problem: problem(kind, res.status, message) };
+  return { ok: false, problem: problem(kind, res.status, message, needsFrom(body)) };
 }
 
 /**

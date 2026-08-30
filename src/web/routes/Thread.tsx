@@ -47,10 +47,10 @@ import {
   sendMessage,
   streamUrl,
 } from "../lib/api.ts";
-import type { Founder } from "../lib/api.ts";
+import type { Founder, Problem } from "../lib/api.ts";
 import { openStream } from "../lib/stream.ts";
 import type { StreamHandle } from "../lib/stream.ts";
-import { EMPTY_THREAD, threadReducer } from "../lib/thread-state.ts";
+import { EMPTY_THREAD, FAILURE_COPY, WHILE_IT_RUNS, threadReducer } from "../lib/thread-state.ts";
 import { mayOpenRoute } from "../lib/track.ts";
 import { hrefFor } from "../lib/nav.ts";
 import { plainFileName } from "../lib/format.ts";
@@ -69,7 +69,13 @@ function newClientMsgId(): string {
 export function Thread({ founder, routeId }: { readonly founder: Founder; readonly routeId: string }): ReactElement {
   const [view, dispatch] = useReducer(threadReducer, EMPTY_THREAD);
   const [opening, setOpening] = useState(true);
-  const [openProblem, setOpenProblem] = useState<string | null>(null);
+  /*
+    THE WHOLE PROBLEM IS KEPT, NOT JUST ITS SENTENCE, and that is what puts a link on this
+    box. The server's 503 says what is missing and names it by id, and the id is what tells
+    this screen whether Setup is the answer or whether Setup would be a wild goose chase.
+    See `Problem.needs` in lib/api.ts.
+  */
+  const [openProblem, setOpenProblem] = useState<Problem | null>(null);
   const streamRef = useRef<StreamHandle | null>(null);
   const row = routeById(routeId);
   const allowed = mayOpenRoute(routeId, founder.track);
@@ -86,14 +92,14 @@ export function Thread({ founder, routeId }: { readonly founder: Founder; readon
       if (!live) return;
       if (!opened.ok) {
         setOpening(false);
-        setOpenProblem(opened.problem.text);
+        setOpenProblem(opened.problem);
         return;
       }
       const loaded = await fetchThread(opened.value.threadId);
       if (!live) return;
       setOpening(false);
       if (!loaded.ok) {
-        setOpenProblem(loaded.problem.text);
+        setOpenProblem(loaded.problem);
         return;
       }
       dispatch({ type: "loaded", thread: loaded.value });
@@ -177,7 +183,31 @@ export function Thread({ founder, routeId }: { readonly founder: Founder; readon
         />
       ) : null}
 
-      {openProblem === null ? null : <Notice tone="problem" lines={[openProblem]} />}
+      {/*
+        THE FIRST WALL A FOUNDER MEETS, AND IT USED TO BE A RED BOX WITH ONE SENTENCE IN IT.
+
+        The sentence came from the server and was written for a page they were not on, and
+        the box had nothing on it to press. So a founder who was already signed in, in their
+        own workspace, on a thread, was told to sign in, told to look below where there is
+        no below, and left to go and find a screen the sentence never named. The server
+        sentence is fixed in src/server/boot/readiness.ts. This is the other half: the doubt
+        answered before the instruction, and the instruction with the door next to it.
+      */}
+      {openProblem === null ? null : (
+        <Notice
+          tone="problem"
+          title="We could not open this one"
+          lines={["Nothing is broken and nothing you have made is affected.", openProblem.text]}
+        >
+          {openProblem.needs.includes("anthropicKey") ? (
+            <p className="notice-line">
+              <a className="button" href={hrefFor({ kind: "setup" })}>
+                Open Setup
+              </a>
+            </p>
+          ) : null}
+        </Notice>
+      )}
 
       <div className="transcript">
         {view.messages.map((message) => (
@@ -192,13 +222,62 @@ export function Thread({ founder, routeId }: { readonly founder: Founder; readon
         {view.turn === null ? null : <StreamedMessage turn={view.turn} />}
       </div>
 
-      {view.notice === null ? null : (
+      {/*
+        WHAT A FOUNDER READS DURING THE SILENCE, and the three conditions are the silence.
+
+        A turn is open, so something is running. They are not in the queue, because
+        QueuedNotice is already saying the better thing then, which is their place in line.
+        And NOT ONE WORD HAS ARRIVED YET, which is the whole of it: this is for the minute or
+        two where the engine is reading files and the screen has nothing on it but a status
+        line that has not changed. The moment text starts appearing, the founder can see for
+        themselves that it is working, and this becomes something to scroll past.
+      */}
+      {view.turn !== null && view.turn.queuePosition === null && view.turn.text === "" ? (
+        <Notice tone="plain" lines={[...WHILE_IT_RUNS]} />
+      ) : null}
+
+      {/*
+        ONE SLOT, TWO KINDS OF NEWS, AND THEY ARE NOT DRAWN THE SAME WAY ANY MORE.
+
+        "Saved. It is in your files" and "That one did not finish" both arrive here. Both
+        used to render as the same quiet grey box with a Got it button, which meant the
+        second one was a failure a founder could dismiss without being told anything: no
+        heading, no word about whether their work survived, and nothing to do next except
+        press Got it and look at a screen with no answer on it.
+
+        A failure now says what happened, says the work is safe, and says what to do, and it
+        has no dismiss button. Dismissing a failure clears the only thing on the screen that
+        explains why there is no answer. It clears itself the moment the next message is
+        sent, which is the action it is asking for.
+      */}
+      {view.notice === null ? null : view.noticeFailure === null ? (
         <Notice
           tone="plain"
           lines={[view.notice]}
           actionLabel="Got it"
           onAction={() => dispatch({ type: "dismiss-notice" })}
         />
+      ) : (
+        <Notice
+          tone="problem"
+          title={FAILURE_COPY[view.noticeFailure].title}
+          // The server's own sentence first, because it is the only one that knows what
+          // actually happened. Ours answer the questions it leaves.
+          lines={[view.notice, ...FAILURE_COPY[view.noticeFailure].lines]}
+        >
+          {/*
+            The door, and only on the failure it opens. A message that did not send and a
+            Stop that did not land have nothing to do with the key, and a button that goes
+            somewhere useless is how a founder loses trust in every other button.
+          */}
+          {view.noticeFailure === "turn" ? (
+            <p className="notice-line">
+              <a className="button button-quiet" href={hrefFor({ kind: "setup" })}>
+                Open Setup
+              </a>
+            </p>
+          ) : null}
+        </Notice>
       )}
 
       {view.filesWritten.length === 0 ? null : (

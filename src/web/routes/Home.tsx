@@ -66,7 +66,83 @@ function blockedBy(row: RouteRow, presentFiles: readonly string[]): string | nul
   return `${plainFileName(first)} comes first.`;
 }
 
-export function Home({ founder, home }: { readonly founder: Founder; readonly home: HomeState }): ReactElement {
+/**
+ * Whether this founder's Anthropic key is in, as far as this screen has been told.
+ *
+ * "unknown" IS A REAL STATE AND IS NOT THE SAME AS "set". The setup read can fail on its
+ * own, and a screen that treated a failed read as a working key would show seven Start
+ * buttons and say nothing, which is the fault this type exists to stop. It is the default
+ * for the same reason: a caller that has not asked has not been told, and this screen says
+ * so rather than assuming the answer it would prefer.
+ */
+export type KeyStatus = "set" | "missing" | "unknown";
+
+/**
+ * What is missing, said before the buttons rather than after them.
+ *
+ * THE FAULT. This screen showed seven cards, each with a Start button on it, and said
+ * nothing at all about the one thing every single one of them needs. A founder pressed
+ * Start, watched a thread open, and met a red box telling them about a key. Seven buttons
+ * that all lead to the same wall is a screen that has wasted somebody's evening.
+ *
+ * IT IS ABOVE THE CARDS ON PURPOSE. Below them it is a footnote somebody reads after
+ * pressing the thing it is about.
+ *
+ * THE CARDS ARE LEFT ALONE. Nothing here disables a Start button. A founder who wants to
+ * read what an engine asks before they set anything up should be able to, and a button that
+ * has gone grey teaches somebody they are locked out rather than that they have one thing
+ * left to do.
+ */
+function KeyBanner({ status }: { readonly status: KeyStatus }): ReactElement | null {
+  if (status === "set") return null;
+  if (status === "missing") {
+    return (
+      <Notice
+        tone="problem"
+        title="One thing is missing, and everything below needs it"
+        lines={[
+          "Every word this app writes is written by Claude, and Claude needs an API key that belongs to you. An API key is a long password that lets this app use your own Anthropic account. There is not one in here yet.",
+          // Accurate, and it was worth checking: the readiness gate refuses POST /api/threads
+          // while the key is missing, so Start does not open a conversation that then dies.
+          // It takes them to a screen that says the same thing this one is saying.
+          "So pressing Start on any of these takes you to a screen saying exactly this. Do the key first. You only do it once.",
+        ]}
+      >
+        <p className="notice-line">
+          <a className="button" href={hrefFor({ kind: "setup" })}>
+            Open Setup
+          </a>
+        </p>
+      </Notice>
+    );
+  }
+  return (
+    <Notice
+      tone="plain"
+      title="We could not check your Anthropic key"
+      lines={[
+        "The list below is right. The one thing we could not read just now is whether your key is in, and nothing below runs without it.",
+        "Open Setup and look at Your Anthropic key. If it says Done, carry on down the list.",
+      ]}
+    >
+      <p className="notice-line">
+        <a className="button button-quiet" href={hrefFor({ kind: "setup" })}>
+          Open Setup
+        </a>
+      </p>
+    </Notice>
+  );
+}
+
+export function Home({
+  founder,
+  home,
+  keyStatus = "unknown",
+}: {
+  readonly founder: Founder;
+  readonly home: HomeState;
+  readonly keyStatus?: KeyStatus;
+}): ReactElement {
   const rows = visibleRoutes(founder.track);
   const nextId = home.nextRouteId;
   const name = founder.displayName ?? founder.firstName;
@@ -79,6 +155,8 @@ export function Home({ founder, home }: { readonly founder: Founder; readonly ho
           ? "Everything you can do right now is done. Come back when the next session opens."
           : "Here is everything you build. Start at the top."}
       </p>
+
+      <KeyBanner status={keyStatus} />
 
       <ul className="cards">
         {rows.map((row) => {

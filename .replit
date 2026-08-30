@@ -24,6 +24,30 @@
 # and cover nothing else: the Deployment has its own run command, set in a web pane, and a
 # fix that lives in two places is a fix that gets applied to one of them. Boot is the one
 # place every start goes through, workspace and deployment alike.
+#
+# THE SAME LINE WAS THE BUG A SECOND TIME, ONE LAYER UP, AND THE FIX IS THE SAME SHAPE.
+# `npm run start` did not build the browser bundle either, dist/ is gitignored, and nothing
+# else built it. So a founder pressed Run and got three lines of HTML: "The app is running.
+# The browser part has not been built yet", one Sign in link that came back to the same page,
+# and 404 on everything else. The build command existed only in a comment at the bottom of
+# this file, for a person to paste into a web pane. No founder was ever going to read it.
+#
+# THE FIX IS NOW IN package.json, AS `prestart`, FOR THE MIGRATION'S REASON. npm runs
+# `prestart` before `start`, so it runs on the workspace Run button and on the deployment run
+# command, both of which are `npm run start`. That is the one place every start goes through.
+# Chaining `npm run build:web &&` here would cover the workspace and leave the deployment
+# uncovered, which is the mistake the migration note above is about.
+#
+# IT BUILDS ONLY WHEN THERE IS NOTHING TO SERVE, so a restart does not wait for a build it
+# does not need, and it NEVER FAILS THE START. A build that dies for want of memory must not
+# leave a founder with a container that restarts for ever behind an address that never
+# answers. It prints a line and the server comes up anyway.
+#
+# THE CAVEAT THAT CANNOT BE CLOSED FROM HERE, and the design works either way: nobody here
+# has run a spike to find out whether pressing Run in a Replit workspace triggers a build of
+# its own first. If it does, dist/web/index.html is already there and `prestart` skips in
+# milliseconds. If it does not, `prestart` is the thing that builds it. Neither answer
+# changes what a founder gets.
 run = "npm run start"
 entrypoint = "src/server/index.ts"
 
@@ -84,6 +108,13 @@ externalPort = 80
 #
 # Build command:  npm ci && npm run build
 # Run command:    npm run start
+#
+# BOTH OF THOSE NOW BUILD THE BROWSER BUNDLE, and that repetition is deliberate rather than
+# sloppy. `npm run build` builds it here, at build time, where it belongs and where a failure
+# stops the deployment going green. `prestart` builds it again on the run command only if it
+# is not there, which is what covers a deployment whose build command was never set, or was
+# set to something else, or was set in a pane somebody edited last month. The second one is
+# cheap when the first one worked: it is a single test for a file.
 #
 # DO NOT ADD `npm run db:migrate` TO THE BUILD COMMAND. It is the obvious next thought and it
 # is wrong twice over. The build runs at a different moment from the app, and whether a

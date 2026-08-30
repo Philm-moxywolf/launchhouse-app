@@ -17,15 +17,57 @@
  * test nobody ran on a laptop, which is the whole reason this folder is built the way it
  * is.
  *
+ * AND THAT SENTENCE USED TO BE A WISH RATHER THAN A FACT, WHICH COST THE WHOLE SUITE.
+ *
+ * "There is no database here" was true only while DATABASE_URL happened to be unset in
+ * whoever's shell was running the tests. One route below does reach for the database: a key
+ * Anthropic has stopped accepting is thrown away, and `forgetStoredAnthropicKey` calls
+ * `getDb()`, which reads DATABASE_URL through `lateSettings()`. With a real Postgres in the
+ * environment that call opened a real connection pool. Nothing ever closed it, an idle
+ * postgres.js connection holds the event loop open, and the file was killed at the 30 second
+ * test timeout. All nine assertions passed, the file failed, and `npm test` exited 1.
+ *
+ * Worse than the leak: with a database present the test was no longer the test. Its name is
+ * "when our own copy CANNOT be removed", and against a real Postgres the removal might well
+ * succeed, so the branch it exists to cover never ran.
+ *
+ * SO THE CONDITION IS MADE RATHER THAN ASSUMED. The two lines below take DATABASE_URL out of
+ * the environment for the length of this file, and `lateSettings()` re-reads the environment
+ * on every call in a test process, so `getDb()` refuses instead of connecting. `after` puts
+ * the variable back and closes any pool that somehow got opened anyway, so a future test in
+ * this file cannot bring the hang back quietly.
+ *
  * WHAT IT CALLS. The real Fastify instance from ./test-fixtures.ts.
- * WHAT IT READS AND WRITES. Nothing outside the process, and no key exists to leak.
+ * WHAT IT READS AND WRITES. Its own process.env entry for DATABASE_URL, removed at import
+ * and put back at the end. Nothing over a socket, nothing on disk, and no key exists to leak.
  */
 
-import { afterEach, test } from 'node:test';
+import { after, afterEach, test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { forgetEverythingForTests, rememberAnthropicKey } from '../agent/anthropic-key.ts';
+import { closeDb } from '../db/client.ts';
 import { buildHarness } from './test-fixtures.ts';
+
+/**
+ * Module scope, not a `before` hook, and the difference matters.
+ *
+ * A hook runs after every import in this file has already run. Nothing here reads the
+ * environment at import time today, but the day something does, a hook would be too late and
+ * the failure would be the same 30 second hang with no clue attached. This is the first
+ * statement that runs, so there is no window at all.
+ */
+const REAL_DATABASE_URL = process.env['DATABASE_URL'];
+delete process.env['DATABASE_URL'];
+
+after(async () => {
+  // Belt as well as braces. If a route in this file ever does open a pool, the process still
+  // exits instead of being killed at the timeout, and the test that opened it still fails on
+  // its own assertion rather than on a hang that names nothing.
+  await closeDb();
+  if (REAL_DATABASE_URL === undefined) delete process.env['DATABASE_URL'];
+  else process.env['DATABASE_URL'] = REAL_DATABASE_URL;
+});
 
 const JSON_HEADERS = { 'content-type': 'application/json' };
 
@@ -37,6 +79,21 @@ interface KeyAnswer {
 
 afterEach(() => {
   forgetEverythingForTests();
+});
+
+/**
+ * The seal itself, asserted rather than trusted.
+ *
+ * Without this, somebody deleting the two lines above gets a suite that passes on their
+ * laptop and hangs on the machine that has a database. The file's own claim about itself is
+ * the thing under test here.
+ */
+test('THIS FILE RUNS WITH NO DATABASE, WHATEVER IS IN THE ENVIRONMENT', () => {
+  assert.equal(
+    process.env['DATABASE_URL'],
+    undefined,
+    'a database reached this file, so the route that clears a refused key would open a pool nothing closes',
+  );
 });
 
 // ---------------------------------------------------------------------------------------
@@ -227,7 +284,8 @@ test('AND A REFUSED KEY IS STILL REPORTED WHEN OUR OWN COPY CANNOT BE REMOVED', 
   const me = (await h.app.inject({ method: 'GET', url: '/api/me', headers: { cookie } })).json<{ id: string }>();
   rememberAnthropicKey(me.id, 'not-a-real-key-that-anthropic-has-revoked', new Date());
 
-  // There is no database behind this harness, so the removal below cannot succeed.
+  // There is no database behind this harness, so the removal below cannot succeed. That is
+  // asserted at the bottom rather than assumed, because it is the entire subject of the test.
   const res = await withAnthropicAnswering(
     401,
     { error: { type: 'authentication_error', message: 'API key is invalid.' } },
@@ -237,6 +295,21 @@ test('AND A REFUSED KEY IS STILL REPORTED WHEN OUR OWN COPY CANNOT BE REMOVED', 
   const answer = JSON.parse(res.body) as KeyAnswer;
   assert.equal(answer.problem?.code, 'key_not_accepted');
   assert.match(answer.problem?.whatToDo ?? '', /console\.anthropic\.com/);
+
+  /*
+    THE BRANCH REALLY RAN, and this is the line that proves it.
+
+    The route wraps the removal in a try and swallows what it catches, so the founder's
+    sentence gets through. That swallow is right, and it is also what let this test pass for
+    the wrong reason: against a real database the removal SUCCEEDS, the catch never runs, and
+    the test name stops describing the test. The route writes one line when the tidy up
+    fails, so the line is the evidence.
+  */
+  const said = h.log.lines.map((l) => l.msg);
+  assert.ok(
+    said.includes('a stored Anthropic key stopped working and our copy could not be removed'),
+    `the removal did not fail, so this test is not testing what it says. The log said: ${said.join(' | ')}`,
+  );
   await h.app.close();
 });
 
