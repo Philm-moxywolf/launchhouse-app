@@ -35,10 +35,24 @@ import {
 const allGood = (): ReadinessFacts => ({
   databaseUrlSet: true,
   databaseAnswered: true,
+  schemaRefusal: undefined,
   engineReady: true,
+  platformCliRefusal: undefined,
   masterKeyRefusal: undefined,
   anthropicKeySet: true,
   passphraseSet: true,
+});
+
+/** Everything missing. Used where the order or the full list is what is being checked. */
+const allBad = (): ReadinessFacts => ({
+  databaseUrlSet: false,
+  databaseAnswered: false,
+  schemaRefusal: 'the tables were not built',
+  engineReady: false,
+  platformCliRefusal: 'the CLI did not install',
+  masterKeyRefusal: 'something went wrong with the key',
+  anthropicKeySet: false,
+  passphraseSet: false,
 });
 
 const idsFor = (facts: ReadinessFacts): string[] => blockersFrom(facts).map((b) => b.id);
@@ -70,7 +84,9 @@ describe('what is missing', () => {
   test('each fact produces its own blocker and no others', () => {
     assert.deepEqual(idsFor({ ...allGood(), databaseUrlSet: false }), ['database']);
     assert.deepEqual(idsFor({ ...allGood(), databaseAnswered: false }), ['database']);
+    assert.deepEqual(idsFor({ ...allGood(), schemaRefusal: 'no tables' }), ['schema']);
     assert.deepEqual(idsFor({ ...allGood(), engineReady: false }), ['engine']);
+    assert.deepEqual(idsFor({ ...allGood(), platformCliRefusal: 'no cli' }), ['platformCli']);
     assert.deepEqual(idsFor({ ...allGood(), anthropicKeySet: false }), ['anthropicKey']);
     assert.deepEqual(idsFor({ ...allGood(), passphraseSet: false }), ['passphrase']);
     assert.deepEqual(idsFor({ ...allGood(), masterKeyRefusal: 'a sentence' }), ['masterKey']);
@@ -84,16 +100,13 @@ describe('what is missing', () => {
   });
 
   test('the database comes first, because the key is stored in it', () => {
-    const ids = idsFor({
-      databaseUrlSet: false,
-      databaseAnswered: false,
-      engineReady: false,
-      masterKeyRefusal: 'a sentence',
-      anthropicKeySet: false,
-      passphraseSet: false,
-    });
+    const ids = idsFor(allBad());
     assert.equal(ids[0], 'database');
-    assert.equal(ids.length, 5);
+    assert.equal(ids.length, 7);
+  });
+
+  test('the schema comes second, because it is the database that is wrong and not a separate thing', () => {
+    assert.equal(idsFor(allBad())[1], 'schema');
   });
 
   test('a master key refusal is carried through word for word', () => {
@@ -102,14 +115,7 @@ describe('what is missing', () => {
   });
 
   test('every blocker says what happened, names the doubt, and ends on an action', () => {
-    const all = blockersFrom({
-      databaseUrlSet: false,
-      databaseAnswered: false,
-      engineReady: false,
-      masterKeyRefusal: 'something went wrong with the key',
-      anthropicKeySet: false,
-      passphraseSet: false,
-    });
+    const all = blockersFrom(allBad());
     for (const b of all) {
       assert.ok(b.heading.length > 0, `${b.id} has no heading`);
       assert.ok(b.what.length > 0, `${b.id} does not say what happened`);
@@ -147,6 +153,39 @@ describe('the start page', () => {
     assert.ok(!html.includes('<script>alert(1)</script>'));
     assert.match(html, /&lt;script&gt;/);
   });
+
+  /**
+   * THE FAULT THIS PAIR EXISTS FOR. The page shipped with no anchors at all, so a founder
+   * who landed on it could not get anywhere. The first test would have failed then. The
+   * second is the reason the link is conditional, and it is the one that would be easy to
+   * lose: a link to sign in while the database is unreachable leads to the 500 this whole
+   * change exists to remove, and the founder blames themselves for clicking it.
+   */
+  test('offers a way off the page when signing in would work', () => {
+    // The engine, not the key: the key never reaches this page on its own any more. A
+    // missing engine refuses turns and leaves sign in working, so the link is live.
+    const html = startHerePage(blockersFrom({ ...allGood(), engineReady: false }));
+    assert.match(html, /<a href="\/auth\/signin">Sign in<\/a>/);
+  });
+
+  test('offers no link at all when signing in would fail, because a dead link is worse than none', () => {
+    for (const facts of [
+      { ...allGood(), databaseUrlSet: false },
+      { ...allGood(), schemaRefusal: 'the tables were not built' },
+    ]) {
+      const html = startHerePage(blockersFrom(facts));
+      assert.ok(!html.includes('<a href'), 'a page that blocks everything must not link to sign in');
+      assert.match(html, /will not work until the list is empty/);
+    }
+  });
+
+  test('says nothing is broken before it says what is missing, because that is the founder first thought', () => {
+    const html = startHerePage(blockersFrom({ ...allGood(), engineReady: false }));
+    assert.ok(
+      html.indexOf('you have not done anything wrong') < html.indexOf('One thing is missing'),
+      'the reassurance has to come before the list, not after it',
+    );
+  });
 });
 
 // =========================================================================================
@@ -170,15 +209,35 @@ describe('the gates', () => {
     await app.close();
   });
 
+  /**
+   * IT USED TO USE THE ANTHROPIC KEY AND CANNOT ANY MORE. That blocker is handledElsewhere
+   * now, because the screen that fixes it lives inside the browser app, which is served at
+   * GET /, which is the request this page takes over. So the key is the one blocker that
+   * must NOT produce this page on its own. The engine is used instead: nobody else owns
+   * that screen, so the start page is the only thing a founder would see.
+   */
   test('answers GET / with the start page when something is missing', async () => {
-    const app = await serverWith({ ...allGood(), anthropicKeySet: false });
+    const app = await serverWith({ ...allGood(), engineReady: false });
     const res = await app.inject({ method: 'GET', url: '/' });
     assert.equal(res.statusCode, 200);
     assert.match(res.headers['content-type'] ?? '', /text\/html/);
-    assert.match(res.body, /Your Anthropic key is not set/);
+    assert.match(res.body, /The writing engine is missing/);
     // A founder who has just fixed one of these reloads at once. A cached page would tell
     // them it is still broken.
     assert.equal(res.headers['cache-control'], 'no-store');
+    await app.close();
+  });
+
+  /**
+   * The other half, and it is the trap that was found by walking the path rather than
+   * reading it. A founder whose only missing thing was the key landed on Start here, which
+   * told them to sign in and paste a key. They signed in, were redirected to /, and read
+   * the same page again. The browser app was behind that page the whole time.
+   */
+  test('stands back from GET / when the only thing missing is fixed inside the app', async () => {
+    const app = await serverWith({ ...allGood(), anthropicKeySet: false });
+    const res = await app.inject({ method: 'GET', url: '/' });
+    assert.equal(res.body, 'the real home page', 'the browser app must be reachable, or the key can never be pasted');
     await app.close();
   });
 
@@ -195,6 +254,41 @@ describe('the gates', () => {
       assert.equal(body.error, 'not_ready');
       assert.match(body.message, /database/i);
     }
+    await app.close();
+  });
+
+  /**
+   * The 500 that started this work, turned into a sentence. A database that answers with no
+   * tables in it used to reach every route and fail inside each one with an incident id.
+   */
+  test('refuses every API route while the tables are not built, and says so in words', async () => {
+    const app = await serverWith({ ...allGood(), schemaRefusal: 'the tables were not built' });
+    for (const [method, url] of [
+      ['GET', '/api/home'],
+      ['POST', '/api/setup/profile'],
+      ['POST', '/api/threads'],
+    ] as const) {
+      const res = await app.inject({ method, url });
+      assert.equal(res.statusCode, 503, `${method} ${url} must be refused with no tables`);
+      assert.match((res.json() as { message: string }).message, /not set up/i);
+    }
+    await app.close();
+  });
+
+  /**
+   * The CLI missing must refuse turns and NOTHING ELSE. Getting this wrong in the strict
+   * direction would lock a founder out of the setup screen over a package they cannot
+   * install; getting it wrong in the loose direction is what shipped, and it let the failure
+   * land on their first message instead.
+   */
+  test('refuses turns when the platform CLI is missing, and leaves every other route alone', async () => {
+    const app = await serverWith({ ...allGood(), platformCliRefusal: 'part of Claude is missing' });
+    for (const url of ['/api/threads', '/api/threads/th_1/messages']) {
+      assert.equal((await app.inject({ method: 'POST', url })).statusCode, 503, `POST ${url} must be refused`);
+    }
+    assert.equal((await app.inject({ method: 'GET', url: '/api/home' })).statusCode, 200);
+    assert.equal((await app.inject({ method: 'GET', url: '/api/setup' })).statusCode, 200);
+    assert.equal((await app.inject({ method: 'POST', url: '/api/setup/profile' })).statusCode, 200);
     await app.close();
   });
 

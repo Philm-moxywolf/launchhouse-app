@@ -10,21 +10,34 @@
  * exactly as it was. Only a real ROLLBACK proves that, and "we rolled back" is the
  * sentence a founder is told when their data is untouched.
  *
- * IT SKIPS WITHOUT A DATABASE, LOUDLY. There is no Postgres on the machine this was
- * written on, so every assertion below is written to run when one appears and to say
- * so plainly when one does not. A skip that says nothing is a skip nobody fixes.
+ * IT SKIPS WITHOUT A DATABASE, LOUDLY, AND ONE ASSERTION AT A TIME. There is no
+ * Postgres on the machine this was written on, so every assertion below is written
+ * to run when one appears and to say so plainly when one does not. The skip is on
+ * each `it` rather than on the `describe`, because node:test counts a skipped test
+ * and does not count a skipped suite: skipping the suite whole printed `ok` beside
+ * it and left `# skipped 0` in the summary, which said nothing had been left out
+ * while six assertions had. tests/db/setup.ts owns the reason.
  *
  * HOW TO RUN IT
- *   DATABASE_URL=postgres://user@localhost:5432/launchhouse_test \
- *   GE_MASTER_KEY=$(node -e "console.log(require('crypto').randomBytes(32).toString('base64'))") \
+ *   createdb launchhouse_test 2>/dev/null
+ *   DATABASE_URL=postgres://localhost:5432/launchhouse_test \
+ *   GE_MASTER_KEY=$(node -e "console.log(require('node:crypto').randomBytes(32).toString('base64'))") \
  *   npx tsx --test src/server/storage/turn.db.test.ts
+ *
+ * IT TAKES THE DATABASE FROM tests/db/setup.ts RATHER THAN MIGRATING IT ITSELF. This
+ * file and turn.concurrency.test.ts both used to call runMigrations() in their own
+ * before hook, node:test runs test files in parallel, and `create extension if not
+ * exists citext` is not safe to run twice at once. Each suite alone was green and the
+ * pair was red, so these six assertions had never run green in a whole `npm test`.
+ * The claim is a lock: one database suite at a time. See that file for why the fix is
+ * a lock and not a database each.
  *
  * IT MIGRATES THE DATABASE IT IS POINTED AT, and it deletes the founder rows it
  * creates afterwards. Point it at a scratch database, never at anything holding a
  * real founder.
  *
  * WHAT IT CALLS. storage/turn.ts, storage/harvest.ts, storage/materialise.ts,
- * db/migrate.ts, db/client.ts, and the filesystem.
+ * tests/db/setup.ts, db/client.ts, and the filesystem.
  */
 
 import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
@@ -34,37 +47,30 @@ import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { and, eq } from 'drizzle-orm';
 
+import { claimTheDatabase, type DatabaseClaim, dbTest, NO_DATABASE } from '../../../tests/db/setup.ts';
 import { closeDb, getDb, setFounderScope } from '../db/client.ts';
-import { runMigrations } from '../db/migrate.ts';
 import { founders, geFile } from '../db/schema.ts';
 import { createFounderKey } from './crypto.ts';
 import { HarvestRefused } from './harvest.ts';
 import { epochPath, founderRoot, geHome } from './paths.ts';
 import { runTurn, TurnRefused } from './turn.ts';
 
-/**
- * Two conditions, and they are separate on purpose. A machine with a database and no
- * master key would otherwise fail with a cipher error and look like a storage bug.
- */
-const HAVE_DB = typeof process.env.DATABASE_URL === 'string' && process.env.DATABASE_URL.length > 0;
-const HAVE_KEY = typeof process.env.GE_MASTER_KEY === 'string' && process.env.GE_MASTER_KEY.length > 0;
-const SKIP = !HAVE_DB || !HAVE_KEY;
-const WHY = !HAVE_DB
-  ? 'DATABASE_URL is not set, so there is no database to roll back'
-  : 'GE_MASTER_KEY is not set, and every blob is encrypted under it';
-
 const FOUNDER = '01J8ZQTMK4NRC7XVYB3D9GHF31';
 
 let workspace: string;
 let savedWorkspaceRoot: string | undefined;
+/** The database, held for as long as this suite runs. See tests/db/setup.ts. */
+let claim: DatabaseClaim | undefined;
 
 before(async () => {
-  if (SKIP) return;
+  if (NO_DATABASE) return;
   savedWorkspaceRoot = process.env.WORKSPACE_ROOT;
   workspace = await mkdtemp(join(tmpdir(), 'lh-turn-db-'));
   process.env.WORKSPACE_ROOT = workspace;
 
-  await runMigrations();
+  // Takes the lock, then migrates inside it. Nothing else is running DDL against this
+  // database while that happens, and nothing else reads these tables until release.
+  claim = await claimTheDatabase('src/server/storage/turn.db.test.ts');
   const db = getDb();
   await db.delete(founders).where(eq(founders.id, FOUNDER));
   const { wrapped } = createFounderKey(FOUNDER);
@@ -78,12 +84,20 @@ before(async () => {
 });
 
 after(async () => {
-  if (SKIP) return;
-  await getDb().delete(founders).where(eq(founders.id, FOUNDER));
-  await closeDb();
-  if (savedWorkspaceRoot === undefined) delete process.env.WORKSPACE_ROOT;
-  else process.env.WORKSPACE_ROOT = savedWorkspaceRoot;
-  await rm(workspace, { recursive: true, force: true });
+  if (NO_DATABASE) return;
+  try {
+    if (claim !== undefined) {
+      await getDb().delete(founders).where(eq(founders.id, FOUNDER));
+      await closeDb();
+    }
+  } finally {
+    // Handed back even when the cleanup above threw, or the next suite waits twenty
+    // seconds for a lock this one is never going to give up.
+    await claim?.release();
+    if (savedWorkspaceRoot === undefined) delete process.env.WORKSPACE_ROOT;
+    else process.env.WORKSPACE_ROOT = savedWorkspaceRoot;
+    await rm(workspace, { recursive: true, force: true });
+  }
 });
 
 async function exists(path: string): Promise<boolean> {
@@ -109,8 +123,8 @@ async function pathsInRecord(): Promise<string[]> {
   });
 }
 
-describe('the turn, against a real Postgres', { skip: SKIP ? WHY : false }, () => {
-  it('harvests what the work wrote, and bumps the version once', async () => {
+describe('the turn, against a real Postgres', () => {
+  it('harvests what the work wrote, and bumps the version once', dbTest, async () => {
     const before = await versionOf();
     const outcome = await runTurn({ founderId: FOUNDER, actor: 'system', verb: 'seed' }, async (ctx) => {
       await writeFile(join(ctx.home, 'founder-brain.md'), '- **Track:** b2b\n\n## Thesis\n', 'utf8');
@@ -127,7 +141,7 @@ describe('the turn, against a real Postgres', { skip: SKIP ? WHY : false }, () =
     assert.equal(await readFile(epochPath(FOUNDER), 'utf8'), `${outcome.versionAfter}\n`);
   });
 
-  it('rebuilds the folder from the record when the container has never seen the founder', async () => {
+  it('rebuilds the folder from the record when the container has never seen the founder', dbTest, async () => {
     // The container filesystem is a cache and is not durable. A founder's second turn
     // may land somewhere that has never seen them, and without the rebuild ge index
     // would tell them their work is gone while it sits safely in the database.
@@ -139,7 +153,7 @@ describe('the turn, against a real Postgres', { skip: SKIP ? WHY : false }, () =
     assert.equal(outcome.versionAfter, outcome.versionBefore);
   });
 
-  it('THE REFUSAL, END TO END: an unexplained absence rolls the record back untouched', async () => {
+  it('THE REFUSAL, END TO END: an unexplained absence rolls the record back untouched', dbTest, async () => {
     const versionBefore = await versionOf();
     const recordBefore = await pathsInRecord();
 
@@ -197,7 +211,7 @@ describe('the turn, against a real Postgres', { skip: SKIP ? WHY : false }, () =
     assert.deepEqual(await pathsInRecord(), recordBefore, 'the cleanup did not put the record back');
   });
 
-  it('the founder can carry on straight afterwards, with everything they had', async () => {
+  it('the founder can carry on straight afterwards, with everything they had', dbTest, async () => {
     // The sentence the screen shows is "try again, your data is untouched". This is
     // that sentence, checked.
     const outcome = await runTurn({ founderId: FOUNDER, actor: 'system', verb: 'retry' }, async (ctx) => {
@@ -212,14 +226,14 @@ describe('the turn, against a real Postgres', { skip: SKIP ? WHY : false }, () =
     ]);
   });
 
-  it('records a deletion when the work removes a file materialise DID write', async () => {
+  it('records a deletion when the work removes a file materialise DID write', dbTest, async () => {
     await runTurn({ founderId: FOUNDER, actor: 'ge', verb: 'person purge' }, async (ctx) => {
       await rm(join(ctx.home, 'people', 'sam-example-com.md'), { force: true });
       return null;
     });
     assert.deepEqual(await pathsInRecord(), ['founder-brain.md', 'ledger.md']);
   });
-  it('THE WRITE THE WORK MAY NOT DO: ctx.tx refuses, and says which handle to use', async () => {
+  it('THE WRITE THE WORK MAY NOT DO: ctx.tx refuses, and says which handle to use', dbTest, async () => {
     // ctx.tx used to be the turn's open transaction. It is a read handle on the pool
     // now, because the turn does not hold a transaction across the run any more. Both
     // refusals below are things that would otherwise be silent: a write that never

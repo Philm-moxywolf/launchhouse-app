@@ -929,7 +929,7 @@ export function parseEnv(raw: Readonly<Record<string, string | undefined>>): Env
   }
 
   if (v.ANTHROPIC_API_KEY === undefined) {
-    warnings.push("ANTHROPIC_API_KEY is not set. That is expected: it is pasted into the app, not into the environment. Nothing runs a turn until it is there.");
+    warnings.push("ANTHROPIC_API_KEY is not set. That is expected: it is pasted into the app, on the Setup screen, and not into the environment. It is checked against Anthropic before it is stored, and the running app picks it up without a restart. Nothing runs a turn until it is there.");
   }
 
   if (base.from === "localhost") {

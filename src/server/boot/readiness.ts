@@ -38,8 +38,19 @@
 
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { escapeHtml, layout } from '../auth/pages.ts';
+import { onAnthropicKeyChanged } from '../agent/anthropic-key.ts';
 
-export type BlockerId = 'database' | 'engine' | 'masterKey' | 'anthropicKey' | 'passphrase';
+export type BlockerId =
+  | 'database'
+  | 'schema'
+  | 'engine'
+  | 'platformCli'
+  | 'masterKey'
+  | 'anthropicKey'
+  | 'passphrase';
+
+/** Where a founder signs in. One constant, because the page and its link must not drift. */
+export const SIGN_IN_PATH = '/auth/signin';
 
 /**
  * One missing thing.
@@ -66,7 +77,21 @@ export interface Blocker {
 export interface ReadinessFacts {
   readonly databaseUrlSet: boolean;
   readonly databaseAnswered: boolean;
+  /**
+   * The founder sentence from a failed migration, or undefined when the tables are there.
+   *
+   * A DATABASE THAT ANSWERS IS NOT A DATABASE THAT IS SET UP, and telling those two apart is
+   * what this fact is for. Before boot ran the migration, a fresh Replit database answered
+   * `select 1`, /healthz said ok, the start page showed nothing, and POST /auth/signin
+   * answered 500 with an incident id. See boot/schema.ts.
+   */
+  readonly schemaRefusal: string | undefined;
   readonly engineReady: boolean;
+  /**
+   * The founder sentence from a CLI that could not be resolved or could not be run, or
+   * undefined when it ran. See boot/platform-cli.ts for why resolving is not enough.
+   */
+  readonly platformCliRefusal: string | undefined;
   /** The founder sentence from a master key refusal, or undefined when there was none. */
   readonly masterKeyRefusal: string | undefined;
   readonly anthropicKeySet: boolean;
@@ -104,6 +129,29 @@ export function blockersFrom(facts: ReadinessFacts): Blocker[] {
     });
   }
 
+  /**
+   * SECOND, BECAUSE IT IS THE DATABASE'S PROBLEM AND NOT A SEPARATE ONE. A founder with no
+   * database never sees this: boot does not try to migrate a database that did not answer,
+   * so schemaRefusal stays undefined and they read one line about the database rather than
+   * two lines about one cause.
+   *
+   * IT BLOCKS EVERYTHING. Every API route in the app reads or writes a founder's record, and
+   * with no tables every one of them fails the same way: a 500 carrying an incident id. That
+   * 500 is the failure this whole blocker exists to replace, so letting any of them through
+   * would put it straight back.
+   */
+  if (facts.schemaRefusal !== undefined) {
+    out.push({
+      id: 'schema',
+      heading: 'Your database is not set up yet',
+      what: facts.schemaRefusal,
+      doThis: 'Show this screen to somebody from the Launchhouse team. They have one command to run and it takes a few seconds.',
+      handledElsewhere: false,
+      blocksTurns: true,
+      blocksEverything: true,
+    });
+  }
+
   if (facts.masterKeyRefusal !== undefined) {
     out.push({
       id: 'masterKey',
@@ -130,13 +178,52 @@ export function blockersFrom(facts: ReadinessFacts): Blocker[] {
     });
   }
 
+  /**
+   * NEXT TO THE ENGINE, BECAUSE IT IS THE SAME KIND OF FAULT. Both are a part of the app
+   * that did not arrive in this copy, and for both the founder's action is to tell somebody.
+   * They are two blockers rather than one because they are fixed differently: the engine is
+   * a folder that ships with the repository, and this is a package npm was allowed to skip.
+   *
+   * IT DOES NOT BLOCK EVERYTHING. Signing in, reading files and pasting a key all work
+   * without the CLI. Only writing needs it, so only turns are refused.
+   */
+  if (facts.platformCliRefusal !== undefined) {
+    out.push({
+      id: 'platformCli',
+      heading: 'Part of Claude did not install',
+      what: facts.platformCliRefusal,
+      doThis: 'This is a problem with the copy you were given, not with anything you did. Tell whoever is running the room.',
+      handledElsewhere: false,
+      blocksTurns: true,
+      blocksEverything: false,
+    });
+  }
+
   if (!facts.anthropicKeySet) {
     out.push({
       id: 'anthropicKey',
       heading: 'Your Anthropic key is not set',
       what: 'Everything this app writes is written by Claude, and Claude needs an API key that belongs to you. An API key is a long password that lets this app use your account. There is not one here yet.',
-      doThis: 'Go to the setup screen and paste your Anthropic API key. You get one at console.anthropic.com.',
-      handledElsewhere: false,
+      // IT NAMES SIGNING IN FIRST. The old wording was "go to the setup screen", and the
+      // setup screen is behind sign in, so a founder who followed it went looking for a
+      // screen they could not reach yet from a page that had no links on it at all.
+      doThis: 'Sign in below with your passphrase, then paste your Anthropic API key into the setup screen. You get a key at console.anthropic.com.',
+      /**
+       * TRUE, LIKE THE PASSPHRASE, AND FOR THE SAME REASON: SOMEBODY ELSE OWNS THIS SCREEN.
+       *
+       * src/web/routes/Setup.tsx now has the box, checks the key against Anthropic and
+       * stores it. That screen is inside the browser app, the browser app is served at
+       * GET /, and GET / is the request this page takes over. With false here, a founder
+       * whose only missing thing was the key read a page telling them to sign in and paste
+       * a key, signed in, was redirected to /, and read the same page again. Sign in
+       * redirects to / and / was this page: there was no way through it from inside the
+       * app, on the first screen of the first deployment.
+       *
+       * It is still LISTED whenever something else is missing too, so a founder missing
+       * three things still reads three things in one place. It only stands back when it is
+       * the one thing left, because then the screen that fixes it is one click away.
+       */
+      handledElsewhere: true,
       // Reads are fine. The setup screen is a read and a write, and gating it would lock
       // the founder out of the one screen that fixes this.
       blocksTurns: true,
@@ -166,6 +253,24 @@ export function blockersFrom(facts: ReadinessFacts): Blocker[] {
  * A copy of the app that never ran `npm run build`, or a deployment whose build step
  * failed, has no bundle at all, and that is exactly the copy most likely to be missing
  * other things too. A page rendered here works in both states and with JavaScript off.
+ *
+ * IT HAS A LINK ON IT NOW, AND THAT WAS THE WHOLE OF THE THIRD FAULT. This page shipped
+ * with no anchors at all. A founder landed on it, read "go to the setup screen", and had
+ * no way to go anywhere: no menu, no address they could guess, nothing to click. The page
+ * that exists to unstick people was itself a dead end.
+ *
+ * THE LINK IS CONDITIONAL, AND THE CONDITION IS THE POINT. Sign in is offered only when
+ * nothing on the list blocks everything. The sign in PAGE renders without touching the
+ * database on purpose, but the sign in BUTTON writes a session row, so offering the link
+ * while the database is unreachable or unmigrated walks the founder straight into the 500
+ * this work exists to remove. A link that leads to a broken screen is worse than no link,
+ * because the founder blames themselves for following it.
+ *
+ * THE COPY IS WRITTEN FOR SOMEBODY WHO PRESSED REMIX FOUR MINUTES AGO. They do not know
+ * what a migration is, whether this app is theirs or shared, or whether they have already
+ * broken something. So the first line says what this is, the second says nothing is broken,
+ * and the list comes third. Naming the doubt before answering it is the house rule, and on
+ * this screen the doubt is always the same one: did I do this?
  */
 export function startHerePage(blockers: readonly Blocker[]): string {
   const items = blockers
@@ -181,20 +286,32 @@ export function startHerePage(blockers: readonly Blocker[]): string {
   const count = blockers.length;
   const opener =
     count === 1
-      ? 'One thing is missing. The app is running, and this is what it needs.'
-      : `${String(count)} things are missing. The app is running, and this is what it needs.`;
+      ? 'One thing is missing, and it is listed below.'
+      : `${String(count)} things are missing, and they are listed below.`;
+
+  // Nothing on the list stops a session being written, so sign in works today.
+  const canSignIn = !blockers.some((b) => b.blocksEverything);
+  const next = canSignIn
+    ? `<p class="row"><a href="${SIGN_IN_PATH}">Sign in</a></p>
+<p class="quiet">Signing in works now. The rest of the list is done from inside the app or by somebody from the Launchhouse team.</p>`
+    : `<p class="row">Work down the list in order, then reload this page.</p>
+<p class="quiet">Signing in will not work until the list is empty, so there is no point trying it yet.</p>`;
 
   return layout(
     'Start here',
     `<h1>Start here</h1>
-<p>${escapeHtml(opener)}</p>
+<p>This is your own copy of the Launchhouse app. It is running, and nobody else is in it.</p>
+<p>Nothing is broken and you have not done anything wrong. A new copy always starts with a few things to fill in. ${escapeHtml(opener)}</p>
 <ol>
 ${items}
 </ol>
-<p>Fix them in the order above, then reload this page.</p>
+${next}
 <style>
   h2 { font-size: 1.05rem; margin: 0 0 0.4rem; }
   ol > li { margin-bottom: 1.6rem; }
+  /* Big enough to hit with a thumb. This is the only way off this page. */
+  .row a { display: inline-block; font-weight: 600; padding: 0.75rem 1.4rem;
+           border: 1px solid currentColor; border-radius: 8px; text-decoration: none; }
 </style>`,
   );
 }
@@ -209,14 +326,44 @@ ${items}
  * screen. Whoever stores the pasted key calls set() with the new facts.
  */
 export class ReadinessState {
+  private facts: ReadinessFacts;
   private current: readonly Blocker[];
 
   constructor(facts: ReadinessFacts) {
+    this.facts = facts;
     this.current = blockersFrom(facts);
+    /**
+     * THE ONE FACT THAT CHANGES WHILE THE PROCESS RUNS, SUBSCRIBED TO RATHER THAN POLLED.
+     *
+     * The founder pastes their Anthropic key into the running app and the holder in
+     * src/server/agent/anthropic-key.ts says so. Without this line the list computed on
+     * the line above stands until somebody restarts the container, so the gate keeps
+     * refusing turns while the screen tells the founder to do the thing they have just
+     * done. A founder cannot restart a Replit deployment, and nobody tells them to.
+     *
+     * A push and not a getter, because the list is computed once and then held. A getter
+     * would be read here, at boot, and never again.
+     */
+    onAnthropicKeyChanged((keyIsSet) => {
+      this.anthropicKeyStored(keyIsSet);
+    });
   }
 
   set(facts: ReadinessFacts): void {
+    this.facts = facts;
     this.current = blockersFrom(facts);
+  }
+
+  /**
+   * One fact changed, and every other fact is kept.
+   *
+   * A caller handing over the whole ReadinessFacts would have to know whether the database
+   * answered and whether the engine is there, and the code that stores a key knows
+   * neither. A stale value for either would put back a blocker somebody has already
+   * fixed, or take away one that still stands.
+   */
+  anthropicKeyStored(keyIsSet: boolean): void {
+    this.set({ ...this.facts, anthropicKeySet: keyIsSet });
   }
 
   blockers(): readonly Blocker[] {

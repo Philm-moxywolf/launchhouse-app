@@ -105,9 +105,32 @@ test("the setup screen never tells a founder they are behind when they cannot ac
   const text = screenText(
     createElement(Setup, {
       founder: founder(null, { trackLocked: false }),
-      setup: setupState({ steps: { "have-it": { state: "skipped", evidence: "not bought yet" } } }),
+      setup: setupState({
+        steps: { "have-it": { state: "skipped", evidence: "not bought yet" } },
+        // The key is in. Without it "everything you can do is done" is not true, and the
+        // test below is the other half of that sentence.
+        anthropic: { set: true, checkedAt: "2026-09-07T14:00:00.000Z", length: 108 },
+      }),
     }),
   );
   assert.ok(text.includes("You are done for now"));
   assert.ok(text.includes("Nothing is late"));
+});
+
+/**
+ * The other half, and it is the bigger lie of the two.
+ *
+ * "Everything you can do today is done" in front of a founder who has not pasted an
+ * Anthropic key is wrong in the direction that costs a session: they can do something, it
+ * is the only thing that matters, and the screen has just told them to stop looking.
+ */
+test("and it never says that to a founder who has not pasted their key yet", () => {
+  const text = screenText(
+    createElement(Setup, {
+      founder: founder(null, { trackLocked: false }),
+      setup: setupState({ steps: { "have-it": { state: "skipped", evidence: "not bought yet" } } }),
+    }),
+  );
+  assert.ok(!text.includes("You are done for now"), "a founder with no key is not done for now");
+  assert.ok(text.includes("Paste your key here"), "the box they need is on the screen instead");
 });

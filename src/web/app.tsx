@@ -272,7 +272,9 @@ function SetupScreen({
     );
   }
 
-  return <Setup founder={founder} setup={setup} />;
+  // onSetupChanged so the rail is re read after the Anthropic key box writes one. The key
+  // box keeps its own copy of the answer as well, so the screen is right either way.
+  return <Setup founder={founder} setup={setup} onSetupChanged={load} />;
 }
 
 function NotYours(): ReactElement {

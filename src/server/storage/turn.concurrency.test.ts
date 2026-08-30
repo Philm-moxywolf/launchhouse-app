@@ -38,15 +38,26 @@
  * there. That is what makes them fail rather than merely slow down: a turn holding
  * a connection across its work cannot even reach the barrier, so nobody does.
  *
- * IT SKIPS WITHOUT A DATABASE, LOUDLY, like turn.db.test.ts beside it.
+ * IT SKIPS WITHOUT A DATABASE, LOUDLY, ONE ASSERTION AT A TIME, like turn.db.test.ts
+ * beside it. The skip is on each `it` and not on the `describe`, because node:test
+ * counts a skipped test and does not count a skipped suite. tests/db/setup.ts owns
+ * the reason, so there is one copy of it rather than one per suite.
  *
  * HOW TO RUN IT
- *   DATABASE_URL=postgres://user@localhost:5432/launchhouse_test \
- *   GE_MASTER_KEY=$(node -e "console.log(require('crypto').randomBytes(32).toString('base64'))") \
+ *   createdb launchhouse_test 2>/dev/null
+ *   DATABASE_URL=postgres://localhost:5432/launchhouse_test \
+ *   GE_MASTER_KEY=$(node -e "console.log(require('node:crypto').randomBytes(32).toString('base64'))") \
  *   npx tsx --test src/server/storage/turn.concurrency.test.ts
  *
+ * IT TAKES THE DATABASE FROM tests/db/setup.ts RATHER THAN MIGRATING IT ITSELF. This
+ * file and turn.db.test.ts both called runMigrations() from their own before hook,
+ * node:test runs test files in parallel, and one of the two lost the race to
+ * `create extension if not exists citext` every time. There is a second reason here
+ * beyond the schema: this file MEASURES the connection pool, and another suite
+ * working the same server at the same moment is noise in that measurement.
+ *
  * WHAT IT CALLS. storage/turn.ts, routes/spend-ledger.ts, agent/budget.ts,
- * db/client.ts, db/migrate.ts.
+ * db/client.ts, tests/db/setup.ts.
  */
 
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
@@ -57,6 +68,7 @@ import assert from 'node:assert/strict';
 import { eq, inArray } from 'drizzle-orm';
 import postgres from 'postgres';
 
+import { claimTheDatabase, type DatabaseClaim, dbTest, NO_DATABASE } from '../../../tests/db/setup.ts';
 import { Budget } from '../agent/budget.ts';
 import {
   APPLICATION_NAME,
@@ -66,19 +78,11 @@ import {
   refuseIfHoldingAConnection,
   whileHoldingAConnection,
 } from '../db/client.ts';
-import { runMigrations } from '../db/migrate.ts';
 import { founders, geFile } from '../db/schema.ts';
 import { PgSpendReader } from '../routes/spend-ledger.ts';
 import { createFounderKey } from './crypto.ts';
 import { geHome } from './paths.ts';
 import { runTurn, TurnRefused } from './turn.ts';
-
-const HAVE_DB = typeof process.env.DATABASE_URL === 'string' && process.env.DATABASE_URL.length > 0;
-const HAVE_KEY = typeof process.env.GE_MASTER_KEY === 'string' && process.env.GE_MASTER_KEY.length > 0;
-const SKIP = !HAVE_DB || !HAVE_KEY;
-const WHY = !HAVE_DB
-  ? 'DATABASE_URL is not set, so there is no pool to run out of'
-  : 'GE_MASTER_KEY is not set, and every blob is encrypted under it';
 
 /**
  * How long a turn may wait at the barrier before this test calls it a deadlock.
@@ -97,22 +101,34 @@ let workspace: string;
 let savedWorkspaceRoot: string | undefined;
 /** Every id this file has ever created, so `after` can clear all of them. */
 const created = new Set<string>();
+/** The database, held for as long as this suite runs. See tests/db/setup.ts. */
+let claim: DatabaseClaim | undefined;
 
 before(async () => {
-  if (SKIP) return;
+  if (NO_DATABASE) return;
   savedWorkspaceRoot = process.env.WORKSPACE_ROOT;
   workspace = await mkdtemp(join(tmpdir(), 'lh-turn-conc-'));
   process.env.WORKSPACE_ROOT = workspace;
-  await runMigrations();
+  // Takes the lock, then migrates inside it. Every number this file measures is a
+  // number about this process alone, and the lock is what makes that true.
+  claim = await claimTheDatabase('src/server/storage/turn.concurrency.test.ts');
 });
 
 after(async () => {
-  if (SKIP) return;
-  if (created.size > 0) await getDb().delete(founders).where(inArray(founders.id, [...created]));
-  await closeDb();
-  if (savedWorkspaceRoot === undefined) delete process.env.WORKSPACE_ROOT;
-  else process.env.WORKSPACE_ROOT = savedWorkspaceRoot;
-  await rm(workspace, { recursive: true, force: true });
+  if (NO_DATABASE) return;
+  try {
+    if (claim !== undefined) {
+      if (created.size > 0) await getDb().delete(founders).where(inArray(founders.id, [...created]));
+      await closeDb();
+    }
+  } finally {
+    // Handed back even when the cleanup above threw, or the next suite waits twenty
+    // seconds for a lock this one is never going to give up.
+    await claim?.release();
+    if (savedWorkspaceRoot === undefined) delete process.env.WORKSPACE_ROOT;
+    else process.env.WORKSPACE_ROOT = savedWorkspaceRoot;
+    await rm(workspace, { recursive: true, force: true });
+  }
 });
 
 /** Put n founders in the record and give each one a folder to work in. */
@@ -196,8 +212,8 @@ async function versionFor(founderId: string): Promise<number> {
   return Number(rows[0]?.version ?? -1);
 }
 
-describe('the turn under concurrency, against a real Postgres', { skip: SKIP ? WHY : false }, () => {
-  it('holds NO connection while the work runs, and Postgres itself says so', async () => {
+describe('the turn under concurrency, against a real Postgres', () => {
+  it('holds NO connection while the work runs, and Postgres itself says so', dbTest, async () => {
     const ids = founderIds(6);
     await seed(ids);
 
@@ -255,7 +271,7 @@ describe('the turn under concurrency, against a real Postgres', { skip: SKIP ? W
   });
 
   for (const n of [2, 10, 24, 40]) {
-    it(`runs ${String(n)} concurrent turns to completion, all of them inside their work at once`, async () => {
+    it(`runs ${String(n)} concurrent turns to completion, all of them inside their work at once`, dbTest, async () => {
       const ids = founderIds(n);
       await seed(ids);
 
@@ -287,7 +303,7 @@ describe('the turn under concurrency, against a real Postgres', { skip: SKIP ? W
     });
   }
 
-  it('THE LITERAL REGRESSION: the spend gate reads the ledger from inside a turn and the turn still finishes', async () => {
+  it('THE LITERAL REGRESSION: the spend gate reads the ledger from inside a turn and the turn still finishes', dbTest, async () => {
     // This is AgentRun.spawn, line for line: inside the work, ask Budget for the
     // spawn cap, which asks PgSpendReader, which queries the pool. On the shipped
     // code this needed a second connection and ten of them wedged the process.
@@ -324,7 +340,7 @@ describe('the turn under concurrency, against a real Postgres', { skip: SKIP ? W
     for (const outcome of done) assert.equal(outcome.value, 0.5);
   });
 
-  it('one founder gets one writer: two turns for the same founder serialise instead of racing', async () => {
+  it('one founder gets one writer: two turns for the same founder serialise instead of racing', dbTest, async () => {
     const [id] = founderIds(1);
     assert.ok(id !== undefined);
     await seed([id]);
@@ -358,7 +374,7 @@ describe('the turn under concurrency, against a real Postgres', { skip: SKIP ? W
     assert.deepEqual(b.plan.changes.map((c) => c.path).sort(), ['ledger.md']);
   });
 
-  it('THE BELT THAT PAYS FOR THE SPLIT: a turn overtaken mid run refuses instead of overwriting', async () => {
+  it('THE BELT THAT PAYS FOR THE SPLIT: a turn overtaken mid run refuses instead of overwriting', dbTest, async () => {
     // The lock cannot span the run any more, so this is what stops a second writer's
     // work being silently overwritten by a turn that materialised before it. The
     // simulation is exact: something else commits for this founder while the model is
@@ -402,7 +418,7 @@ describe('the turn under concurrency, against a real Postgres', { skip: SKIP ? W
     assert.deepEqual(await pathsFor(id), recordBefore);
   });
 
-  it('the guard itself can fail: a pool read from inside a held connection is refused', async () => {
+  it('the guard itself can fail: a pool read from inside a held connection is refused', dbTest, async () => {
     // Proving the guard works, rather than trusting that it does. If this ever
     // stops throwing, the refusal in routes/spend-ledger.ts is decoration.
     await assert.rejects(
@@ -420,5 +436,40 @@ describe('the turn under concurrency, against a real Postgres', { skip: SKIP ? W
     // And it is silent when there is nothing held, which is the normal case.
     refuseIfHoldingAConnection('a read outside any transaction');
     assert.equal(typeof (await new PgSpendReader().cohortSpendToday()), 'number');
+  });
+
+  it('ONE TURN FINISHES WITH THE POOL AT ONE, which no pool size can fake', dbTest, async () => {
+    // Assertion 3 in the header of this file. It was described there and never written,
+    // which is the same class of thing this whole workstream is about: a claim in a
+    // comment that nothing checks. A turn that needs two connections at once cannot
+    // finish against a pool of one, and there is no pool size at which it can. Raising
+    // the number hides the defect at 2 and it comes back at 11.
+    const [id] = founderIds(1);
+    assert.ok(id !== undefined);
+    await seed([id]);
+
+    const savedPoolMax = process.env.PGPOOL_MAX;
+    process.env.PGPOOL_MAX = '1';
+    // The pool is built once and cached, so it has to be dropped for the new size to be
+    // read. Dropped again in the finally, or every test after this one runs on a pool of
+    // one and this test quietly changes what they are measuring.
+    await closeDb();
+    try {
+      const finish = deadline(BARRIER_MS, 'one turn finishing with the pool at one');
+      const outcome = await Promise.race([
+        runTurn({ founderId: id, actor: 'system', verb: 'single' }, async (ctx) => {
+          await writeFile(join(ctx.home, 'founder-brain.md'), '- **Track:** b2b\n\n## Thesis\n', 'utf8');
+          return null;
+        }),
+        finish.promise,
+      ]);
+      finish.cancel();
+      assert.equal(outcome.versionAfter, outcome.versionBefore + 1);
+      assert.equal(outcome.trackAfter, 'b2b');
+    } finally {
+      await closeDb();
+      if (savedPoolMax === undefined) delete process.env.PGPOOL_MAX;
+      else process.env.PGPOOL_MAX = savedPoolMax;
+    }
   });
 });

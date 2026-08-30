@@ -20,6 +20,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { forgetEverythingForTests, rememberAnthropicKey } from './anthropic-key.js';
 import { Budget, type BudgetConfig } from './budget.js';
 import { Pushable } from './pushable.js';
 import {
@@ -257,6 +258,73 @@ test('the options that keep 130 founders apart are all set', async () => {
   assert.equal(o.thinking, undefined);
   assert.equal(o.maxThinkingTokens, undefined);
   await run.close();
+});
+
+/** The environment the CLI subprocess would have been given. Typed, because `env` is optional. */
+function spawnEnv(sdk: FakeSdk): Record<string, string | undefined> {
+  return (sdk.options?.env ?? {}) as Record<string, string | undefined>;
+}
+
+/**
+ * The key the subprocess is handed, and where it comes from.
+ *
+ * WHY IT IS A TEST OF ITS OWN. On a founder's own deployment the environment has no
+ * Anthropic key in it and never will: they paste one into the running app, because they
+ * cannot restart a Replit container and nothing tells them to. The config value above is
+ * settled once at boot, so a spawn that read it would use the environment for ever and the
+ * paste screen would be decoration. This is the line that makes "without a restart" true,
+ * and it is one property that is invisible in a code review.
+ *
+ * It is asserted BOTH WAYS ROUND. A test that only checked the pasted key would still pass
+ * if the holder had quietly become the only source, which would break every laptop and
+ * both prove scripts.
+ */
+test('THE SPAWN USES THE PASTED KEY WHEN THERE IS ONE, AND THE ENVIRONMENT WHEN THERE IS NOT', async () => {
+  const ctx = founder('b2b');
+  const pasted = 'not-a-real-key-pasted-into-the-running-app';
+  try {
+    rememberAnthropicKey(ctx.founderId, pasted, new Date());
+    const withKey = new FakeSdk();
+    withKey.onMessage = (_t, s) => s.emitResult(0.01);
+    const first = new AgentRun(build(withKey).deps, ctx, routeById('founder-brain'));
+    await first.send('t1', 'hello', () => {}, { ctx, route: routeById('founder-brain') });
+    assert.equal(spawnEnv(withKey).ANTHROPIC_API_KEY, pasted);
+    await first.close();
+
+    // And with nothing pasted it is the config, which is where a laptop and the two prove
+    // scripts get theirs.
+    forgetEverythingForTests();
+    const without = new FakeSdk();
+    without.onMessage = (_t, s) => s.emitResult(0.01);
+    const second = new AgentRun(build(without).deps, ctx, routeById('founder-brain'));
+    await second.send('t1', 'hello', () => {}, { ctx, route: routeById('founder-brain') });
+    assert.equal(spawnEnv(without).ANTHROPIC_API_KEY, 'sk-test');
+    await second.close();
+  } finally {
+    forgetEverythingForTests();
+  }
+});
+
+/**
+ * The same holder, asked for somebody else's key.
+ *
+ * One founder per deployment means the ids always match. The comparison is what keeps that
+ * true if it ever stops being, and a spawn billing the wrong account is the most expensive
+ * thing in this file.
+ */
+test('and a key belonging to another founder is not used', async () => {
+  const ctx = founder('b2b');
+  try {
+    rememberAnthropicKey('01JSOMEBODYELSEXXXXXXXXXXX', 'not-a-real-key-belonging-to-somebody-else', new Date());
+    const sdk = new FakeSdk();
+    sdk.onMessage = (_t, s) => s.emitResult(0.01);
+    const run = new AgentRun(build(sdk).deps, ctx, routeById('founder-brain'));
+    await run.send('t1', 'hello', () => {}, { ctx, route: routeById('founder-brain') });
+    assert.equal(spawnEnv(sdk).ANTHROPIC_API_KEY, 'sk-test');
+    await run.close();
+  } finally {
+    forgetEverythingForTests();
+  }
 });
 
 test('the cacheable prefix is the skill body and the volatile header is not in it', async () => {

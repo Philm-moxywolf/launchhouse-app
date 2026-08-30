@@ -27,6 +27,9 @@ const BLANK: SetupState = {
   profile: { name: null, timezone: null },
   steps: {},
   ghl: { connected: false, locationId: null, locationName: null, accounts: [], contacts: "not_checked", tokenMadeAt: null },
+  // The Anthropic key is not a rail row and this file is about rail rows. It is here
+  // because SetupState carries it for every founder on both tracks.
+  anthropic: { set: false, checkedAt: null, length: null },
 };
 
 function withSteps(steps: SetupState["steps"], extra: Partial<SetupState> = {}): SetupState {

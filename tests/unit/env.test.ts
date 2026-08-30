@@ -17,6 +17,18 @@
  * asserted by making the thing go wrong, not by asserting that a correct environment is
  * accepted. A guard only ever watched passing is a comment.
  *
+ * IT PASSES WHETHER OR NOT THE PROCESS WAS STARTED WITH A MASTER KEY, AND IT DID NOT
+ * USED TO. parseEnv is handed a plain object, so nothing here reads the real
+ * environment, with one exception: the installMasterKey block at the bottom goes
+ * through lateSettings(), which builds its keyring out of process.env. A GE_MASTER_KEY
+ * in the environment is therefore already a live key, installMasterKey refuses to put a
+ * different one over a live key, and four assertions failed. Not a rare environment
+ * either: the skip line this project prints for its database suites tells the next
+ * person to set that exact variable, so the file was red for anybody who followed the
+ * instructions and green for everybody who ignored them. See
+ * withNoMasterKeyInTheEnvironment below, and the first test of that block, which sets
+ * a key on purpose and proves the seal against it.
+ *
  * RUNNER. node:test, which is what most of this repository uses. See README.
  */
 import { describe, test } from "node:test";
@@ -25,6 +37,7 @@ import { resolve } from "node:path";
 import { randomBytes } from "node:crypto";
 import {
   EnvError,
+  MAX_MASTER_KEY_VERSION,
   assertFullIcu,
   assertNoAmbientVendorCredentials,
   assertUtcProcessClock,
@@ -379,51 +392,137 @@ describe("secrets do not leak through a log line", () => {
   });
 });
 
+// =========================================================================================
+// The keyring seam, sealed against the environment it runs in
+// =========================================================================================
+
+/**
+ * Every variable parseLateSettings builds the keyring out of.
+ *
+ * Derived from MAX_MASTER_KEY_VERSION rather than typed out, so widening the rotation
+ * range cannot leave a name behind that this file then fails to clear.
+ */
+const KEYRING_NAMES: readonly string[] = [
+  "GE_MASTER_KEY",
+  ...Array.from({ length: MAX_MASTER_KEY_VERSION - 1 }, (_, i) => `GE_MASTER_KEY_V${String(i + 2)}`),
+  "GE_MASTER_KEY_VERSION",
+];
+
+/**
+ * Run body with no master key anywhere in the process environment, then put the
+ * environment back exactly as it was.
+ *
+ * WHY IT EXISTS. resetEnvCacheForTests clears the cached late settings, and the next
+ * lateSettings() call rebuilds the keyring from process.env. So GE_MASTER_KEY in the
+ * environment is a key that is already installed at version 1, and installMasterKey
+ * refuses to put a different one over it. That refusal is correct, and it is the reason
+ * these tests could not install anything. The environment is the test's to control, so
+ * this takes control of it rather than hoping.
+ *
+ * Absent variables are restored as absent, not as empty strings. env.ts reads an empty
+ * string as absent anyway, and a test helper that quietly changes the shape of what it
+ * borrowed is the next thing somebody debugs.
+ */
+function withNoMasterKeyInTheEnvironment<T>(body: () => T): T {
+  const saved = new Map<string, string | undefined>();
+  for (const name of KEYRING_NAMES) {
+    saved.set(name, process.env[name]);
+    delete process.env[name];
+  }
+  resetEnvCacheForTests();
+  try {
+    return body();
+  } finally {
+    for (const [name, value] of saved) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+    resetEnvCacheForTests();
+  }
+}
+
 describe("installMasterKey, the seam the resolved key arrives through", () => {
+  test("THE SEAL ITSELF, PROVED AGAINST A KEY DELIBERATELY LEFT IN THE ENVIRONMENT", () => {
+    // Everything below depends on the keyring starting empty. On a machine with no
+    // GE_MASTER_KEY that is true by accident, and a test that is right by accident says
+    // nothing. So the accident is removed: a key is put in the environment on purpose,
+    // the unsealed reading is shown to pick it up, and the sealed reading is shown not
+    // to. This is the whole difference between the file passing and the file being
+    // hermetic.
+    const ambient = randomBytes(32).toString("base64");
+    const saved = process.env["GE_MASTER_KEY"];
+    process.env["GE_MASTER_KEY"] = ambient;
+    try {
+      // Unsealed. This is the failure, watched rather than assumed: the environment
+      // reaches the keyring, so version 1 is already taken before any test runs.
+      resetEnvCacheForTests();
+      assert.equal(lateSettings().masterKeys.get(1), ambient);
+      assert.throws(() => {
+        installMasterKey(randomBytes(32).toString("base64"), 1);
+      }, /already installed/);
+
+      // Sealed. Same process, same variable still set, and now the keyring is empty and
+      // a key installs.
+      withNoMasterKeyInTheEnvironment(() => {
+        assert.equal(lateSettings().masterKeys.size, 0, "the seal let a key through");
+        const fresh = randomBytes(32).toString("base64");
+        installMasterKey(fresh, 1);
+        assert.equal(lateSettings().masterKeys.get(1), fresh);
+      });
+
+      // And the borrowed variable is exactly as it was, so nothing after this can tell.
+      assert.equal(process.env["GE_MASTER_KEY"], ambient);
+    } finally {
+      if (saved === undefined) delete process.env["GE_MASTER_KEY"];
+      else process.env["GE_MASTER_KEY"] = saved;
+      resetEnvCacheForTests();
+    }
+  });
+
   test("puts a key where storage/crypto.ts looks for it", () => {
-    resetEnvCacheForTests();
-    const fresh = randomBytes(32).toString("base64");
-    installMasterKey(fresh, 1);
-    assert.equal(lateSettings().masterKeys.get(1), fresh);
-    resetEnvCacheForTests();
+    withNoMasterKeyInTheEnvironment(() => {
+      const fresh = randomBytes(32).toString("base64");
+      installMasterKey(fresh, 1);
+      assert.equal(lateSettings().masterKeys.get(1), fresh);
+    });
   });
 
   test("installing the same key twice is a no op, so a restart is harmless", () => {
-    resetEnvCacheForTests();
-    const fresh = randomBytes(32).toString("base64");
-    installMasterKey(fresh, 1);
-    installMasterKey(fresh, 1);
-    assert.equal(lateSettings().masterKeys.get(1), fresh);
-    resetEnvCacheForTests();
+    withNoMasterKeyInTheEnvironment(() => {
+      const fresh = randomBytes(32).toString("base64");
+      installMasterKey(fresh, 1);
+      installMasterKey(fresh, 1);
+      assert.equal(lateSettings().masterKeys.get(1), fresh);
+    });
   });
 
   test("REFUSES a different key over a live one, because that orphans every file already written", () => {
-    resetEnvCacheForTests();
-    installMasterKey(randomBytes(32).toString("base64"), 1);
-    assert.throws(() => {
+    withNoMasterKeyInTheEnvironment(() => {
       installMasterKey(randomBytes(32).toString("base64"), 1);
-    }, /already installed/);
-    resetEnvCacheForTests();
+      assert.throws(() => {
+        installMasterKey(randomBytes(32).toString("base64"), 1);
+      }, /already installed/);
+    });
   });
 
   test("refuses a version outside the rotation range rather than storing it", () => {
-    resetEnvCacheForTests();
-    for (const bad of [0, 10, 1.5]) {
-      assert.throws(() => {
-        installMasterKey(randomBytes(32).toString("base64"), bad);
-      }, /version/);
-    }
-    resetEnvCacheForTests();
+    withNoMasterKeyInTheEnvironment(() => {
+      for (const bad of [0, MAX_MASTER_KEY_VERSION + 1, 1.5]) {
+        assert.throws(() => {
+          installMasterKey(randomBytes(32).toString("base64"), bad);
+        }, /version/);
+      }
+    });
   });
 
   test("the keyring never prints a key, even when one is installed", () => {
-    resetEnvCacheForTests();
-    const fresh = randomBytes(32).toString("base64");
-    installMasterKey(fresh, 1);
-    const printed = JSON.stringify(lateSettings());
-    assert.ok(!printed.includes(fresh), "the master key reached a serialised late settings object");
-    assert.match(printed, /version\(s\) held, values not shown/);
-    resetEnvCacheForTests();
+    withNoMasterKeyInTheEnvironment(() => {
+      const fresh = randomBytes(32).toString("base64");
+      installMasterKey(fresh, 1);
+      const printed = JSON.stringify(lateSettings());
+      assert.ok(!printed.includes(fresh), "the master key reached a serialised late settings object");
+      assert.match(printed, /version\(s\) held, values not shown/);
+    });
   });
 });
 

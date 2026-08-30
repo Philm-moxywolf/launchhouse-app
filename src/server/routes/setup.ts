@@ -40,6 +40,29 @@
  *   than 404, which would say there is nothing at that address. The address
  *   exists. What it does is not built.
  *
+ * AND ONE ROUTE DOES NOT REFUSE, WHICH IS THE ANTHROPIC KEY.
+ *
+ *   `POST /api/setup/key` is the first thing a founder does after signing in, and until
+ *   today there was nowhere to do it. `boot/readiness.ts` told them to paste their key
+ *   into the setup screen; there was no route, no form and no field anywhere that took
+ *   one. The key was read once out of the environment at startup, so even a founder who
+ *   found Replit Secrets would have needed a restart nobody told them about and that they
+ *   cannot perform.
+ *
+ *   IT IS NOT LIKE THE GOHIGHLEVEL ROUTES ABOVE, AND THE DIFFERENCE IS EVIDENCE. The
+ *   GoHighLevel check refuses because nobody has ever made those calls and every field
+ *   name in them is a guess. Anthropic's is not a guess: this app already talks to that
+ *   API on every turn, the addresses and header names are in the Claude API reference, and
+ *   the check below is two real calls whose answer is the founder's answer. So this one
+ *   verifies for real, and it does it before the key is stored rather than three screens
+ *   later.
+ *
+ *   THE ORDER IS CHECK, THEN STORE, THEN ANNOUNCE. A key that has not been proved is never
+ *   written down, so `set: true` on the screen means Anthropic accepted it and not that
+ *   somebody typed something. Storing it puts it in memory, and the holder tells
+ *   `boot/readiness.ts`, which drops its blocker and reopens the two routes that start a
+ *   turn. That is what makes it work without a restart.
+ *
  * WHAT CALLS IT. ./index.ts registers it. The setup screens and the token walk.
  * WHAT IT READS. `founder`, `setup_steps` and `connections`, founder scoped.
  * WHAT IT WRITES. `founder` (name and timezone), `setup_steps`, `connections`.
@@ -49,6 +72,9 @@ import type { FastifyInstance, RouteHandlerMethod } from 'fastify';
 
 import { GHL_WALK_STEPS } from '../../../app/content/ghl-walk.ts';
 import { GHL_TOKEN_PREFIX_GUESS } from '../integrations/contracts/ghl.ts';
+import { checkAnthropicKey, problemOf, readPastedKey, type KeyProblem } from '../agent/anthropic-check.ts';
+import { anthropicKeyFor, describeAnthropicKey } from '../agent/anthropic-key.ts';
+import { forgetStoredAnthropicKey, saveAnthropicKey } from '../agent/anthropic-key-store.ts';
 import { trackOf } from './founder-state.ts';
 import { errorBody, type FounderError } from './errors.ts';
 import type { SetupStepState } from './ports.ts';
@@ -148,6 +174,33 @@ export const SETUP_ERRORS = {
 } as const satisfies Record<string, FounderError>;
 
 /**
+ * Does this paste begin the way a GoHighLevel token is guessed to begin?
+ *
+ * `startsWith`, not `includes`, and the difference matters here where it did not in the
+ * Location ID box. An Anthropic key is around a hundred characters of near random text, so
+ * `includes('pit-')` would refuse a perfectly good key roughly once in twelve thousand
+ * pastes. Across 130 founders that is unlikely and it is not impossible, and the founder it
+ * happened to would be told their correct key was somebody else's token.
+ *
+ * IT DOES NOT BLOCK. contracts/ghl.ts says the prefix is a guess and that a guess must
+ * never stop a founder who has pasted the right thing. So the key is sent to Anthropic
+ * either way, and this only changes which sentence a REFUSED key comes back with.
+ */
+export function startsLikeAGhlToken(value: string): boolean {
+  return value.toLowerCase().startsWith(GHL_TOKEN_PREFIX_GUESS);
+}
+
+/**
+ * Codes that mean the key itself is finished, as opposed to a bad moment.
+ *
+ * A recheck that lands on one of these forgets the stored key, because a key Anthropic has
+ * stopped accepting is worse than no key: the blocker stays down, turns keep being
+ * admitted, and every one of them fails. Anything else, a rate limit or a bad minute at
+ * Anthropic, leaves the key exactly where it was.
+ */
+const KEY_IS_FINISHED: readonly string[] = ['key_not_accepted', 'key_not_allowed'];
+
+/**
  * Is this a zone this machine can actually convert with?
  *
  * Asked of Node rather than checked against a list, because the list that
@@ -208,6 +261,18 @@ export async function registerSetupRoutes(app: FastifyInstance, deps: RouteDeps)
     return reply.send({
       profile: { name: founder.displayName, timezone: founder.timezone },
       steps,
+      /**
+       * READ OUT OF MEMORY, NOT OUT OF THE DATABASE, AND THAT IS DELIBERATE.
+       *
+       * The holder is what the running app will actually use on the next turn. A row in
+       * `connections` that this process has not loaded is a key the next turn would not
+       * use, so reporting it as set would be a tick that is wrong in the one direction
+       * that matters. The rows are loaded once at boot, below, and after that memory and
+       * the database say the same thing because nothing writes one without the other.
+       *
+       * No key material, no prefix and no part of one. A boolean, a length and a date.
+       */
+      anthropic: describeAnthropicKey(founder.id),
       ghl: {
         connected: ghl?.status === 'connected',
         locationId: ghl?.locationId ?? null,
@@ -218,6 +283,130 @@ export async function registerSetupRoutes(app: FastifyInstance, deps: RouteDeps)
       },
       ...apollo,
     });
+  });
+
+  /**
+   * Paste the key, check it against Anthropic, and keep it only if it worked.
+   *
+   * 200 EITHER WAY, AND THAT IS NOT SLOPPINESS. The request did what it was asked: it
+   * checked a key. A key Anthropic refused is an answer, not a failure of ours, and it
+   * carries a title, an action and Anthropic's own words. Sending it as a 4xx would put it
+   * through the browser's general refusal handling, which has one sentence for everything
+   * and would throw away the two fields the founder needs. The GoHighLevel verify route
+   * answers the same way, for the same reason. A malformed request is still a refusal, and
+   * `readPastedKey` produces one.
+   */
+  app.post('/api/setup/key', async (request, reply) => {
+    if (!(await deps.auth.requireFounder(request, reply))) return reply;
+    const founder = deps.auth.founderOf(request);
+
+    const read = readPastedKey((request.body as { key?: unknown } | undefined)?.key);
+    if (!read.ok) {
+      // The code, never the value. Nothing about what they pasted reaches a log line.
+      deps.log.info({ founderId: founder.id, code: read.problem.code }, 'a pasted Anthropic key was not usable as typed');
+      return reply.send({ saved: false, problem: read.problem, anthropic: describeAnthropicKey(founder.id) });
+    }
+
+    const check = await checkAnthropicKey(read.key);
+    if (!check.ok) {
+      const problem: KeyProblem =
+        check.problem.code === 'key_not_accepted' && startsLikeAGhlToken(read.key)
+          ? { ...problemOf('wrong_box'), vendorSaid: check.problem.vendorSaid }
+          : check.problem;
+      deps.log.warn({ founderId: founder.id, code: problem.code }, 'Anthropic did not accept a pasted key');
+      return reply.send({ saved: false, problem, anthropic: describeAnthropicKey(founder.id) });
+    }
+
+    try {
+      await saveAnthropicKey(founder.id, read.key, check.checkedAt);
+    } catch {
+      // The message is not carried. It is a driver's writing and it can hold a connection
+      // string. What matters is that the founder is not told this worked.
+      deps.log.error({ founderId: founder.id }, 'an Anthropic key passed its check and could not be written to the database');
+      return reply.send({ saved: false, problem: problemOf('not_saved'), anthropic: describeAnthropicKey(founder.id) });
+    }
+
+    deps.log.info(
+      { founderId: founder.id, provedWith: check.provedWith },
+      'an Anthropic key was checked, stored and is now live. Turns can run without a restart.',
+    );
+    return reply.send({ saved: true, anthropic: describeAnthropicKey(founder.id) });
+  });
+
+  /**
+   * Check the key that is already there.
+   *
+   * WHY A SECOND BUTTON EXISTS. A key can stop working after it was stored: somebody
+   * deletes it in the console, the account runs out of credit, the card on it expires.
+   * Every one of those turns into "That one did not finish" on a founder's next turn,
+   * which reads as the app being broken. This is the button that answers "is it me".
+   */
+  app.post('/api/setup/key/check', async (request, reply) => {
+    if (!(await deps.auth.requireFounder(request, reply))) return reply;
+    const founder = deps.auth.founderOf(request);
+
+    const key = anthropicKeyFor(founder.id, '');
+    if (key === '') return reply.send({ saved: false, problem: problemOf('empty'), anthropic: describeAnthropicKey(founder.id) });
+
+    const check = await checkAnthropicKey(key);
+    if (!check.ok) {
+      if (KEY_IS_FINISHED.includes(check.problem.code)) {
+        try {
+          // Forgotten on purpose. See KEY_IS_FINISHED: a key Anthropic will not accept is
+          // worse than no key, because the gate stays open and every turn behind it fails.
+          await forgetStoredAnthropicKey(founder.id, deps.clock.now());
+          deps.log.warn({ founderId: founder.id, code: check.problem.code }, 'a stored Anthropic key stopped working and was removed');
+        } catch {
+          /*
+            THE NEWS THE FOUNDER CAME FOR STILL GETS THROUGH.
+            
+            Tidying up our own copy is our problem, not theirs, and it fails when the
+            database is unreachable. Letting it throw turned "Anthropic will not accept
+            your key" into a 500, which reads as the app being broken and hides the one
+            sentence that would have told them what to do. The key stays where it was,
+            because the database write comes before the memory clear, so nothing is now
+            half removed.
+          */
+          deps.log.error({ founderId: founder.id }, 'a stored Anthropic key stopped working and our copy could not be removed');
+        }
+      } else {
+        deps.log.warn({ founderId: founder.id, code: check.problem.code }, 'a stored Anthropic key could not be checked just now');
+      }
+      /**
+        * THE KEY STATE GOES BACK WITH THE FAILURE, AND THE SCREEN MUST NOT GUESS IT.
+        *
+        * Some of these failures threw the key away just above and some left it exactly
+        * where it was. A browser that decided for itself would clear the row on a rate
+        * limit, and the founder would be looking at a paste box asking for a key that is
+        * still stored and still working. So the answer carries what is true now.
+        */
+      return reply.send({ saved: false, problem: check.problem, anthropic: describeAnthropicKey(founder.id) });
+    }
+
+    // Written again so `verifiedAt` is the last time it was actually proved, rather than
+    // the first. A mentor asking "when did this last work" needs the second number.
+    try {
+      await saveAnthropicKey(founder.id, key, check.checkedAt);
+    } catch {
+      deps.log.warn({ founderId: founder.id }, 'an Anthropic key still works and the checked at time could not be written');
+    }
+    return reply.send({ saved: true, anthropic: describeAnthropicKey(founder.id) });
+  });
+
+  /**
+   * Take our copy away.
+   *
+   * REMOVING OUR COPY DOES NOT SWITCH THE KEY OFF AT ANTHROPIC, and the screen says so in
+   * as many words. A founder told "removed" who believes the key is dead has a live
+   * credential they have stopped thinking about. The order is on the screen: remove it
+   * here, then delete it at console.anthropic.com.
+   */
+  app.post('/api/setup/key/forget', async (request, reply) => {
+    if (!(await deps.auth.requireFounder(request, reply))) return reply;
+    const founder = deps.auth.founderOf(request);
+    await forgetStoredAnthropicKey(founder.id, deps.clock.now());
+    deps.log.info({ founderId: founder.id }, 'a founder removed their Anthropic key. Our copy is gone; the key is not');
+    return reply.code(204).send();
   });
 
   /**

@@ -25,6 +25,7 @@
  */
 
 import type { SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
+import { anthropicKeyForThisDeployment } from './anthropic-key.js';
 import type { QueryFn } from './runner.js';
 import type { IntentClassifier } from './router.js';
 import type { Logger } from './ports.js';
@@ -102,7 +103,20 @@ export function createIntentClassifier(
               PATH: cfg.path,
               HOME: '/tmp',
               CLAUDE_CONFIG_DIR: cfg.claudeConfigDir,
-              ANTHROPIC_API_KEY: cfg.anthropicApiKey,
+              /**
+               * The pasted key, when there is one. See runner.ts for why this
+               * is read here rather than taken from the config.
+               *
+               * NO FOUNDER ID TO CHECK AGAINST. The classifier is built once for
+               * the process, before any founder exists, so it asks for "this
+               * deployment's key". That is exact while one founder owns a
+               * deployment, which is the shape of this product. With two it
+               * refuses and hands back the config, routing finds no match, and
+               * the founder's sentence is treated as ordinary conversation.
+               * A shrug is the right failure; charging one founder's account
+               * for another founder's message is not.
+               */
+              ANTHROPIC_API_KEY: anthropicKeyForThisDeployment(cfg.anthropicApiKey),
             },
           },
         });

@@ -404,11 +404,96 @@ export interface SetupState {
    * server omits the key and this side treats undefined as "there is no such row".
    */
   readonly apollo?: { readonly connected: boolean };
+  /**
+   * The Anthropic key, as the browser is allowed to know it.
+   *
+   * ALWAYS PRESENT, unlike `apollo`, because every founder on both tracks needs a key and
+   * it is the first thing they do. Never a key, never a prefix and never a part of one: a
+   * boolean, a character count and a date. The count is here because "mine says 108
+   * characters" is the one thing two founders can compare across a room without either of
+   * them reading a key out loud.
+   */
+  readonly anthropic: AnthropicKeyState;
 }
+
+export interface AnthropicKeyState {
+  /** True only when Anthropic has accepted it. Nothing unchecked is ever stored. */
+  readonly set: boolean;
+  /** ISO 8601, when Anthropic last accepted it, or null. */
+  readonly checkedAt: string | null;
+  readonly length: number | null;
+}
+
+/**
+ * Why a key was not accepted, in the words the founder reads.
+ *
+ * THREE FIELDS RATHER THAN A MESSAGE, because a key failure has three parts and collapsing
+ * them loses the useful one. `title` is what happened. `whatToDo` is the action, and it is
+ * always there. `vendorSaid` is Anthropic's own sentence, which for the commonest failure
+ * of all, an account with no credit on it, is far better than anything written in advance.
+ * The screen renders theirs under ours rather than instead of it.
+ */
+export interface KeyProblem {
+  /** Ours, stable, for a mentor to quote. Never rendered on its own. */
+  readonly code: string;
+  readonly title: string;
+  readonly whatToDo: string;
+  /** True when pressing the button again could reasonably work. */
+  readonly retryable: boolean;
+  readonly vendorSaid: string | null;
+}
+
+/**
+ * What the key routes answer, and they answer 200 either way.
+ *
+ * A key Anthropic refused is an answer rather than a failure of ours, so it does not go
+ * through `toResult`'s general refusal handling, which has one sentence for everything and
+ * would throw away the two fields above. This mirrors `GhlVerifyResult`.
+ */
+export type KeyResult =
+  | { readonly saved: true; readonly anthropic: AnthropicKeyState }
+  | { readonly saved: false; readonly problem: KeyProblem; readonly anthropic: AnthropicKeyState };
+
+/**
+ * BOTH BRANCHES CARRY `anthropic`, AND THAT IS NOT SYMMETRY FOR ITS OWN SAKE.
+ *
+ * Some key failures throw the stored key away, because a key Anthropic will not accept is
+ * worse than none. Others, a rate limit or a bad minute at Anthropic, leave it exactly
+ * where it is. Only the server knows which just happened. Without this field the screen
+ * would have to guess, and the guess would put a paste box in front of a founder whose key
+ * is still stored and still working.
+ */
 
 /** ASSUMED path. */
 export function fetchSetup(): Promise<Result<SetupState>> {
   return get<SetupState>("/api/setup");
+}
+
+/**
+ * ASSUMED path. The key crosses the wire once and is never sent back to the browser.
+ *
+ * It is checked against Anthropic before it is stored, so the answer to this call is the
+ * real answer rather than a receipt. That is the whole point of the screen: a founder finds
+ * out at the box they pasted into, not three screens later in a live session.
+ */
+export function saveAnthropicKey(key: string): Promise<Result<KeyResult>> {
+  return post<KeyResult>("/api/setup/key", { key });
+}
+
+/**
+ * ASSUMED path. Re checks the key already stored, without asking for it again.
+ *
+ * A key can stop working after it was saved: it gets deleted in the console, or the account
+ * runs out of credit. Asking a founder to paste a credential again to find that out is how
+ * you lose them.
+ */
+export function checkAnthropicKey(): Promise<Result<KeyResult>> {
+  return post<KeyResult>("/api/setup/key/check");
+}
+
+/** ASSUMED path. Deletes our copy. It does not switch the key off, and the screen says so. */
+export function forgetAnthropicKey(): Promise<Result<void>> {
+  return postVoid("/api/setup/key/forget");
 }
 
 /** ASSUMED path. Name and timezone, the two questions of the first run screen. */

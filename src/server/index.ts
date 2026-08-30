@@ -50,6 +50,30 @@
  *   caller reads in a review exactly like a guard that runs, which is the worst
  *   property a guard can have.
  *
+ *   THE DATABASE IS BUILT HERE, BEFORE THE PORT BINDS, AND THAT IS NEW. Nothing
+ *   ran the migration. `.replit` runs `npm run start`, the deployment build
+ *   command is `npm ci && npm run build`, and `npm run db:migrate` was in
+ *   neither. So the path a founder walks was: create a Replit database, set a
+ *   passphrase, press Sign in, get a 500 carrying an incident id and the words
+ *   "tell a mentor". The log line they never see said relation "founder" does
+ *   not exist. It was the first wall on the path and every founder hit it.
+ *   main() now calls ensureSchema() as soon as the database answers. Read
+ *   boot/schema.ts for why that is a boot step rather than one more sentence on
+ *   the start page: the one line command that fixes it needs a terminal, and a
+ *   founder in that room does not have one, so a blocker there is a blocker
+ *   nobody can act on.
+ *
+ *   THE CLI THE AGENT LOOP SPAWNS IS RESOLVED HERE TOO, for the same reason the
+ *   ge checks are. The Agent SDK ships that binary as a per platform OPTIONAL
+ *   dependency, so an install may skip it and still exit 0. Before this, such a
+ *   copy booted green, answered /healthz with {"ok":true,"blockers":[]}, wrote
+ *   no log line at all, and failed on the founder's first message. boot/
+ *   platform-cli.ts resolves it and reads its ELF header, because resolving a
+ *   path proves only that a file exists: the other half of this failure is the
+ *   wrong C library build, which is present, correctly named, and fails at exec
+ *   with an error naming a file that is plainly there. It reads rather than
+ *   runs because ge/no-shell.test.ts holds the server to one spawn boundary.
+ *
  *   IT BINDS 0.0.0.0. Binding localhost on a container means a health check
  *   that never passes and a deployment that looks like a hang.
  *
@@ -133,7 +157,10 @@ import { assertContractsReady, FEATURES_ON } from './integrations/contracts/inde
 import { createAuth } from './auth/plugin.ts';
 import { PgAuthStore } from './auth/store-pg.ts';
 import { ensureMasterKey, type MasterKeyOutcome } from './boot/master-key.ts';
+import { resolvePlatformCli, type PlatformCliOutcome } from './boot/platform-cli.ts';
 import { ReadinessState, installReadinessGates, type ReadinessFacts } from './boot/readiness.ts';
+import { loadStoredAnthropicKeys } from './agent/anthropic-key-store.ts';
+import { ensureSchema } from './boot/schema.ts';
 import { assertMasterKeyPresent } from './storage/crypto.ts';
 import { ContentRouteCatalogue, GeneratedSkillBodies } from './routes/agent-content.ts';
 import { TurnEventBus, TurnEvents } from './routes/events.ts';
@@ -864,6 +891,35 @@ async function checkGePin(): Promise<boolean> {
 }
 
 /**
+ * Is the binary the agent loop spawns on this machine, and will it run.
+ *
+ * TWO SEPARATE QUESTIONS, AND ONLY THE SECOND ONE SETTLES IT. The SDK ships its CLI as a
+ * per platform optional dependency, so npm may skip it and still exit 0. Resolving the path
+ * catches the skipped install. It does NOT catch the other half, which is a glibc build on a
+ * musl machine: the file is there, the size is right, and exec fails with "no such file or
+ * directory" naming a file that plainly exists. So boot/platform-cli.ts runs `--version`,
+ * because running the thing is the only proof that it runs. About 1.5 seconds on a cold
+ * container, once, and it buys the difference between finding this at boot and finding it in
+ * front of a founder who has just typed their first message.
+ *
+ * A FAILURE REFUSES TURNS AND NOTHING ELSE. Signing in, reading files and pasting a key all
+ * work without the CLI. Only writing needs it.
+ */
+async function checkPlatformCli(): Promise<PlatformCliOutcome> {
+  const started = Date.now();
+  const outcome = await resolvePlatformCli();
+  if (outcome.ok) {
+    log.info(
+      { ms: Date.now() - started, path: outcome.path, detail: outcome.detail },
+      'the Claude Code CLI is installed and this machine can execute it. Turns have something to spawn.',
+    );
+  } else {
+    log.error({ detail: outcome.detail }, 'the Claude Code CLI is missing or will not run on this machine, so every turn is refused. The start page says so.');
+  }
+  return outcome;
+}
+
+/**
  * Find or make the master key, and say what happened in one line.
  *
  * IT IS ONLY CALLED WHEN THE DATABASE ANSWERED. The key lives in Postgres, so
@@ -938,7 +994,44 @@ async function main(): Promise<void> {
   // reading two lines about a folder they do not have is a founder who reads neither.
   const geUp = (await checkGe()) && (await checkGePin());
 
+  // Is the binary the agent loop spawns actually on this machine and runnable.
+  //
+  // IT IS HERE BECAUSE IT WAS NOWHERE. agent/sdk.ts says in its own header that this check
+  // belongs beside its import, and the only copy of it lived in scripts/probe-deployment.ts,
+  // which runs only if somebody changes the Replit run command. No founder will. Without it
+  // an install that skipped optional dependencies boots green, answers /healthz with
+  // {"ok":true,"blockers":[]}, logs nothing at all, and fails on the founder's first
+  // message. That was measured by moving the platform package aside and booting.
+  const cli = await checkPlatformCli();
+
   const dbUp = await checkDatabase();
+
+  /**
+   * BUILD THE DATABASE BEFORE THE PORT BINDS, and this is the line the first wall was
+   * behind. Nothing ran the migration: `.replit` runs `npm run start` and the deployment
+   * build command is `npm ci && npm run build`. So a founder created a Replit database, set
+   * a passphrase, pressed Sign in, and got a 500 with an incident id and "tell a mentor",
+   * while the log said relation "founder" does not exist.
+   *
+   * ONLY WHEN THE DATABASE ANSWERED. Migrating a database that is not there produces a
+   * connection error dressed up as a schema error, which is a second line on the start page
+   * for one cause. See boot/schema.ts for why this runs at boot rather than being named as
+   * something the founder has to do, and for what happens when two containers boot together.
+   */
+  const schema = dbUp ? await ensureSchema() : undefined;
+  if (schema !== undefined) {
+    // Three outcomes and three sentences, because "the tables were built" on a boot that
+    // built nothing is how a mentor is sent looking for a migration that never ran.
+    if (!schema.ok) {
+      log.error({ detail: schema.detail }, 'the database could not be set up, so every API route is refused and the start page says so');
+    } else if (!schema.applied) {
+      log.info({}, 'another copy of this app was migrating. Waited for it, then checked the schema is current.');
+    } else if (schema.newlyApplied > 0) {
+      log.info({ newlyApplied: schema.newlyApplied }, 'the database tables were built. This is a first boot, or a new migration shipped.');
+    } else {
+      log.info({}, 'the database was already up to date. The schema and the row level security policies were checked.');
+    }
+  }
 
   // The key lives in Postgres, so there is only a question to ask when the
   // database answered. With no database the founder is told about the database,
@@ -948,12 +1041,39 @@ async function main(): Promise<void> {
   const facts: ReadinessFacts = {
     databaseUrlSet: env.DATABASE_URL !== undefined,
     databaseAnswered: dbUp,
+    schemaRefusal: schema !== undefined && !schema.ok ? schema.founderMessage : undefined,
     engineReady: geUp,
+    platformCliRefusal: cli.ok ? undefined : cli.founderMessage,
     masterKeyRefusal: key !== undefined && !key.ok ? key.founderMessage : undefined,
     anthropicKeySet: env.ANTHROPIC_API_KEY !== undefined,
     passphraseSet: env.OWNER_PASSPHRASE !== '',
   };
   const readiness = new ReadinessState(facts);
+
+  /**
+   * PUT ANY STORED ANTHROPIC KEY BACK IN MEMORY, ONCE, BEFORE ANYTHING BINDS A PORT.
+   *
+   * A Replit deployment is replaced whenever Replit feels like it, and the pasted key
+   * lives in memory while the process runs. Without this line every replacement would
+   * send the founder back to the paste screen to re-enter a key that is already in their
+   * own database, and the start page would tell them their key was not set when it was.
+   *
+   * AFTER the ReadinessState above rather than before it, and that order is the whole
+   * behaviour: the state subscribes to the key holder in its constructor, so a key
+   * restored here clears the blocker the facts above just raised. Before it, nothing
+   * would be listening. It also has to come after resolveMasterKey, because the row is
+   * encrypted under that key.
+   *
+   * NEVER FATAL. No database means the founder is already being told about the database,
+   * which is the thing to fix first, and this simply reports that it could not ask.
+   */
+  if (dbUp) {
+    const restored = await loadStoredAnthropicKeys();
+    if (restored.loaded > 0) log.info({ keys: restored.loaded }, 'an Anthropic key was restored from the database. Nobody has to paste it again.');
+    // Named by founder id, never by content. A row that will not open is a half done
+    // rotation or a damaged row, and it needs a person rather than a retry.
+    if (restored.unreadable.length > 0) log.error({ founderIds: restored.unreadable }, 'a stored Anthropic key would not decrypt. That founder will be asked to paste theirs again.');
+  }
 
   // One line that answers "is this app able to do its job", separately from "is
   // the container up". Those stopped being the same question when this file

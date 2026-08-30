@@ -10,13 +10,30 @@
 # WHAT READS IT. The Replit workspace. The Deployment reads its own configuration, which is
 # NOT in this file, and the note further down says why.
 
+# One command, and it is the whole start sequence. There is deliberately no `npm run
+# db:migrate &&` in front of it.
+#
+# THIS LINE USED TO BE THE BUG. `npm run start` did not migrate, the deployment build command
+# did not migrate, and nothing else ran. So a founder created a Replit database, set a
+# passphrase, pressed Sign in, and got a 500 carrying an incident id and the words "tell a
+# mentor", while the log said relation "founder" does not exist. Every founder hit it, within
+# minutes of remixing, before doing anything wrong.
+#
+# THE FIX IS NOT IN THIS FILE, AND THAT IS ON PURPOSE. src/server/index.ts migrates at boot,
+# before it binds the port. Chaining the migration here instead would work in the workspace
+# and cover nothing else: the Deployment has its own run command, set in a web pane, and a
+# fix that lives in two places is a fix that gets applied to one of them. Boot is the one
+# place every start goes through, workspace and deployment alike.
 run = "npm run start"
 entrypoint = "src/server/index.ts"
 
 # Node 22. Not a preference. The Agent SDK's reference implementation is the npm package, it
 # declares engines node >= 18, and it ships the Linux CLI binary the agent loop spawns as a
 # per platform optional dependency. An install that skipped optional dependencies fails at
-# the first query, not at install time, which is why the probe resolves that binary at boot.
+# the first query, not at install time. src/server/boot/platform-cli.ts now resolves that
+# binary at boot AND runs it, and refuses to report ready when it cannot. It used to be
+# checked only by scripts/probe-deployment.ts, which nothing runs unless a person changes the
+# run command below, and no founder ever will.
 modules = ["nodejs-22"]
 
 [nix]
@@ -67,6 +84,20 @@ externalPort = 80
 #
 # Build command:  npm ci && npm run build
 # Run command:    npm run start
+#
+# DO NOT ADD `npm run db:migrate` TO THE BUILD COMMAND. It is the obvious next thought and it
+# is wrong twice over. The build runs at a different moment from the app, and whether a
+# Replit build step is handed DATABASE_URL is a vendor detail no spike here has verified, so
+# a build that migrates is a build that may fail on an environment variable that was never
+# missing. And a founder redeploying an existing app would migrate at build time against a
+# database the running container is still using. The app migrates at boot instead, where the
+# environment is the one it will actually run under. See src/server/boot/schema.ts.
+#
+# `npm ci` and NOT `npm install`, and not either with --no-optional. The CLI the agent loop
+# spawns is a per platform OPTIONAL dependency. Skip it and the deployment goes green and
+# fails at the founder's first message. Boot now refuses to report ready without it, so this
+# shows up as a start page rather than as a broken conversation, but the build command is
+# where it is avoided in the first place.
 #
 # For the deployment probe, and only for the probe, the run command is: npm run probe
 # See scripts/PROBE.md.

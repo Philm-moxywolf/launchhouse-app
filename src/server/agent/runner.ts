@@ -49,6 +49,7 @@ import type {
   SDKMessage,
   SDKUserMessage,
 } from '@anthropic-ai/claude-agent-sdk';
+import { anthropicKeyFor } from './anthropic-key.js';
 import { assemble, reAnchor, type AssembledPrompt } from './assemble.js';
 import { CostMeter, cacheReadTokensOf, type Budget } from './budget.js';
 import { postToolUse, preCompact, type HookDeps } from './hooks.js';
@@ -382,7 +383,23 @@ export class AgentRun {
         PATH: this.deps.config.path,
         HOME: '/tmp',
         CLAUDE_CONFIG_DIR: this.deps.config.claudeConfigDir,
-        ANTHROPIC_API_KEY: this.deps.config.anthropicApiKey,
+        /**
+         * READ AT SPAWN, NOT AT BOOT, AND THAT IS THE WHOLE OF "WITHOUT A RESTART".
+         *
+         * The config value is settled once, when the process starts, from the
+         * environment. On a founder's own deployment the environment has no key
+         * in it and never will: they paste one into the running app, because
+         * they cannot restart a container and nothing tells them to. So the
+         * holder is asked here, on the line that actually hands the key to the
+         * subprocess, and the config is what answers when nothing has been
+         * pasted. A key pasted two seconds ago is used by the next turn.
+         *
+         * The founder id is passed so the holder can refuse a key belonging to
+         * somebody else. There is one founder per deployment, so it always
+         * matches; the comparison is what keeps that true if it ever stops
+         * being.
+         */
+        ANTHROPIC_API_KEY: anthropicKeyFor(this.ctx.founderId, this.deps.config.anthropicApiKey),
       },
       stderr: (data) =>
         this.deps.log.warn({ founderId: this.ctx.founderId, data }, 'cli stderr'),

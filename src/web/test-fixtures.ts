@@ -75,6 +75,13 @@ export function setupState(extra: Partial<SetupState> = {}): SetupState {
       contacts: "not_checked",
       tokenMadeAt: null,
     },
+    /**
+     * NOT SET, because that is the state every founder starts in and the one the screens
+     * are most often wrong about. A fixture that arrived with a key already in it would
+     * render the settled row, and the paste box, which is the first thing 130 people
+     * touch, would never be read by the house style test.
+     */
+    anthropic: { set: false, checkedAt: null, length: null },
     ...extra,
   };
 }
