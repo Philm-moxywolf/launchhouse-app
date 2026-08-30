@@ -1,0 +1,49 @@
+#!/bin/sh
+# date — a stand-in for GNU date, with the clock stopped.
+#
+# WHY IT EXISTS: lib/date_compat.sh chooses its GNU branch or its BSD branch by
+#                asking the date on the machine, so on a Mac only one of the two
+#                branches is ever reached and the other ships untested to 130
+#                laptops. Putting this on PATH makes the GNU branch run anywhere,
+#                and stopping the clock makes the answer a fixed number a fixture
+#                can be compared against byte for byte.
+# CALLED BY:     tests/cases/02-date-compat.sh, through PATH
+# READS:         nothing             WRITES: nothing
+# POSTURE:       fail-closed. An option this does not implement exits 1 loudly
+#                rather than answering, so a new date call in ge shows up here
+#                as a failure instead of passing on a wrong number.
+# PORTABILITY:   POSIX sh. No bash/python/node/jq.
+# EVERY ERROR MESSAGE ENDS WITH A RECOVERY LINE ("→ run: ...").
+set -u
+
+. "$(dirname -- "$0")/../epoch.sh"
+
+# The stopped clock. 2026-09-25 is the first morning of the event.
+GE_T_EPOCH=1790294400
+GE_T_STAMP=20260925T000000Z
+GE_T_DAY=2026-09-25
+GE_T_HHMM=00:00
+
+case "${1:-}" in
+  # The probe lib/date_compat.sh uses to tell the two flavours apart. GNU date
+  # takes -d, so this arm is what makes the library choose its GNU branch.
+  -d)
+    case "${2:-}" in
+      @*) printf '%s\n' "$GE_T_DAY"; exit 0 ;;
+    esac
+    if ! ge_t_epoch "${2:-}"; then
+      printf 'date: invalid date %s\n      → run: pass a date shaped 2026-09-25 or 2026-09-25T09:30:00\n' "${2:-}" >&2
+      exit 1
+    fi
+    exit 0 ;;
+  +%s)             printf '%s\n' "$GE_T_EPOCH"; exit 0 ;;
+  +%Y-%m-%d)       printf '%s\n' "$GE_T_DAY"; exit 0 ;;
+  '+%Y-%m-%d %H:%M') printf '%s %s\n' "$GE_T_DAY" "$GE_T_HHMM"; exit 0 ;;
+  -u)
+    case "${2:-}" in
+      '+%Y%m%dT%H%M%SZ') printf '%s\n' "$GE_T_STAMP"; exit 0 ;;
+    esac ;;
+esac
+
+printf 'date: this stand-in does not implement "%s"\n      → run: add that option to tests/fixtures/02-date-compat/bin-gnu/date\n' "$*" >&2
+exit 1

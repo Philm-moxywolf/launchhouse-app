@@ -1,0 +1,17 @@
+| file | gate | status | bytes | modified |
+|---|---|---|---|---|
+| founder-brain.md | gate A | ok | 47 | @DATE@ @TS@ |
+| content-30.md | gate B | ok | 25 | @DATE@ @TS@ |
+| content-30.csv | gate B | missing | - | - |
+| rss-feeds.md | gate B | missing | - | - |
+| outreach-sequence.md | gate C | missing | - | - |
+| outreach-firstlines.csv | gate C | missing | - | - |
+| ops-workflow.md | gate C | missing | - | - |
+| 90-day-plan.md | - | missing | - | - |
+| playbook-insert.md | - | missing | - | - |
+| ledger.md | - | ok | 79 | @DATE@ @TS@ |
+| memory.md | - | ok | 611 | @DATE@ @TS@ |
+| ops-log.md | - | ok | 77 | @DATE@ @TS@ |
+| people/ | gate B or C | ok | 1 file | @DATE@ @TS@ |
+
+Written to @ROOT@/work/growth-engine/.state/index.md

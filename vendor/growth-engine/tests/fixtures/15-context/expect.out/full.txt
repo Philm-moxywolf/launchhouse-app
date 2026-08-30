@@ -1,0 +1,8 @@
+Working folder: @ROOT@/work/growth-engine
+gate A: 1 of 1 file written
+gate B: 0 of 3 files written
+gate C: 0 of 3 files written
+gate B or C: 0 of 1 file written
+Flag: no proof yet, so write from observation
+Last decision: @DATE@ b2b track, my buyers are agencies
+Open thread: @DATE@ waiting on the list from Juan

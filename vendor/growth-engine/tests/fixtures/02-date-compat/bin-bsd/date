@@ -1,0 +1,74 @@
+#!/bin/sh
+# date — a stand-in for BSD date, with the clock stopped.
+#
+# WHY IT EXISTS: the twin of bin-gnu/date, for the other branch. On a Linux or
+#                Git Bash runner the BSD branch of lib/date_compat.sh is never
+#                reached, which is exactly the branch every macOS founder runs.
+#                This makes both branches run on every machine, against the same
+#                stopped clock, so the two answers can be compared.
+# CALLED BY:     tests/cases/02-date-compat.sh, through PATH
+# READS:         nothing             WRITES: nothing
+# POSTURE:       fail-closed. It refuses -d, exactly as BSD date does, which is
+#                what makes lib/date_compat.sh choose its BSD branch. An option
+#                it does not implement exits 1 loudly rather than answering.
+# PORTABILITY:   POSIX sh. No bash/python/node/jq.
+# EVERY ERROR MESSAGE ENDS WITH A RECOVERY LINE ("→ run: ...").
+set -u
+
+. "$(dirname -- "$0")/../epoch.sh"
+
+# The same stopped clock as bin-gnu/date. If these two ever differ, the test
+# comparing the branches is comparing clocks instead of code.
+GE_T_EPOCH=1790294400
+GE_T_STAMP=20260925T000000Z
+GE_T_DAY=2026-09-25
+GE_T_HHMM=00:00
+
+case "${1:-}" in
+  # BSD date has no -d for parsing. Refusing it is the whole reason
+  # lib/date_compat.sh can tell the two flavours apart at all.
+  -d)
+    printf 'date: illegal option -- d\n      → run: use date -j -f <format> <value>, which is the BSD form\n' >&2
+    exit 1 ;;
+  -j)
+    [ "${2:-}" = -f ] || {
+      printf 'date: -j needs -f and a format\n      → run: date -j -f %%Y-%%m-%%d 2026-09-25 +%%s\n' >&2
+      exit 1
+    }
+    gt_fmt=${3:-}
+    gt_val=${4:-}
+    # The format is honoured strictly. A lenient match here would hide the very
+    # difference between the two branches this file exists to show.
+    case "$gt_fmt" in
+      '%Y-%m-%dT%H:%M:%S')
+        case "$gt_val" in
+          [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]) ;;
+          *) printf 'date: cannot parse %s with %s\n      → run: pass a value shaped 2026-09-25T09:30:00\n' "$gt_val" "$gt_fmt" >&2
+             exit 1 ;;
+        esac ;;
+      '%Y-%m-%d')
+        case "$gt_val" in
+          [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]) ;;
+          *) printf 'date: cannot parse %s with %s\n      → run: pass a value shaped 2026-09-25\n' "$gt_val" "$gt_fmt" >&2
+             exit 1 ;;
+        esac ;;
+      *)
+        printf 'date: this stand-in does not implement the format %s\n      → run: add it to tests/fixtures/02-date-compat/bin-bsd/date\n' "$gt_fmt" >&2
+        exit 1 ;;
+    esac
+    if ! ge_t_epoch "$gt_val"; then
+      printf 'date: %s is not a real date\n      → run: pass a date that exists, for example 2026-09-25\n' "$gt_val" >&2
+      exit 1
+    fi
+    exit 0 ;;
+  +%s)             printf '%s\n' "$GE_T_EPOCH"; exit 0 ;;
+  +%Y-%m-%d)       printf '%s\n' "$GE_T_DAY"; exit 0 ;;
+  '+%Y-%m-%d %H:%M') printf '%s %s\n' "$GE_T_DAY" "$GE_T_HHMM"; exit 0 ;;
+  -u)
+    case "${2:-}" in
+      '+%Y%m%dT%H%M%SZ') printf '%s\n' "$GE_T_STAMP"; exit 0 ;;
+    esac ;;
+esac
+
+printf 'date: this stand-in does not implement "%s"\n      → run: add that option to tests/fixtures/02-date-compat/bin-bsd/date\n' "$*" >&2
+exit 1

@@ -1,0 +1,2 @@
+FAIL  people is a folder, and ge snapshot backs up one file at a time.
+      → run: ge snapshot people/<the file inside it>

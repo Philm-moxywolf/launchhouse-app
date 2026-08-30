@@ -1,0 +1,3 @@
+FAIL  there is nothing to undo. ge has not changed any of your files yet.
+      ge check reads your folder and says what state it is in.
+      → run: ge check

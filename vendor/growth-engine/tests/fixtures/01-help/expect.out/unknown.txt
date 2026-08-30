@@ -1,0 +1,2 @@
+FAIL  ge does not have a command called "nosuchverb".
+      → run: ge help

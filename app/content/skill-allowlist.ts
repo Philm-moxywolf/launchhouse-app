@@ -11,7 +11,7 @@
  * With it, any other change fails the build. The failure it prevents is prose
  * drift: a founder-facing sentence edited here, never reviewed in the public
  * repo, shipped to 130 people. It also catches the reverse, an upstream edit
- * arriving with a moved submodule pin and silently not reaching the app.
+ * arriving with a re-vendored copy and silently not reaching the app.
  *
  * WHAT CALLS IT
  * `app/content/skill-diff.ts`, and through it `app/tests/skill-diff.test.ts`.
@@ -20,7 +20,9 @@
  * Nothing. It is data.
  *
  * HOW TO CHANGE A SKILL BODY
- * Edit the prose in the public content repo first. Move the submodule pin.
+ * Edit the prose in the public content repo first. Then bring it in here:
+ *   npm run engine:bump -- --to <ref> --from <a checkout of the content repo>
+ * That is the only supported way, and it prints what moved before it moves it.
  * Then, if the app's copy has to differ, add a row here with the group it
  * belongs to and the reason, and only then edit the file under `skills/`.
  * A row that matches nothing fails too, so a rule cannot outlive its change.

@@ -25,9 +25,17 @@
  * so in the words of the journey rather than in the words of a payload.
  *
  * WHAT IS PROVED HERE, in order, because it is the order a founder does it:
- * ask for a link, use it, be recognised, answer the two first run questions,
- * see where they are up to, open the Founder Brain, send a message, read their
- * files and their gates, and sign out.
+ * find the door shut, type the passphrase, be recognised, answer the two first
+ * run questions, see where they are up to, open the Founder Brain, send a
+ * message, read their files and their gates, and sign out.
+ *
+ * THE FRONT DOOR CHANGED AND THIS FILE CHANGED WITH IT. The journey used to
+ * start by asking for an emailed link. There is no roster and no mail sender
+ * now: one founder owns the deployment and signs in with OWNER_PASSPHRASE, a
+ * Replit Secret. That is a plain HTML form the browser posts itself, so it is
+ * driven here as a form post rather than through api.ts, which is exactly how a
+ * founder with JavaScript switched off gets in. Everything after the door is
+ * still driven through the browser's own functions.
  *
  * WHAT IT CALLS. `src/web/lib/api.ts`, and the real Fastify instance from
  * ./test-fixtures.ts.
@@ -39,6 +47,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  downloadAllUrl,
   fetchFiles,
   fetchGates,
   fetchHome,
@@ -46,12 +55,11 @@ import {
   fetchSetup,
   fetchThread,
   openThread,
-  requestSignInLink,
   saveProfile,
   sendMessage,
   signOut,
 } from '../../web/lib/api.ts';
-import { readSignInEmail, tokenFromUrl } from '../auth/test-fixtures.ts';
+import { FOUNDER_A } from '../auth/test-fixtures.ts';
 import { buildHarness, type Harness } from './test-fixtures.ts';
 
 /**
@@ -106,23 +114,24 @@ function driveBrowserAt(h: Harness): { restore: () => void; jar: Map<string, str
   };
 }
 
-/** The link out of the email, pressed the way the verify page presses it. */
-async function pressTheLinkInTheEmail(h: Harness, jar: Map<string, string>): Promise<void> {
-  const email = h.mailer.last()?.text ?? '';
-  const token = tokenFromUrl(readSignInEmail(email).url);
-  assert.notEqual(token, '', 'the email carried no link');
-
-  // A POST, because a GET consumes nothing: a mail scanner that fetches the URL
-  // must not spend the token. That page is server rendered and is not one of
-  // the browser bundle's calls, so it is driven here rather than through api.ts.
-  const verified = await h.app.inject({
+/**
+ * The one button on the sign in screen, pressed the way a browser presses it.
+ *
+ * A form post, not a fetch. The sign in screen is server rendered and posts
+ * itself so that somebody can get in before this bundle exists and with
+ * JavaScript switched off, so there is no api.ts function to drive here. The
+ * cookie it sets goes into the jar and everything after this is the browser's
+ * own code.
+ */
+async function typeThePassphrase(h: Harness, jar: Map<string, string>): Promise<void> {
+  const res = await h.app.inject({
     method: 'POST',
-    url: '/auth/verify',
+    url: '/auth/signin',
     headers: { 'content-type': 'application/x-www-form-urlencoded' },
-    payload: new URLSearchParams({ t: token }).toString(),
+    payload: new URLSearchParams({ passphrase: h.passphrase }).toString(),
   });
-  assert.equal(verified.statusCode, 303, 'the link did not sign anybody in');
-  for (const c of verified.cookies) jar.set(c.name, c.value);
+  assert.equal(res.statusCode, 303, 'the passphrase did not sign anybody in');
+  for (const c of res.cookies) jar.set(c.name, c.value);
 }
 
 test('A FOUNDER SIGNS IN THROUGH THE BROWSER AND REACHES THEIR FOUNDER BRAIN', async (t) => {
@@ -139,13 +148,25 @@ test('A FOUNDER SIGNS IN THROUGH THE BROWSER AND REACHES THEIR FOUNDER BRAIN', a
   assert.equal(before.ok, true);
   if (before.ok) assert.equal(before.value.signedIn, false);
 
-  // The button on the sign in screen.
-  const asked = await requestSignInLink('ama@example.com');
-  assert.equal(asked.ok, true, 'the button that starts everything did not work');
-  if (asked.ok) assert.equal(asked.value.sent, true);
-  assert.equal(h.mailer.sent.length, 1);
+  /**
+   * A STRANGER WITH THE URL REACHES NOTHING, ASKED THROUGH THE BROWSER'S OWN CODE.
+   *
+   * The jar is empty, so these are the calls somebody who found the address
+   * makes. Every one has to come back refused rather than with a founder's
+   * work in it. Replit publishes at a guessable name and the founder pastes
+   * that link into Slack, so this is not a hypothetical.
+   */
+  for (const [what, answer] of [
+    ['their files', await fetchFiles()],
+    ['their home screen', await fetchHome()],
+    ['their setup', await fetchSetup()],
+    ['their gates', await fetchGates()],
+  ] as const) {
+    assert.equal(answer.ok, false, `a stranger read ${what}`);
+    if (!answer.ok) assert.equal(answer.problem.kind, 'signed_out', what);
+  }
 
-  await pressTheLinkInTheEmail(h, jar);
+  await typeThePassphrase(h, jar);
 
   // And now the browser recognises them. This is the assertion the whole file
   // exists for: the shape the screens read, produced by the server as it is.
@@ -191,6 +212,15 @@ test('A FOUNDER SIGNS IN THROUGH THE BROWSER AND REACHES THEIR FOUNDER BRAIN', a
 
   const sent = await sendMessage(threadId, 'we sell to construction firms', 'c-1');
   assert.equal(sent.ok, true, 'the founder pressed send and it did not arrive');
+  // A turn, not just a 202. The screen needs the id to follow the run, and a
+  // send that stored a message without queueing anything is a founder watching
+  // a thread that never answers.
+  if (!sent.ok) return;
+  assert.equal(typeof sent.value.turnId, 'string');
+  assert.notEqual(sent.value.turnId, '');
+  const queued = h.store.turns.get(sent.value.turnId);
+  assert.ok(queued !== undefined, 'the message was stored and no turn was made');
+  assert.equal(queued.threadId, threadId);
 
   const thread = await fetchThread(threadId);
   assert.equal(thread.ok, true);
@@ -215,6 +245,28 @@ test('A FOUNDER SIGNS IN THROUGH THE BROWSER AND REACHES THEIR FOUNDER BRAIN', a
   assert.equal(gates.ok, true);
   if (gates.ok) assert.equal(gates.value.fileStatus['founder-brain.md'], 'missing');
 
+  /**
+   * And they can take it all away, from the address the browser hands the link.
+   *
+   * `downloadAllUrl` is not a fetch, it is the href on an anchor, so it is
+   * followed here the way a browser follows one: with the cookie jar, at the
+   * address the browser's own code built. That is the whole of rule 4 for a
+   * founder who wants their work off this deployment.
+   */
+  h.store.putFile(FOUNDER_A, 'founder-brain.md', '# Founder Brain\nTrack: b2b\n');
+  h.store.putFile(FOUNDER_A, 'dm-openers.md', 'the other track, which they should not have');
+  const zip = await h.app.inject({
+    method: 'GET',
+    url: downloadAllUrl(false),
+    headers: { cookie: [...jar.entries()].map(([name, value]) => `${name}=${value}`).join('; ') },
+  });
+  assert.equal(zip.statusCode, 200, 'the download everything link did not work');
+  assert.equal(String(zip.headers['content-type']), 'application/zip');
+  const archive = zip.rawPayload.toString('latin1');
+  assert.match(archive, /growth-engine\/founder-brain\.md/);
+  // Rule 1 holds inside the archive as well as on the screen.
+  assert.doesNotMatch(archive, /dm-openers/);
+
   const setup = await fetchSetup();
   assert.equal(setup.ok, true);
   if (setup.ok) {
@@ -234,15 +286,16 @@ test('A FOUNDER SIGNS IN THROUGH THE BROWSER AND REACHES THEIR FOUNDER BRAIN', a
 });
 
 test('A B2C FOUNDER NEVER MEETS THE OTHER TRACK, THROUGH THE SAME CODE THE SCREENS USE', async (t) => {
-  const h = await buildHarness();
+  // A B2C deployment, not a second person signing in. One founder owns one app,
+  // so the other track is another deployment rather than another account.
+  const h = await buildHarness({ track: 'b2c' });
   const { restore, jar } = driveBrowserAt(h);
   t.after(async () => {
     restore();
     await h.app.close();
   });
 
-  await requestSignInLink('ben@example.com');
-  await pressTheLinkInTheEmail(h, jar);
+  await typeThePassphrase(h, jar);
 
   const setup = await fetchSetup();
   assert.equal(setup.ok, true);
@@ -267,8 +320,7 @@ test('THE PARTS THAT ARE NOT BUILT SAY SO, AND SAY IT IN WORDS A FOUNDER CAN ACT
     await h.app.close();
   });
 
-  await requestSignInLink('ama@example.com');
-  await pressTheLinkInTheEmail(h, jar);
+  await typeThePassphrase(h, jar);
 
   const { connectGhl, saveVoiceSample } = await import('../../web/lib/api.ts');
 

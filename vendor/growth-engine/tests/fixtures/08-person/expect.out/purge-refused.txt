@@ -1,0 +1,4 @@
+FAIL  sam.carter@northfield.io is at status candidate, and purge only acts on stopped or cut.
+      Purge destroys the file and every backup of it, so it cannot be the first thing you reach for.
+      Set them to stopped first, then purge again.
+      → run: ge person set 'sam.carter@northfield.io' status stopped

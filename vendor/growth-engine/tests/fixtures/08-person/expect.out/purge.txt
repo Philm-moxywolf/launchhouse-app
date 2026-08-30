@@ -1,0 +1,4 @@
+purged people/sam-carter-northfield-io.md
+  destroyed 1 person file and 1 snapshot. This cannot be undone
+  The list shows who is left.
+  → run: ge person list

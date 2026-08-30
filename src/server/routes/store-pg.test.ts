@@ -32,16 +32,16 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { and, asc, eq, gt, gte, isNull, like, sql } from 'drizzle-orm';
+import { and, asc, eq, gt, gte, sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 
 import {
   founders,
+  geEvent,
   geFile,
   messages,
   sessions,
-  signinTokens,
   threads,
   turnEvents,
   turns,
@@ -156,39 +156,42 @@ test('THE MESSAGE INSERT NAMES THE PARTIAL INDEX PREDICATE, OR POSTGRES CANNOT I
   assert.match(rendered.sql, /returning "id"/);
 });
 
-test('CONSUMING A SIGN IN TOKEN IS ONE CONDITIONAL UPDATE THAT REPORTS WHO WON', () => {
-  const rendered = db
-    .update(signinTokens)
-    .set({ consumedAt: new Date('2026-09-25T13:00:00Z') })
-    .where(and(eq(signinTokens.id, 'req.link'), isNull(signinTokens.consumedAt)))
-    .returning({ id: signinTokens.id })
-    .toSQL();
+/**
+ * THE SIGN IN TOKEN TEST THAT WAS HERE IS DELETED, NOT REWRITTEN.
+ *
+ * It rendered the conditional UPDATE that consumed one magic link, and asserted
+ * the `consumed_at is null` predicate that stopped two tabs both spending it.
+ * There is no link, no token pair and no such statement anywhere in the app: a
+ * founder types OWNER_PASSPHRASE and nothing is consumed. The `signin_tokens`
+ * table is still in the schema and in the migrations, and nothing reads or
+ * writes it. A test that went on rendering SQL for it would read in a review
+ * like coverage of how somebody signs in, which is the worst kind of green.
+ */
 
-  // Without `consumed_at is null` two tabs both update the row, both get a row
-  // back, and both are given a session on a token that works once.
-  assert.match(rendered.sql, /"consumed_at" is null/);
-  assert.match(rendered.sql, /returning "id"/);
-  assert.match(rendered.sql, /update "signin_tokens"/);
-});
-
-test('THE SIGN IN RATE LIMIT COUNTS ROWS IN POSTGRES, AND COUNTS REQUESTS NOT ROWS', () => {
+test('THE SIGN IN SLOWDOWN COUNTS ROWS IN POSTGRES, SO A RESTART IS NOT A BYPASS', () => {
+  // What `PgAuthStore.countAuthEvents` builds. The per client limit is held in
+  // memory and resets with the process, and the cheapest way past an in memory
+  // limit is to wait for a redeploy. This is the half that survives one.
   const rendered = db
     .select({ n: sql<string>`count(*)` })
-    .from(signinTokens)
+    .from(geEvent)
     .where(
       and(
-        eq(signinTokens.email, 'ama@example.com'),
-        gte(signinTokens.createdAt, new Date('2026-09-25T12:00:00Z')),
-        like(signinTokens.id, '%.link'),
+        eq(geEvent.founderId, FOUNDER),
+        eq(geEvent.verb, 'signin-refused'),
+        gte(geEvent.at, new Date('2026-09-25T12:00:00Z')),
       ),
     )
     .toSQL();
 
   assert.match(rendered.sql, /count\(\*\)/);
-  assert.match(rendered.sql, /from "signin_tokens"/);
-  // One request writes two rows, a link and a code. Counting both would halve
-  // the limit without anybody noticing.
-  assert.ok(rendered.params.includes('%.link'), rendered.sql);
+  // The audit line that already exists, rather than a table of its own. It is
+  // one indexed query on (founder_id, at) and it needs no migration.
+  assert.match(rendered.sql, /from "ge_event"/);
+  // Refused attempts only. Counting every verb would slow the door down for a
+  // founder who had simply used their own app that morning.
+  assert.ok(rendered.params.includes('signin-refused'), rendered.sql);
+  assert.ok(rendered.params.includes(FOUNDER), rendered.sql);
 });
 
 test('A SESSION IS FOUND BY THE HASH OF THE COOKIE, AND THE COOKIE IS NEVER A PARAMETER', () => {

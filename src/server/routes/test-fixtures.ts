@@ -7,8 +7,8 @@
  *
  * WHY IT EXISTS. There is no Postgres here and there will not be one in CI
  * before the freeze, and the properties that have to be proved are properties
- * of the routes: two founders each see only their own workspace, an address
- * that is not on the roster is refused, a double sent message is stored once,
+ * of the routes: a session reaches only the founder row it belongs to, a
+ * stranger with the URL reaches nothing, a double sent message is stored once,
  * and a queued founder is given a number. Every one of those is a test that has
  * to run on a laptop.
  *
@@ -18,6 +18,11 @@
  * `appendTurnEvent` hands out increasing ids, because those ids are the SSE
  * `id:` field and replay depends on their order.
  *
+ * AND IT SIGNS IN THROUGH THE REAL FRONT DOOR. `signIn` posts the passphrase to
+ * `/auth/signin` exactly as the browser posts it, so every test below runs
+ * against the door a founder actually opens. A fixture that wrote a session row
+ * and handed back a cookie would keep passing on the day the door stops working.
+ *
  * WHAT CALLS IT. The tests in this folder.
  * WHAT IT READS AND WRITES. Its own Maps. Nothing on disk, nothing over a socket.
  */
@@ -25,9 +30,15 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 
 import { createAuth } from '../auth/plugin.ts';
-import { CollectingMailer } from '../auth/mailer.ts';
-import { DEFAULT_RATE_LIMIT } from '../auth/rate-limit.ts';
-import { MemoryAuthStore, TestLogger, seededStore } from '../auth/test-fixtures.ts';
+import {
+  FOUNDER_A,
+  MemoryAuthStore,
+  RecordingSleep,
+  TEST_PASSPHRASE,
+  TestLogger,
+  seededStore,
+} from '../auth/test-fixtures.ts';
+import { OWNER_ROW_KEY } from '../auth/types.ts';
 import { TurnEventBus, TurnEvents } from './events.ts';
 import { registerApiRoutes, type RegisteredRoutes } from './index.ts';
 import { QueueTurnExecutor, type RunTurn } from './turn-executor.ts';
@@ -422,7 +433,6 @@ export interface Harness {
   app: FastifyInstance;
   store: MemoryAppStore;
   auth: MemoryAuthStore;
-  mailer: CollectingMailer;
   clock: TestClock;
   log: TestLogger;
   bus: TurnEventBus;
@@ -430,43 +440,100 @@ export interface Harness {
   queue: TestQueue;
   routes: RegisteredRoutes;
   deps: RouteDeps;
-  /** Sign a founder in the way a browser does, and get their cookie back. */
-  signIn(email: string): Promise<string>;
+  /**
+   * Every route this instance registered, read off it rather than written down.
+   *
+   * WHY A TEST NEEDS THE LIVE TABLE. "No route is reachable without a session"
+   * is only worth asserting over ALL of them, and a hand written list is a list
+   * somebody forgets to add to. The forgetting looks exactly like the bug: a
+   * route added on the Tuesday, open to whoever finds the URL, with a green
+   * suite. Read here, a route added next week is walked the moment it exists.
+   */
+  routeTable: readonly { readonly method: string; readonly url: string }[];
+  /** The passphrase this deployment was built with, for a test that types a wrong one. */
+  passphrase: string;
+  /**
+   * Sign the owner in the way a browser does, and get their cookie header back.
+   *
+   * IT POSTS THE FORM. There is one way into this app and this is it, so every
+   * test below is driven through the door a founder opens rather than past it.
+   */
+  signIn(): Promise<string>;
+  /**
+   * A cookie that resolves to some other founder row.
+   *
+   * WHY A FIXTURE NEEDS THIS AT ALL WHEN THE APP HAS ONE FOUNDER. Every route
+   * in this folder is founder scoped, and the scoping is one `where founder_id`
+   * away from being deleted at any time. A single tenant deployment is exactly
+   * where somebody removes that filter as unnecessary, and no test that only
+   * ever holds the owner's cookie would notice. So the tenancy tests hold a
+   * session belonging to a different row and must still reach nothing.
+   *
+   * THE COOKIE IS REAL, AND THAT IS THE POINT OF DOING IT THIS WAY. It is
+   * minted by the sign in route, through the same derivation as any other, and
+   * only the row it points at is moved. Nothing here re-implements how a cookie
+   * becomes a session id, so this cannot drift away from the real one and go on
+   * passing.
+   */
+  sessionFor(founderId: string): Promise<string>;
 }
 
 export interface HarnessOptions {
   readonly run?: RunTurn;
   readonly queue?: TestQueue;
+  /**
+   * The owner's track. B2B unless a test says otherwise, and `null` for a
+   * founder who has not run the Founder Brain yet.
+   *
+   * ONE FOUNDER OWNS ONE DEPLOYMENT, so the other track is not another person
+   * to sign in as: it is another deployment. Building the harness with the
+   * track set is what makes a B2C test a test of a B2C founder's own app.
+   */
+  readonly track?: 'b2b' | 'b2c' | null;
 }
 
 export async function buildHarness(options: HarnessOptions = {}): Promise<Harness> {
   const authStore = seededStore();
+  if (options.track !== undefined) {
+    // The owner row, re-stated with the track this test is about. Keyed on the
+    // same id and the same OWNER_ROW_KEY, so `ensureOwner` still finds one owner
+    // and the sign in below lands on this row rather than claiming a new one.
+    authStore.addFounder({
+      id: FOUNDER_A,
+      email: OWNER_ROW_KEY,
+      displayName: 'Ama Boateng',
+      timezone: 'America/New_York',
+      track: options.track,
+    });
+  }
   const store = new MemoryAppStore(authStore);
   const clock = new TestClock();
   const log = new TestLogger();
-  const mailer = new CollectingMailer();
   const bus = new TurnEventBus();
   const events = new TurnEvents(store, bus, clock);
   const queue = options.queue ?? new TestQueue();
 
   const app = Fastify({ logger: false });
 
+  // Before anything is registered, because onRoute only sees what comes after it.
+  const routeTable: { method: string; url: string }[] = [];
+  app.addHook('onRoute', (route) => {
+    const methods = Array.isArray(route.method) ? route.method : [route.method];
+    for (const method of methods) routeTable.push({ method, url: route.url });
+  });
+
   const { register: registerAuth, context } = createAuth({
     store: authStore,
-    mailer,
     // The auth clock takes no timers, so the route clock satisfies it.
     clock: { now: () => clock.now() },
     log,
+    passphrase: TEST_PASSPHRASE,
     // secure: false, because a test client does not speak https and a Secure
     // cookie would never come back. env.ts forces https in prod, where it matters.
-    session: { cookieName: 'lh_session', ttlDays: 90, secure: false },
-    magicLink: {
-      appBaseUrl: 'http://localhost:5000',
-      tokenTtlMinutes: 30,
-      mentorCodeTtlMinutes: 10,
-      session: { cookieName: 'lh_session', ttlDays: 90, secure: false },
-    },
-    rateLimit: DEFAULT_RATE_LIMIT,
+    cookie: { name: 'lh_session', ttlDays: 90, secure: false },
+    // Records instead of waiting. A wrong passphrase is deliberately slowed
+    // down, and a suite that actually waited for it is a suite somebody deletes.
+    sleep: new RecordingSleep().fn,
     cookieSecret: 'test-cookie-secret-not-used-for-anything',
   });
   await registerAuth(app);
@@ -495,29 +562,49 @@ export async function buildHarness(options: HarnessOptions = {}): Promise<Harnes
   const routes = await registerApiRoutes(app, deps);
   await app.ready();
 
-  async function signIn(email: string): Promise<string> {
-    const requested = await app.inject({
+  async function signIn(): Promise<string> {
+    const res = await app.inject({
       method: 'POST',
-      url: '/auth/request',
+      url: '/auth/signin',
       headers: { 'content-type': 'application/x-www-form-urlencoded' },
-      payload: new URLSearchParams({ email }).toString(),
+      payload: new URLSearchParams({ passphrase: TEST_PASSPHRASE }).toString(),
     });
-    if (requested.statusCode !== 200) throw new Error(`sign in request failed: ${String(requested.statusCode)}`);
-
-    const body = mailer.last()?.text ?? '';
-    const url = /https?:\/\/\S+/.exec(body)?.[0] ?? '';
-    const token = new URL(url).searchParams.get('t') ?? '';
-
-    const verified = await app.inject({
-      method: 'POST',
-      url: '/auth/verify',
-      headers: { 'content-type': 'application/x-www-form-urlencoded' },
-      payload: new URLSearchParams({ t: token }).toString(),
-    });
-    const cookie = verified.cookies.find((c) => c.name === 'lh_session');
-    if (cookie === undefined) throw new Error('no session cookie was set');
+    // 303 so the browser follows with a GET. Anything else is the door itself
+    // being broken, and a harness that carried on would report that as a
+    // failure in whatever route the test was actually about.
+    if (res.statusCode !== 303) throw new Error(`sign in failed: ${String(res.statusCode)}`);
+    const cookie = res.cookies.find((c) => c.name === 'lh_session');
+    if (cookie === undefined) throw new Error('sign in set no session cookie');
     return `lh_session=${cookie.value}`;
   }
 
-  return { app, store, auth: authStore, mailer, clock, log, bus, events, queue, routes, deps, signIn };
+  async function sessionFor(founderId: string): Promise<string> {
+    const before = new Set(authStore.sessions.keys());
+    const cookie = await signIn();
+    const id = [...authStore.sessions.keys()].find((key) => !before.has(key));
+    if (id === undefined) throw new Error('sign in wrote no session row');
+    const row = authStore.sessions.get(id);
+    if (row === undefined) throw new Error('the session row went missing');
+    // Only the owner of the row moves. The cookie, the derivation and the expiry
+    // are all the ones the sign in route made.
+    authStore.sessions.set(id, { ...row, founderId });
+    return cookie;
+  }
+
+  return {
+    app,
+    store,
+    auth: authStore,
+    clock,
+    log,
+    bus,
+    events,
+    queue,
+    routes,
+    deps,
+    routeTable,
+    passphrase: TEST_PASSPHRASE,
+    signIn,
+    sessionFor,
+  };
 }

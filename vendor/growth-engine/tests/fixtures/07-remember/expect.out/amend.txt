@@ -1,0 +1,3 @@
+Amended entry 1 under Decisions.
+  was: b2b track, my buyers are agencies
+  now: b2b track, my buyers are agency owners

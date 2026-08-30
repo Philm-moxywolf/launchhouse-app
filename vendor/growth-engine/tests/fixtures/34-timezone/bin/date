@@ -1,0 +1,62 @@
+#!/bin/sh
+# date — the real date with the clock stopped, and the timezone left alone.
+#
+# WHY IT EXISTS: 34-timezone has to show that a founder in Atlanta logging late
+#                in the evening gets that evening's date, and that the snapshot
+#                ring is stamped in UTC whatever zone the founder is in. Neither
+#                can be shown against the real clock, because the answer would
+#                depend on the minute the suite happened to run: for nineteen
+#                hours of every day the two zones agree, and the case would go
+#                green having proved nothing.
+#
+#                SO THE CLOCK IS STOPPED AND NOTHING ELSE IS. Every call that
+#                asks what time it is now is answered from one fixed instant.
+#                Every call that already names an instant, with -d, -r or -j, is
+#                handed to the real date untouched. The real date is what turns
+#                the instant into a local time, so the zone handling under test
+#                is the operating system's own and not a fake written here.
+#                Faking the zone as well would make this case a test of this
+#                file.
+# CALLED BY:     tests/cases/34-timezone.sh, through PATH
+# READS:         GE_T_REAL_DATE, the real date this stands in front of
+#                GE_T_NOW, the stopped clock, in seconds since the epoch
+# WRITES:        standard output only
+# POSTURE:       fail-closed. Neither variable set means this was reached by
+#                something other than the case that arms it, and it says so and
+#                exits 1 rather than answering with the real time, which would
+#                make a test pass on a clock nobody chose.
+# PORTABILITY:   POSIX sh. No bash/python/node/jq. The two date flavours name the
+#                instant differently, so which one is in front is asked once,
+#                here, the same way lib/date_compat.sh asks it.
+# EVERY ERROR MESSAGE ENDS WITH A RECOVERY LINE ("→ run: ...").
+set -u
+
+if [ -z "${GE_T_REAL_DATE:-}" ] || [ -z "${GE_T_NOW:-}" ]; then
+  printf 'date: this stand-in was reached without a clock to answer from.\n' >&2
+  printf '      → run: sh tests/run.sh, which sets GE_T_REAL_DATE and GE_T_NOW\n' >&2
+  exit 1
+fi
+
+if [ ! -x "$GE_T_REAL_DATE" ]; then
+  printf 'date: %s is not there, so there is nothing to hand the question to.\n' "$GE_T_REAL_DATE" >&2
+  printf '      → run: command -v date, to see where the real one is\n' >&2
+  exit 1
+fi
+
+# Does this call already say which instant it is about? -d on GNU, -r and -j on
+# BSD. If it does, it is a conversion of a value somebody passed in, not a
+# reading of the clock, and it goes through exactly as it arrived.
+for gtd_a in "$@"; do
+  case $gtd_a in
+    -d|-r|-j|-d?*|-r?*|-j?*) exec "$GE_T_REAL_DATE" "$@" ;;
+  esac
+done
+
+# It is asking what time it is now. The stopped clock is put in front of
+# whatever else was asked for, so -u, the format, and everything else still
+# reach the real date and still mean what they mean.
+if "$GE_T_REAL_DATE" -d @0 >/dev/null 2>&1; then
+  exec "$GE_T_REAL_DATE" -d "@$GE_T_NOW" "$@"
+else
+  exec "$GE_T_REAL_DATE" -r "$GE_T_NOW" "$@"
+fi

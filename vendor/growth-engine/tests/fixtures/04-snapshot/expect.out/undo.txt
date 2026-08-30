@@ -1,0 +1,4 @@
+restored founder-brain.md from the backup stamped @STAMP@
+  1 line is different from what was there a moment ago.
+  This puts back what you had a moment ago.
+  → run: ge restore founder-brain.md @STAMP@

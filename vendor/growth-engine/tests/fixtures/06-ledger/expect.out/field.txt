@@ -1,0 +1,3 @@
+FAIL  "vibe" is not a field on a content piece.
+      The ones that work are: pillar format lane status ghl_post_id scheduled_for
+      → Pick one of those, then type the same command again with it.

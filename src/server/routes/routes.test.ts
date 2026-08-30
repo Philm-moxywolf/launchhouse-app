@@ -7,10 +7,19 @@
  * WHY IT EXISTS. Four properties have to be true before 130 founders touch
  * this, and none of them can be argued from reading code.
  *
- *   Two founders each see only their own workspace.
- *   An address that is not on the roster is refused, honestly.
+ *   A session reaches only the founder row it belongs to.
+ *   A stranger with the URL reaches nothing, on every route there is.
  *   A message sent twice is stored once.
  *   A founder who is waiting is given a number.
+ *
+ * THE FRONT DOOR CHANGED AND THE FIRST TWO DID NOT. One founder owns one
+ * deployment and signs in with OWNER_PASSPHRASE, so there is no roster, no
+ * second account to sign in as, and nothing to refuse an address for. What is
+ * behind the door is unchanged: every route is founder scoped, and the scoping
+ * is still one deleted line from being gone. A single tenant app is exactly
+ * where that line gets removed as unnecessary, so `sessionFor` hands these
+ * tests a real cookie pointing at another founder row and they prove it reaches
+ * nothing.
  *
  * The negative assertions are the valuable ones, because they test boundaries
  * the design states explicitly and they do not move when something else does.
@@ -69,10 +78,13 @@ async function openStream(
 // The tenancy boundary
 // ---------------------------------------------------------------------------
 
-test('TWO FOUNDERS SIGN IN AND EACH SEES ONLY THEIR OWN WORKSPACE', async () => {
+test('A SESSION BELONGING TO ANOTHER FOUNDER ROW REACHES NONE OF THE OWNER\'S WORKSPACE', async () => {
   const h = await buildHarness();
-  const cookieA = await h.signIn('ama@example.com');
-  const cookieB = await h.signIn('ben@example.com');
+  const cookieA = await h.signIn();
+  // A live session pointing at somebody else. Every route below is founder
+  // scoped and this is what proves it, on a deployment with one founder where
+  // nothing else would notice the filter going missing.
+  const cookieB = await h.sessionFor(FOUNDER_B);
 
   const threadA = await newThread(h, cookieA);
   const threadB = await newThread(h, cookieB);
@@ -134,8 +146,8 @@ test('TWO FOUNDERS SIGN IN AND EACH SEES ONLY THEIR OWN WORKSPACE', async () => 
 
 test('NO ROUTE READS A FOUNDER ID FROM THE BODY OR THE QUERY STRING', async () => {
   const h = await buildHarness();
-  const cookieA = await h.signIn('ama@example.com');
-  const cookieB = await h.signIn('ben@example.com');
+  const cookieA = await h.signIn();
+  const cookieB = await h.sessionFor(FOUNDER_B);
   const threadA = await newThread(h, cookieA);
 
   // B sends A's founder id every way a body and a query string allow.
@@ -168,77 +180,95 @@ test('NO ROUTE READS A FOUNDER ID FROM THE BODY OR THE QUERY STRING', async () =
   await h.app.close();
 });
 
-test('EVERY API ROUTE REFUSES A REQUEST WITH NO SESSION', async () => {
+test('EVERY API ROUTE THERE IS REFUSES A STRANGER, READ OFF THE LIVE ROUTE TABLE', async () => {
   const h = await buildHarness();
-  const cookie = await h.signIn('ama@example.com');
+  const cookie = await h.signIn();
   const threadId = await newThread(h, cookie);
+  h.store.putFile(FOUNDER_A, 'founder-brain.md', 'the founder own work');
 
-  const urls = [
-    ['GET', '/api/me'],
-    ['GET', '/api/home'],
-    ['GET', '/api/setup'],
-    ['GET', '/api/gates'],
-    ['GET', `/api/threads/${threadId}`],
-    ['POST', '/api/threads'],
-    ['GET', `/api/threads/${threadId}/stream`],
-    ['GET', '/api/files'],
-    ['GET', '/api/files/founder-brain.md'],
-    ['GET', '/api/files/founder-brain.md/download'],
-    ['GET', '/api/files/download.zip'],
-  ] as const;
-  for (const [method, url] of urls) {
-    const res = await h.app.inject({ method, url });
-    assert.equal(res.statusCode, 401, `${method} ${url} was not refused`);
+  /**
+   * THE LIST IS THE APP'S, NOT THIS FILE'S, and that is the whole point.
+   *
+   * A hand written list of routes to check is a list somebody forgets to add
+   * to, and what they forget is a route open to whoever finds the URL with a
+   * green suite behind it. Reading the table off the instance means a route
+   * added next week is walked on the day it is registered.
+   */
+  const api = h.routeTable.filter((r) => r.url.startsWith('/api/') && r.method !== 'OPTIONS');
+  assert.ok(api.length >= 18, `the route table looks short at ${String(api.length)}, so this is not walking the app`);
+
+  for (const route of api) {
+    const url = route.url
+      .replace(':id', threadId)
+      .replace(':name', 'founder-brain.md')
+      .replace(':slug', 'founder-brain')
+      .replace('/*', '/founder-brain.md');
+    const res = await h.app.inject({
+      method: route.method as 'GET',
+      url,
+      // A body and a content type, so nothing is refused for the wrong reason
+      // and every one of these actually reaches the door.
+      ...(route.method === 'POST' ? { headers: JSON_HEADERS, payload: {} } : {}),
+    });
+    assert.equal(res.statusCode, 401, `${route.method} ${url} was not refused: ${res.body}`);
+    // Not the file, not a row, not a name. Nothing of the founder's crosses.
+    assert.doesNotMatch(res.body, /the founder own work|founder-brain\.md|Ama/);
+    // HEAD is Fastify's own, added for every GET, and a HEAD carries no body by
+    // definition. It is walked for the status because a 200 here would tell a
+    // stranger which files exist, and its empty body is not read as JSON.
+    if (route.method === 'HEAD') continue;
     assert.equal((JSON.parse(res.body) as { error: string }).error, 'not_signed_in');
   }
   await h.app.close();
 });
 
-// ---------------------------------------------------------------------------
-// The roster
-// ---------------------------------------------------------------------------
-
-test('AN ADDRESS THAT IS NOT ON THE ROSTER GETS AN HONEST SCREEN AND NO EMAIL', async () => {
+/**
+ * The other half of the same question, asked at the door rather than behind it.
+ *
+ * A stranger with the URL meets one screen: the passphrase box. src/server/auth/
+ * proves what that door does with a wrong answer, an empty one and the eleventh
+ * one in a row. What is asserted HERE is the consequence for this folder, which
+ * is that nothing behind it moved: no thread, no message, no file.
+ */
+test('A WRONG PASSPHRASE MINTS NOTHING AND WRITES NOTHING INTO THE WORKSPACE', async () => {
   const h = await buildHarness();
   const res = await h.app.inject({
     method: 'POST',
-    url: '/auth/request',
+    url: '/auth/signin',
     headers: { 'content-type': 'application/x-www-form-urlencoded' },
-    payload: new URLSearchParams({ email: 'nobody@example.com' }).toString(),
+    payload: new URLSearchParams({ passphrase: 'not the passphrase at all' }).toString(),
   });
-  assert.equal(res.statusCode, 200);
-  assert.match(res.body, /We cannot find that address/);
-  assert.match(res.body, /nobody@example\.com/, 'it shows what they typed, so a typo is visible');
-  assert.match(res.body, /Try another address/);
-  assert.match(res.body, /Tell a mentor/);
-  assert.equal(h.mailer.sent.length, 0);
+  assert.equal(res.statusCode, 401);
+  assert.equal(res.cookies.find((c) => c.name === 'lh_session'), undefined, 'a wrong answer set a session cookie');
+  assert.equal(h.store.threads.size, 0);
+  assert.equal(h.store.messages.length, 0);
 
-  // The second button is not decoration. It writes into the mentor queue.
-  const asked = await h.app.inject({
-    method: 'POST',
-    url: '/auth/help',
-    headers: { 'content-type': 'application/x-www-form-urlencoded' },
-    payload: new URLSearchParams({ email: 'nobody@example.com' }).toString(),
+  // And the cookie a stranger makes up resolves to nobody.
+  const guessed = await h.app.inject({
+    method: 'GET',
+    url: '/api/home',
+    headers: { cookie: `lh_session=${'f'.repeat(43)}` },
   });
-  assert.equal(asked.statusCode, 200);
-  assert.equal(h.auth.mentorRequests.length, 1);
-  assert.equal(h.auth.mentorRequests[0]?.email, 'nobody@example.com');
+  assert.equal(guessed.statusCode, 401);
   await h.app.close();
 });
 
-test('THE ADDRESS ON THE ROSTER MISS SCREEN IS ESCAPED, BECAUSE IT IS TYPED BY WHOEVER IS AT THE KEYBOARD', async () => {
-  const h = await buildHarness();
-  const res = await h.app.inject({
-    method: 'POST',
-    url: '/auth/request',
-    headers: { 'content-type': 'application/x-www-form-urlencoded' },
-    payload: new URLSearchParams({ email: '<script>alert(1)</script>@x.com' }).toString(),
-  });
-  assert.equal(res.statusCode, 200);
-  assert.doesNotMatch(res.body, /<script>alert/);
-  assert.match(res.body, /&lt;script&gt;/);
-  await h.app.close();
-});
+/**
+ * THE TWO ROSTER TESTS THAT WERE HERE ARE DELETED RATHER THAN ADAPTED.
+ *
+ * One drove `POST /auth/request` with an address nobody had seeded and asserted
+ * the honest miss screen, the empty outbox and the write into the mentor queue.
+ * The other asserted that the address printed back on that screen was escaped.
+ * There is no roster, no address, no outbox and no mentor queue: the screen
+ * they were about does not exist, and a test rewritten to drive the passphrase
+ * form instead would have been a new test wearing an old name.
+ *
+ * NEITHER PROPERTY IS LOST, AND HERE IS WHERE EACH ONE WENT. The refusal is
+ * proved in src/server/auth/owner.test.ts and plugin.test.ts, over a wrong
+ * passphrase, an empty box and the eleventh try. The escaping is proved in
+ * pages.test.ts, over the only thing the sign in screen still prints back,
+ * which is a notice key it refuses to take from a query string at all.
+ */
 
 // ---------------------------------------------------------------------------
 // One founder message
@@ -246,7 +276,7 @@ test('THE ADDRESS ON THE ROSTER MISS SCREEN IS ESCAPED, BECAUSE IT IS TYPED BY W
 
 test('THE POST RETURNS 202 WITH A TURN ID, STREAMS NOTHING, AND IS FAST', async () => {
   const h = await buildHarness();
-  const cookie = await h.signIn('ama@example.com');
+  const cookie = await h.signIn();
   const threadId = await newThread(h, cookie);
 
   const started = process.hrtime.bigint();
@@ -282,7 +312,7 @@ test('A DOUBLE SENT MESSAGE IS STORED ONCE AND ANSWERED ONCE', async () => {
       return Promise.resolve();
     },
   });
-  const cookie = await h.signIn('ama@example.com');
+  const cookie = await h.signIn();
   const threadId = await newThread(h, cookie);
 
   const send = (): Promise<{ statusCode: number; body: string }> =>
@@ -313,7 +343,7 @@ test('A DOUBLE SENT MESSAGE IS STORED ONCE AND ANSWERED ONCE', async () => {
 
 test('WITHOUT A CLIENT MESSAGE ID, TWO SENDS ARE TWO MESSAGES, WHICH IS ALSO CORRECT', async () => {
   const h = await buildHarness();
-  const cookie = await h.signIn('ama@example.com');
+  const cookie = await h.signIn();
   const threadId = await newThread(h, cookie);
 
   for (let i = 0; i < 2; i += 1) {
@@ -333,7 +363,7 @@ test('WITHOUT A CLIENT MESSAGE ID, TWO SENDS ARE TWO MESSAGES, WHICH IS ALSO COR
 
 test('THE SECOND TURN OF A THREAD IS HIGH PRIORITY, THE FIRST IS NOT', async () => {
   const h = await buildHarness();
-  const cookie = await h.signIn('ama@example.com');
+  const cookie = await h.signIn();
   const threadId = await newThread(h, cookie);
 
   for (const clientMsgId of ['m1', 'm2']) {
@@ -353,7 +383,7 @@ test('THE SECOND TURN OF A THREAD IS HIGH PRIORITY, THE FIRST IS NOT', async () 
 
 test('AN EMPTY MESSAGE, AN OVERSIZED PASTE AND A BAD ID ARE EACH REFUSED WITH A SENTENCE', async () => {
   const h = await buildHarness();
-  const cookie = await h.signIn('ama@example.com');
+  const cookie = await h.signIn();
   const threadId = await newThread(h, cookie);
   const url = `/api/threads/${threadId}/messages`;
 
@@ -381,7 +411,7 @@ test('THE STREAM CARRIES A QUEUED POSITION, NOT A SPINNER WITH NO NUMBER', async
   // No capacity, so every turn waits. This is the cohort told "now run the
   // Founder Brain" at the same minute, without sixty five subprocesses.
   const h = await buildHarness({ queue: new TestQueue(0) });
-  const cookie = await h.signIn('ama@example.com');
+  const cookie = await h.signIn();
   const threadId = await newThread(h, cookie);
   const stream = await openStream(h, cookie, threadId);
 
@@ -414,7 +444,7 @@ test('A REFUSAL ARRIVES ON THE STREAM, NOT AS A BARE 429 THE INTERFACE HAS TO GU
     reason: 'That is a lot of messages in one hour. Give it a few minutes and try again. Nothing you have made is affected.',
   };
   const h = await buildHarness({ queue });
-  const cookie = await h.signIn('ama@example.com');
+  const cookie = await h.signIn();
   const threadId = await newThread(h, cookie);
   const stream = await openStream(h, cookie, threadId);
 
@@ -442,7 +472,7 @@ test('A REFUSAL ARRIVES ON THE STREAM, NOT AS A BARE 429 THE INTERFACE HAS TO GU
 
 test('A RECONNECT WITH Last-Event-ID REPLAYS WHAT WAS MISSED AND THEN GOES LIVE', async () => {
   const h = await buildHarness();
-  const cookie = await h.signIn('ama@example.com');
+  const cookie = await h.signIn();
   const threadId = await newThread(h, cookie);
 
   for (const text of ['one', 'two', 'three']) {
@@ -467,7 +497,7 @@ test('A RECONNECT WITH Last-Event-ID REPLAYS WHAT WAS MISSED AND THEN GOES LIVE'
 
 test('A HEARTBEAT IS A COMMENT, SO AN IDLE PROXY SEES BYTES AND A BROWSER SEES NOTHING', async () => {
   const h = await buildHarness();
-  const cookie = await h.signIn('ama@example.com');
+  const cookie = await h.signIn();
   const threadId = await newThread(h, cookie);
   const stream = await openStream(h, cookie, threadId);
 
@@ -482,7 +512,7 @@ test('A HEARTBEAT IS A COMMENT, SO AN IDLE PROXY SEES BYTES AND A BROWSER SEES N
 
 test('SHUTDOWN TELLS OPEN STREAMS WHY BEFORE IT CLOSES THEM', async () => {
   const h = await buildHarness();
-  const cookie = await h.signIn('ama@example.com');
+  const cookie = await h.signIn();
   const threadId = await newThread(h, cookie);
   const stream = await openStream(h, cookie, threadId);
   assert.equal(h.routes.streams.size, 1);
@@ -500,8 +530,8 @@ test('SHUTDOWN TELLS OPEN STREAMS WHY BEFORE IT CLOSES THEM', async () => {
 // ---------------------------------------------------------------------------
 
 test('A B2C FOUNDER CANNOT START THE B2B ENGINE, EVEN BY TYPING ITS ID', async () => {
-  const h = await buildHarness();
-  const cookieB2C = await h.signIn('ben@example.com');
+  const h = await buildHarness({ track: 'b2c' });
+  const cookieB2C = await h.signIn();
   const refused = await h.app.inject({
     method: 'POST',
     url: '/api/threads',
@@ -529,9 +559,10 @@ test('A B2C FOUNDER CANNOT START THE B2B ENGINE, EVEN BY TYPING ITS ID', async (
 });
 
 test('A FOUNDER WITH NO BRAIN YET MAY ONLY START WHAT BOTH TRACKS SHARE', async () => {
-  const h = await buildHarness();
-  h.auth.addFounder({ id: FOUNDER_A, email: 'ama@example.com', displayName: 'Ama Boateng', track: null });
-  const cookie = await h.signIn('ama@example.com');
+  // Track null is where every deployment starts. The fork happens once, inside
+  // the Founder Brain, and until it has run this founder has no track at all.
+  const h = await buildHarness({ track: null });
+  const cookie = await h.signIn();
 
   const brain = await h.app.inject({
     method: 'POST',
@@ -555,7 +586,7 @@ test('A FOUNDER WITH NO BRAIN YET MAY ONLY START WHAT BOTH TRACKS SHARE', async 
 
 test('AN UNKNOWN ROUTE ID IS REFUSED WITHOUT SAYING WHETHER IT EXISTS ON THE OTHER TRACK', async () => {
   const h = await buildHarness();
-  const cookie = await h.signIn('ama@example.com');
+  const cookie = await h.signIn();
   const res = await h.app.inject({
     method: 'POST',
     url: '/api/threads',
@@ -573,7 +604,7 @@ test('AN UNKNOWN ROUTE ID IS REFUSED WITHOUT SAYING WHETHER IT EXISTS ON THE OTH
 
 test('THE FILES LIST AND ONE FILE COME BACK, FROM THE RECORD AND NOT FROM A SCRATCH FOLDER', async () => {
   const h = await buildHarness();
-  const cookie = await h.signIn('ama@example.com');
+  const cookie = await h.signIn();
   h.store.putFile(FOUNDER_A, 'founder-brain.md', '# Founder Brain\nTrack: b2b\n');
   h.store.putFile(FOUNDER_A, 'content-30.csv', 'date,post\n');
   h.store.putFile(FOUNDER_A, '.state/index.md', '| file | gate |\n');
@@ -612,7 +643,7 @@ test('THE FILES LIST AND ONE FILE COME BACK, FROM THE RECORD AND NOT FROM A SCRA
 
 test('A PATH THAT IS NOT ONE OF THEIR OWN FILES DOES NOT RESOLVE, WHATEVER IT LOOKS LIKE', async () => {
   const h = await buildHarness();
-  const cookie = await h.signIn('ama@example.com');
+  const cookie = await h.signIn();
   h.store.putFile(FOUNDER_A, 'founder-brain.md', 'mine');
   h.store.putFile(FOUNDER_B, 'people/sam-example-com.md', 'a real person');
 
@@ -631,7 +662,7 @@ test('A PATH THAT IS NOT ONE OF THEIR OWN FILES DOES NOT RESOLVE, WHATEVER IT LO
 
 test('DOWNLOAD EVERYTHING IS ONE ZIP, AND TWO DOWNLOADS OF ONE VERSION ARE BYTE IDENTICAL', async () => {
   const h = await buildHarness();
-  const cookie = await h.signIn('ama@example.com');
+  const cookie = await h.signIn();
   h.store.putFile(FOUNDER_A, 'founder-brain.md', '# Founder Brain\n');
   h.store.putFile(FOUNDER_A, 'people/sam-example-com.md', '# Sam\n');
   h.store.putFile(FOUNDER_A, '.state/snapshots/founder-brain.md.1', 'old');
@@ -654,9 +685,45 @@ test('DOWNLOAD EVERYTHING IS ONE ZIP, AND TWO DOWNLOADS OF ONE VERSION ARE BYTE 
   await h.app.close();
 });
 
+/**
+ * Rule 1 reaches the archive, not only the screen.
+ *
+ * The files list filters by track, and it is the surface everybody looks at, so
+ * it is the one that gets tested. The ZIP builds its own list from
+ * `readAllFiles`, which is every byte the founder has, and applies the filter
+ * again. That second call is a line somebody deletes as duplication, and what
+ * it costs is the other track's material arriving in a founder's own download
+ * where nothing on any screen would ever have shown it.
+ *
+ * A B2B founder cannot normally end up holding `dm-openers.md`: rule 1 is
+ * applied when the file is written as well. This test puts one there anyway,
+ * because defence in depth that is never exercised is decoration.
+ */
+test('THE ZIP APPLIES RULE 1 TOO, SO THE OTHER TRACK IS NOT IN THE DOWNLOAD', async () => {
+  const h = await buildHarness();
+  const cookie = await h.signIn();
+  h.store.putFile(FOUNDER_A, 'founder-brain.md', '# Founder Brain\nTrack: b2b\n');
+  h.store.putFile(FOUNDER_A, 'outreach-sequence.md', 'the b2b one');
+  h.store.putFile(FOUNDER_A, 'dm-openers.md', 'the b2c one, which they should not have');
+
+  const zip = await h.app.inject({ method: 'GET', url: '/api/files/download.zip', headers: { cookie } });
+  assert.equal(zip.statusCode, 200);
+  const text = zip.rawPayload.toString('latin1');
+  assert.match(text, /growth-engine\/outreach-sequence\.md/, 'their own track is in it');
+  assert.doesNotMatch(text, /dm-openers/, 'the other track name is in the archive');
+  assert.doesNotMatch(text, /the b2c one/, 'and the other track bytes are in the archive');
+
+  // The same rule on the screen, so the two answers cannot drift apart.
+  const listed = JSON.parse((await h.app.inject({ method: 'GET', url: '/api/files', headers: { cookie } })).body) as {
+    rows: Array<{ name: string }>;
+  };
+  assert.ok(!listed.rows.some((r) => r.name === 'dm-openers.md'));
+  await h.app.close();
+});
+
 test('THE ZIP README SAYS THE FOLDER IS THEIRS AND CARRIES NO DASHES', async () => {
   const h = await buildHarness();
-  const cookie = await h.signIn('ama@example.com');
+  const cookie = await h.signIn();
   h.store.putFile(FOUNDER_A, 'founder-brain.md', '# Founder Brain\n');
   const zip = await h.app.inject({ method: 'GET', url: '/api/files/download.zip', headers: { cookie } });
   const text = zip.rawPayload.toString('utf8');
@@ -676,8 +743,8 @@ test('STOP INTERRUPTS A RUNNING TURN, AND ONLY THE FOUNDER WHO OWNS IT MAY PRESS
     released = resolve;
   });
   const h = await buildHarness({ run: () => holding });
-  const cookie = await h.signIn('ama@example.com');
-  const cookieB = await h.signIn('ben@example.com');
+  const cookie = await h.signIn();
+  const cookieB = await h.sessionFor(FOUNDER_B);
   const threadId = await newThread(h, cookie);
 
   const posted = await h.app.inject({
@@ -715,7 +782,7 @@ test('STOP INTERRUPTS A RUNNING TURN, AND ONLY THE FOUNDER WHO OWNS IT MAY PRESS
 
 test('A TURN THAT THROWS ENDS AT FAILED AND SAYS SO ON THE STREAM', async () => {
   const h = await buildHarness({ run: () => Promise.reject(new Error('ge exited 1')) });
-  const cookie = await h.signIn('ama@example.com');
+  const cookie = await h.signIn();
   const threadId = await newThread(h, cookie);
   const stream = await openStream(h, cookie, threadId);
 

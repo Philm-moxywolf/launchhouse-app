@@ -204,10 +204,12 @@ async function main(argv: readonly string[]): Promise<number> {
       `${String(written)} new, ${String(SEEDS.length - written)} already there.`,
       '',
       'To sign one of them in:',
-      `  open ${env.APP_BASE_URL}/auth/signin and type the address.`,
-      env.MAIL_TRANSPORT === 'log'
-        ? '  MAIL_TRANSPORT is log, so the sign in link is printed in this server\'s own output.'
-        : '  MAIL_TRANSPORT is smtp, so the link is emailed and MAIL_ALLOWLIST decides whether it can leave.',
+      `  open ${env.APP_BASE_URL}/auth/signin and type the passphrase.`,
+      // Sign in is OWNER_PASSPHRASE now, not a mailed link. These two lines changed because
+      // the mailer was deleted, not because seeding changed. Seeding 130 fictional founders
+      // is itself a leftover from the cohort shape, and retiring this script belongs to
+      // whoever owns it.
+      '  The passphrase is OWNER_PASSPHRASE, from Replit Secrets or your .env file.',
       '',
       'The track column on the last two is a cache. founder-brain.md is the authority,',
       'so the first Founder Brain a seeded founder runs is what actually forks them.',

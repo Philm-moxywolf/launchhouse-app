@@ -1,0 +1,3 @@
+id         pillar format         lane   status     goes out           post id
+1          1      short-post     text   archived   -                  -
+2          2      carousel       media  draft      -                  -

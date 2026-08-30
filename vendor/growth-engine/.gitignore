@@ -1,0 +1,19 @@
+# The founder's own output folder. Their business data stays on their machine.
+#
+# The leading slash matters. Without it this pattern also matched
+# plugins/growth-engine/, which silently excluded every skill and command in
+# the plugin. Keep it anchored to the repo root.
+/growth-engine/
+
+.DS_Store
+*.log
+node_modules/
+
+# Build artifact. Ship it as a release asset, not in the tree.
+/dist/
+
+# The golden suite sandbox. Rebuilt on every run.
+/tests/.work/
+
+# Internal. Rates, mentor briefs and the delivery plan. Never public.
+/planning/

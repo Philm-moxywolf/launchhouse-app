@@ -1,0 +1,3 @@
+FAIL  "banana" is not a status.
+      The ones that work are: draft approved scheduled posted failed archived
+      → Pick one of those, then type the same command again with it.

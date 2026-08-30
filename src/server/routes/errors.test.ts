@@ -9,9 +9,16 @@
  * `setErrorHandler` anywhere in the tree, so Fastify answered a thrown error
  * with that error's own message. Every sign in route reaches Postgres, and the
  * driver writes its message as the failed query with the bound parameters
- * printed after it. `POST /auth/request` against a database that did not answer
- * replied 500 with the founder's own email address, the `founder` table name
- * and its column list, in a browser, in a room with 130 people in it.
+ * printed after it. The sign in POST against a database that did not answer
+ * replied 500 with what the founder had typed, the `founder` table name and its
+ * column list, in a browser, in a room with 130 people in it.
+ *
+ * THE ADDRESS OF THAT ROUTE CHANGED AND THE HOLE DID NOT. It was
+ * `POST /auth/request`, which took an email and looked it up on a roster. It is
+ * `POST /auth/signin`, which takes a passphrase and reads the owner row. Same
+ * store, same driver, same message, and now the thing that would come back is
+ * the passphrase rather than an address, which is worse. So the two bug report
+ * tests below drive the new address and the walk posts a passphrase field.
  *
  * ONE ROUTE AT A TIME WOULD NOT HAVE CAUGHT IT AND WILL NOT CATCH THE NEXT ONE.
  * A hand written list of routes to check is a list somebody forgets to add to.
@@ -55,8 +62,7 @@ import { fileURLToPath } from 'node:url';
 import Fastify, { type FastifyInstance, type FastifyReply, type InjectOptions } from 'fastify';
 
 import { createAuth } from '../auth/plugin.ts';
-import { CollectingMailer } from '../auth/mailer.ts';
-import { DEFAULT_RATE_LIMIT } from '../auth/rate-limit.ts';
+import { TEST_PASSPHRASE } from '../auth/test-fixtures.ts';
 import { checkProseText } from '../rules/prose.ts';
 import {
   ERRORS,
@@ -87,6 +93,17 @@ const DRIVER_MESSAGE =
   `params: ${SENTINEL}@example.com,1`;
 
 /**
+ * What the founder typed, planted in the request rather than in the exception.
+ *
+ * IT IS THE PASSPHRASE, and that is the point of putting it here. The old bug
+ * came back with a bound parameter in it, which on that route was an email
+ * address. On this route the field is OWNER_PASSPHRASE, so a body or a page
+ * that echoes what was typed is not an embarrassment, it is the one secret this
+ * whole app has, on a screen, over the wire. Nothing may repeat it back.
+ */
+const TYPED = 'ZZQX-TYPED-BY-THE-FOUNDER-8b2e';
+
+/**
  * Everything that must never appear in something a founder can read.
  *
  * The sentinel proves nothing escaped from the exception. These prove nothing
@@ -96,6 +113,7 @@ const DRIVER_MESSAGE =
  */
 const NEVER_ON_A_FOUNDER_SCREEN: readonly (readonly [string, RegExp])[] = [
   ['the exception text', new RegExp(SENTINEL)],
+  ['what the founder typed into the passphrase box', new RegExp(TYPED)],
   ['a failed query', /Failed query/i],
   ['SQL', /\bselect\s+"|\binsert\s+into\s+"|\bupdate\s+"\w|\bdelete\s+from\s+"/i],
   ['bound parameters', /\bparams:/],
@@ -179,17 +197,21 @@ async function buildThrowingApp(): Promise<ThrowingApp> {
 
   const { register: registerAuth, context } = createAuth({
     store: authStore,
-    mailer: new CollectingMailer(),
     clock: { now: () => clock.now() },
     log,
-    session: { cookieName: 'lh_session', ttlDays: 90, secure: false },
-    magicLink: {
-      appBaseUrl: 'http://localhost:5000',
-      tokenTtlMinutes: 30,
-      mentorCodeTtlMinutes: 10,
-      session: { cookieName: 'lh_session', ttlDays: 90, secure: false },
-    },
-    rateLimit: DEFAULT_RATE_LIMIT,
+    /**
+     * A USABLE PASSPHRASE, AND THE WALK BELOW IS MEANINGLESS WITHOUT ONE.
+     *
+     * With no passphrase set the guard hook answers every request with the
+     * screen naming the Replit Secret, before any route runs and before the
+     * store is ever touched. Every assertion here would then pass over a
+     * deployment that was refusing everything for a different reason.
+     */
+    passphrase: TEST_PASSPHRASE,
+    cookie: { name: 'lh_session', ttlDays: 90, secure: false },
+    // The wrong passphrase path waits on purpose. Recording the wait instead of
+    // taking it keeps this file fast without turning the guard off.
+    sleep: () => Promise.resolve(),
     cookieSecret: 'test-cookie-secret-not-used-for-anything',
   });
   await registerAuth(app);
@@ -220,6 +242,12 @@ async function buildThrowingApp(): Promise<ThrowingApp> {
  */
 const COOKIE = 'lh_session=deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef';
 const FORM = 'application/x-www-form-urlencoded';
+
+/**
+ * One form body that satisfies every POST in the app, carrying the planted
+ * passphrase so the walk also proves nothing echoes it.
+ */
+const BODY = `passphrase=${TYPED}&name=a+founder&timezone=Europe%2FLondon`;
 
 /** A path with its parameters filled in, so the route reaches its handler. */
 function fill(url: string): string {
@@ -445,7 +473,7 @@ test('NOT ONE ROUTE IN THE APP CAN PUT A DATABASE ERROR ON A FOUNDER SCREEN', as
             route.method === 'POST'
               ? { cookie: COOKIE, accept, 'content-type': FORM }
               : { cookie: COOKIE, accept },
-          payload: route.method === 'POST' ? 'email=founder@example.com&t=x&code=123456' : undefined,
+          payload: route.method === 'POST' ? BODY : undefined,
         });
         assertNothingInternal(`${route.method} ${url} (accept ${accept})`, res);
         if (res.statusCode >= 500) faults += 1;
@@ -478,7 +506,7 @@ test('THE SAME WALK OVER A REAL SOCKET, BECAUSE A FOUNDER USES ONE AND inject DO
         let body: string | undefined;
         if (route.method === 'POST') {
           headers['content-type'] = FORM;
-          body = 'email=founder@example.com&t=x&code=123456';
+          body = BODY;
         }
         // Five seconds is not a performance budget. It is long enough that a
         // working route never trips it and short enough that a route which hangs
@@ -505,22 +533,25 @@ test('THE SAME WALK OVER A REAL SOCKET, BECAUSE A FOUNDER USES ONE AND inject DO
 test('THE ROUTE THAT LEAKED, DRIVEN THE WAY THE BUG REPORT DRIVES IT', async () => {
   const { app, log } = await buildThrowingApp();
   try {
+    // The sign in POST is still the route that reaches the database first, and
+    // it is still the first thing a founder does. Only the field changed: an
+    // address then, their passphrase now.
     const res = await app.inject({
       method: 'POST',
-      url: '/auth/request',
+      url: '/auth/signin',
       headers: { 'content-type': FORM, accept: 'text/html' },
-      payload: 'email=founder@example.com',
+      payload: `passphrase=${TYPED}`,
     });
 
     assert.equal(res.statusCode, 500);
-    assertNothingInternal('POST /auth/request', res);
+    assertNothingInternal('POST /auth/signin', res);
     // A browser posted a form, so a browser gets a page, not a line of JSON.
     assert.match(String(res.headers['content-type']), /text\/html/);
     assert.match(res.body, /Nothing you have made is affected/);
     assert.equal(res.headers['cache-control'], 'no-store');
 
-    // The founder's own address was the bound parameter that used to come back.
-    assert.doesNotMatch(res.body, /founder@example\.com/);
+    // The bound parameter that used to come back was the founder's own typing.
+    assert.doesNotMatch(res.body, new RegExp(TYPED));
 
     // And the detail is not lost, it has moved. The log has the driver's message
     // and the id the founder was shown, so a mentor can find this one line.
@@ -539,16 +570,16 @@ test('THE BUG REPORT curl, RUN AS WRITTEN, AGAINST A LISTENING SOCKET', async ()
   try {
     const port = await listenOn(app);
 
-    // Byte for byte the request in the report:
-    //   curl -s -X POST http://127.0.0.1:PORT/auth/request \
-    //     -d "email=founder@example.com" -H "content-type: application/x-www-form-urlencoded"
-    // What came back was 500 with the failed query and the founder's own address
-    // as a bound parameter, in the body, in a browser.
-    const payload = 'email=founder@example.com';
+    // The request in the report, at the address that route now has:
+    //   curl -s -X POST http://127.0.0.1:PORT/auth/signin \
+    //     -d "passphrase=..." -H "content-type: application/x-www-form-urlencoded"
+    // What came back was 500 with the failed query and what the founder had
+    // typed as a bound parameter, in the body, in a browser.
+    const payload = `passphrase=${TYPED}`;
     const wire = readWire(
       await overTheWire(
         port,
-        `POST /auth/request HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: ${FORM}\r\n` +
+        `POST /auth/signin HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: ${FORM}\r\n` +
           `Content-Length: ${String(payload.length)}\r\nConnection: close\r\n\r\n${payload}`,
         3000,
       ),
@@ -557,7 +588,7 @@ test('THE BUG REPORT curl, RUN AS WRITTEN, AGAINST A LISTENING SOCKET', async ()
     assertNothingInternalOnTheWire('the bug report curl', wire);
     assert.equal(wire.statusCode, 500, `the request did not reach the failure it is supposed to: ${wire.statusLine}`);
     assert.equal(wire.complete, true, 'the response was never finished, so curl would sit there');
-    assert.doesNotMatch(wire.body, /founder@example\.com/, "the founder's own address came back on the wire");
+    assert.doesNotMatch(wire.body, new RegExp(TYPED), 'what the founder typed came back on the wire');
     assert.match(wire.body, /Nothing you have made is affected/, 'the founder was not told their work is safe');
     assert.match(wire.body, /LH[0-9BCDFGHJKMNPQRSTVWXZ]{6}/, 'the founder was given nothing to quote to a mentor');
   } finally {
@@ -565,12 +596,29 @@ test('THE BUG REPORT curl, RUN AS WRITTEN, AGAINST A LISTENING SOCKET', async ()
   }
 });
 
-test('A QUERY STRING NEVER REACHES THE LOG LINE, BECAUSE ONE OF THEM IS A SIGN IN TOKEN', async () => {
+/**
+ * A QUERY STRING IS SOMEBODY ELSE'S WRITING AND A LOG LINE IS FOREVER.
+ *
+ * This used to be about `/auth/verify?t=`, which carried a live sign in token.
+ * There are no tokens now, and the rule outlived them for a better reason: a
+ * query string is written by whoever sent the link, so what lands in it is not
+ * ours to predict. A founder who pastes their passphrase into an address bar,
+ * or follows a link somebody built for them, must not have it written into a
+ * log that outlives the request. errors.ts logs the path without its query and
+ * this is the line that keeps it that way.
+ */
+test('A QUERY STRING NEVER REACHES THE LOG LINE, BECAUSE SOMEBODY ELSE WROTE IT', async () => {
   const { app, log } = await buildThrowingApp();
   try {
-    await app.inject({ method: 'GET', url: '/auth/verify?t=A-LIVE-SIGN-IN-TOKEN', headers: { accept: 'text/html' } });
+    for (const url of [
+      `/api/home?passphrase=${TYPED}`,
+      `/api/files/founder-brain.md?t=${TYPED}`,
+    ]) {
+      await app.inject({ method: 'GET', url, headers: { cookie: COOKIE, accept: 'text/html' } });
+    }
+    assert.ok(log.lines.length > 0, 'nothing was logged, so this proves nothing');
     for (const line of log.lines) {
-      assert.doesNotMatch(JSON.stringify(line.obj), /A-LIVE-SIGN-IN-TOKEN/, 'a sign in token was written to the log');
+      assert.doesNotMatch(JSON.stringify(line.obj), new RegExp(TYPED), 'a query string was written to the log');
     }
   } finally {
     await app.close();
@@ -853,10 +901,10 @@ test('THE BUNDLE GETS JSON AND A BROWSER GETS A PAGE', () => {
   const ask = (url: string, accept: string): boolean =>
     wantsHtml({ url, headers: { accept } } as unknown as Parameters<typeof wantsHtml>[0]);
 
-  assert.equal(ask('/auth/request', 'text/html,application/xhtml+xml'), true, 'a form post reads a page');
-  assert.equal(ask('/auth/request', '*/*'), false, 'fetch reads JSON');
+  assert.equal(ask('/auth/signin', 'text/html,application/xhtml+xml'), true, 'a form post reads a page');
+  assert.equal(ask('/auth/signin', '*/*'), false, 'fetch reads JSON');
   assert.equal(ask('/api/threads', 'text/html'), false, 'the API is JSON whatever is asked for');
-  assert.equal(ask('/auth/signin', 'application/json'), false);
+  assert.equal(ask('/auth/signout', 'application/json'), false);
 });
 
 // ------------------------------------------------- the wiring, read as source

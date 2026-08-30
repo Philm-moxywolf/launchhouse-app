@@ -20,11 +20,13 @@
  *   AND AN EXCEPTION IS NOT A SENTENCE EITHER. It is worse than a status code,
  *   because it is somebody else's writing about our insides. With no handler
  *   installed, Fastify answers a thrown error with that error's own message.
- *   Every sign in route reaches Postgres, and the Postgres driver writes its
+ *   The sign in route reaches Postgres, and the Postgres driver writes its
  *   message as the failed query with the bound parameters printed after it. So
- *   `POST /auth/request` against a database that does not answer replied 500
- *   with the founder's own email address, the table name and the column list in
- *   the body. That is a screenshot, in a room, on the day.
+ *   `POST /auth/signin` against a database that does not answer replied 500
+ *   with what the founder had just typed, the table name and the column list in
+ *   the body. That is a screenshot, in a room, on the day. On this build the
+ *   bound parameter would be OWNER_PASSPHRASE, which is the only secret the
+ *   whole deployment has.
  *
  *   `installErrorHandler` is the wall. Nothing internal crosses it: no query
  *   text, no bound parameter, no stack, no file path, no table name, no library
@@ -392,9 +394,10 @@ export function installErrorHandler(app: FastifyInstance, log: Logger, options: 
     const answer = known ?? ERRORS.serverFault;
     const message = incident === undefined ? answer.message : serverFaultMessage(incident);
 
-    // THE URL WITHOUT ITS QUERY STRING. `/auth/verify?t=...` carries a live sign
-    // in token, and a log line is a place a token should never come to rest.
-    // The route pattern is what somebody greps by anyway.
+    // THE URL WITHOUT ITS QUERY STRING. A query string is written by whoever
+    // built the link, so what lands in one is not ours to predict, and a log
+    // line outlives the request by months. The route pattern is what somebody
+    // greps by anyway.
     const path = request.url.split('?')[0] ?? '';
     const seen = {
       incident,

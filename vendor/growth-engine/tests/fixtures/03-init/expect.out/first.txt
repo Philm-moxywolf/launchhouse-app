@@ -1,0 +1,19 @@
+Your Launchhouse folder
+
+  created  .state/HOME
+  created  .gitignore
+  created  people/README.md
+  created  memory.md
+  created  ops-log.md
+  created  ledger.md
+  built    .state/index.md
+
+Your folder is:
+
+  @ROOT@/growth-engine
+
+Always open this same folder when you work on Launchhouse.
+If you open a different one, your work will be scattered and hard to find later.
+
+Next: build your Founder Brain.
+Saying "build my founder brain" is how you start it.

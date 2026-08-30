@@ -1,0 +1,9 @@
+# Setup receipt
+
+One line per check: the name, then PASS or FAIL or SKIP, then what was seen.
+Written by ge receipt. Do not hand edit.
+It holds the day your token was made. It never holds the token.
+
+plugin FAIL the marketplace entry is missing
+ghl PASS location connected, 4 social accounts
+pit_created @DATE@

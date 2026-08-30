@@ -392,7 +392,10 @@ async function main(): Promise<number> {
       primaryModel: env.MODEL_PRIMARY,
       utilityModel: env.MODEL_UTILITY,
       fallbackModel: env.MODEL_FALLBACK,
-      anthropicApiKey: env.ANTHROPIC_API_KEY,
+      // The model is stubbed in this script, so an absent key is fine here. It is undefined
+      // on Env now because a founder pastes it into the app rather than setting it before
+      // boot. See src/server/env.ts.
+      anthropicApiKey: env.ANTHROPIC_API_KEY ?? '',
       path: '/usr/bin:/bin',
       claudeConfigDir: '/tmp/claude-config',
       sessionLoadTimeoutMs: 10_000,

@@ -1,0 +1,3 @@
+# Your own business data. Never commit or share these.
+people/
+.state/

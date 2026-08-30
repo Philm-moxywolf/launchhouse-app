@@ -1,0 +1,66 @@
+#!/bin/sh
+# ge: the founder's brain. Thin shim, so the real dispatcher can move.
+#
+# WHY IT EXISTS: bin/ is what lands on PATH when the plugin is enabled, and a
+#                shim keeps that entry point stable while scripts/ge.sh changes.
+#                It follows shortcuts, because founders and mentors link this
+#                file into a folder on PATH to save typing the long path, and
+#                the name a shortcut is reached by says nothing about where the
+#                rest of the toolkit lives.
+# CALLED BY:     founders, skills, and the SessionStart hook
+# READS:         nothing            WRITES: nothing
+# POSTURE:       fail-closed on the handoff. exec is a special built-in, so a
+#                shell that reaches it and fails ends there with nothing said.
+#                Everything this file checks, it checks before the exec.
+# PORTABILITY:   POSIX sh. No bash/python/node/jq. No readlink -f, which BSD lacks.
+# EVERY ERROR MESSAGE ENDS WITH A RECOVERY LINE ("→ run: ...").
+set -u
+
+# Follow a chain of shortcuts one link at a time. readlink -f would do it in a
+# line and BSD readlink has no -f, so this walks the chain by hand. The hop
+# limit stops two shortcuts that point at each other from spinning for ever.
+ge_self=$0
+ge_hops=0
+while [ -L "$ge_self" ] && [ "$ge_hops" -lt 40 ]; do
+  ge_link=$(readlink -- "$ge_self" 2>/dev/null)
+  [ -n "$ge_link" ] || break
+  case $ge_link in
+    /*) ge_self=$ge_link ;;
+    *)  ge_self=$(dirname -- "$ge_self")/$ge_link ;;
+  esac
+  ge_hops=$((ge_hops + 1))
+done
+
+# Where the shortcut led first, then the name this was called by. The second is
+# what a machine with no readlink falls back to, where the first is still the
+# shortcut itself.
+ge_root=''
+for ge_try in "$ge_self" "$0"; do
+  ge_dir=$(CDPATH= cd -- "$(dirname -- "$ge_try")/.." 2>/dev/null && pwd) || continue
+  if [ -f "$ge_dir/scripts/ge.sh" ] && [ -r "$ge_dir/scripts/ge.sh" ] &&
+     [ -s "$ge_dir/scripts/ge.sh" ]; then
+    ge_root=$ge_dir
+    break
+  fi
+done
+
+# Said here rather than after the exec, because there is no after the exec.
+#
+# TWO COPIES OF THIS MESSAGE, and they have to say the same thing. The other is
+# ge_damaged in scripts/ge.sh. They cannot be shared, because this one speaks in
+# the one case where scripts/ge.sh is itself the file that would not load, so
+# anything read first would only be one more file that can be missing. Change one
+# copy and the next founder sees two different answers to the same fault, so
+# grep for this heading and change both.
+if [ -z "$ge_root" ]; then
+  printf 'FAIL  ge cannot start, because one of its own files is missing or damaged.\n' >&2
+  printf '      It could not read scripts/ge.sh. Nothing in your folder was touched.\n' >&2
+  # The reason goes on its own line, above the arrow. Everything after "run: " is
+  # the command, to the end of the line, because a founder selects the whole line
+  # and pastes it. An English clause on the end of it arrives as more arguments.
+  printf '      Installing the plugin again puts a clean copy back.\n' >&2
+  printf '      → run: /plugin install growth-engine@launchhouse\n' >&2
+  exit 1
+fi
+
+exec sh "$ge_root/scripts/ge.sh" "$@"

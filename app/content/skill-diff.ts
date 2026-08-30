@@ -8,13 +8,21 @@
  *
  * WHY IT EXISTS
  * The prose is the product. It is edited in the public content repo and
- * consumed here, and a submodule cannot be edited from the consuming repo, so
- * the nine bodies are copied in and adapted. Copies drift. A founder-facing
- * sentence quietly diverging from the reviewed original is the exact failure
- * this prevents: 130 people would be reading text nobody signed off, and the
- * public repo would no longer describe what they were sent. The allowlist is
- * the section 3 adaptation table of `planning/REPLIT-BUILD.md`, written out so
- * a machine can hold it. A new prose change means adding a row on purpose.
+ * consumed here, and the app's nine bodies have to differ from it, so they are
+ * copied in and adapted. Copies drift. A founder-facing sentence quietly
+ * diverging from the reviewed original is the exact failure this prevents: 130
+ * people would be reading text nobody signed off, and the public repo would no
+ * longer describe what they were sent. The allowlist is the section 3
+ * adaptation table of `planning/REPLIT-BUILD.md`, written out so a machine can
+ * hold it. A new prose change means adding a row on purpose.
+ *
+ * THE ORIGINALS ARE NO LONGER READ ONLY, SO SOMETHING ELSE HAS TO HOLD THEM.
+ * They used to be a git submodule, which a founder's fork cannot fetch, so they
+ * are now ordinary committed files. That makes them writeable, and the cheapest
+ * way to silence this check became "edit the original instead of the port".
+ * `app/content/content-pin.ts` closes that: every vendored file is recorded by
+ * its git blob hash against a named commit of the public repo. Read the two
+ * files together, because on their own neither is enough.
  *
  * WHAT CALLS IT
  * `app/tests/skill-diff.test.ts`. Nothing at runtime.
@@ -166,51 +174,35 @@ export const REPO_ROOT = join(APP_ROOT, "..");
 export const PORTED_SKILLS_DIR = join(HERE, "skills");
 
 /**
- * The two environment reads in this file, in one place.
+ * Where the untouched originals live: the vendored copy, and nowhere else.
  *
- * The repository rule is that `process.env` is read once, at boot, through
- * `src/server/env.ts`, which validates with zod and refuses to start on a
- * mismatch. That rule is about the server process. Nothing in this file runs in
- * the server: it is build and test tooling for the prose port, and importing
- * the server's env module would mean a prose diff test could not run without a
- * DATABASE_URL, a master key and an API key. Neither variable below is a secret
- * and neither reaches a log.
+ * THERE IS NO OVERRIDE ANY MORE, AND THAT IS THE POINT. This used to accept
+ * `GE_CONTENT_ROOT` so the diff could run before the submodule was checked out.
+ * There is no such moment now. The originals are ordinary committed files in
+ * this repository, present in every clone, fork and remix, so a variable that
+ * aimed the comparison at a different tree could only ever weaken it. A diff
+ * test that can be pointed somewhere else by an environment variable is not a
+ * diff test, and this one can no longer be pointed anywhere.
  *
- * If the owner of `eslint.config.js` would rather this file were listed in the
- * rule's `ignores` than carry two disables, that is a better answer and this
- * comment goes with it.
- */
-function buildEnv(name: "CI" | "GE_CONTENT_ROOT"): string | undefined {
-  // eslint-disable-next-line no-restricted-syntax -- build tooling, see above
-  return process.env[name];
-}
-
-/**
- * Where the untouched originals live.
- *
- * The submodule is the only answer that means anything in CI: it is pinned to a
- * tag, so it is the version the deployment actually ships. `GE_CONTENT_ROOT` is
- * a local convenience for working before the submodule is checked out, and it
- * is refused under CI on purpose. A diff test that can be pointed at a
- * different tree by an environment variable is not a diff test.
+ * What stops the vendored copy from simply being edited to match a changed port
+ * is `vendor/content-pin.json`: every file under `vendor/growth-engine/` is
+ * recorded by its git blob hash, so "the original" means a named commit of the
+ * public repo rather than whatever is on this machine. See
+ * `app/content/content-pin.ts` and the test beside it.
  */
 export function contentRepoRoot(): string {
   const vendored = join(REPO_ROOT, "vendor", "growth-engine");
   if (existsSync(join(vendored, "plugins", "growth-engine", "skills"))) return vendored;
 
-  if (buildEnv("CI")) {
-    throw new Error(
-      "vendor/growth-engine is not checked out. Run `git submodule update --init` before the tests. " +
-        "GE_CONTENT_ROOT is refused under CI because the pinned submodule is the version that ships.",
-    );
-  }
-
-  const override = buildEnv("GE_CONTENT_ROOT");
-  if (override && existsSync(join(override, "plugins", "growth-engine", "skills"))) return override;
-
   throw new Error(
-    "Cannot find the content repo. Either run `git submodule update --init` so " +
-      "vendor/growth-engine exists, or set GE_CONTENT_ROOT to a checkout of Philm-moxywolf/Atlanta.",
+    [
+      "The vendored content is missing, so there is nothing to diff the ported prose against.",
+      "This is not a submodule any more, so there is nothing to initialise. The files are committed to",
+      "this repository, and a checkout without them is an incomplete checkout.",
+      `Looked for: ${join(vendored, "plugins", "growth-engine", "skills")}`,
+      "Fix: restore the working tree, or re-vendor with",
+      "  npm run engine:bump -- --to <ref> --from <a checkout of Philm-moxywolf/Atlanta>",
+    ].join("\n"),
   );
 }
 

@@ -1,0 +1,34 @@
+ge, the Launchhouse brain. Everything it writes lives in your growth-engine folder.
+
+Start here
+  ge init                 make your growth-engine folder. Safe to run again
+  ge context              a short summary of where your work stands
+  ge check                checks your folder and shows what it found
+  ge help                 this page
+
+Your work
+  ge log <type> "<text>"  add one line to your ops log
+  ge remember <kind> ...  add one line to your curated memory
+  ge person <verb> ...    the people you are selling to
+  ge ledger <verb> ...    your content pieces
+  ge receipt <verb> ...   the record of what your setup checks found
+  ge accounts <verb> ...  the social accounts you can post to
+
+Going back
+  ge snapshot <file>      keep a copy of one file before you change it
+  ge restore <file>       put an older copy of that file back
+                          more than one copy, and it lists them for you to pick
+  ge undo                 undo the last change ge made to one of your files
+
+Keeping it tidy
+  ge index                rebuild the table of which files are ready
+  ge lint                 warnings about the shape of your files. It changes nothing
+
+Used by the skills
+  ge version              which version of the toolkit you have
+  ge invocation           the line a skill uses to call ge
+
+Six of these do more than one thing. Type one on its own, for example ge person,
+and it prints its own list: log, remember, person, ledger, receipt and accounts.
+
+If something looks wrong, start with ge check.

@@ -1,0 +1,5 @@
+FAIL  /etc/hosts is outside your growth-engine folder.
+      ge only ever touches files inside that one folder.
+      Name the file the way it sits inside growth-engine.
+      ge index prints every file ge knows about, so you can pick the name.
+      → run: ge index

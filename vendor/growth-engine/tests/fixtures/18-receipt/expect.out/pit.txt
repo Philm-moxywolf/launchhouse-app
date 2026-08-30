@@ -1,0 +1,2 @@
+Recorded: your token was made on @DATE@.
+The token itself is not stored anywhere by this command.

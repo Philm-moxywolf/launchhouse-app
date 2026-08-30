@@ -1,0 +1,8 @@
+ge receipt, the record of what your setup checks found.
+
+  ge receipt set <check> <PASS|FAIL|SKIP> "<what you saw>"
+  ge receipt set pit-created <YYYY-MM-DD>
+  ge receipt show
+
+Setting a check that is already there replaces that one line. Nothing else moves.
+The receipt records that a token exists and the day it was made. It never records the token.

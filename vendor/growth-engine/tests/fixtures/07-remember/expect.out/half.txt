@@ -1,0 +1,4 @@
+FAIL  memory.md holds one <!-- GE:WORKED:START --> line and no <!-- GE:WORKED:END --> lines.
+      Nothing was written. Guessing where that section starts and stops could delete your own writing.
+      Do this, then run the same command again.
+      → put '<!-- GE:WORKED:END -->' back on its own line in @ROOT@/growth-engine/memory.md, where that section stops

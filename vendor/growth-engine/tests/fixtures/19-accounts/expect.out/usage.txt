@@ -1,0 +1,14 @@
+ge accounts, the list of social accounts your GoHighLevel location can post to.
+
+  ge accounts set     replace the cache with the rows you send it
+  ge accounts list    show the accounts that are cached now
+  ge accounts clear   empty the cache, after backing it up
+
+The rows are sent into set rather than typed after it. One row per account,
+three parts with the | character between them: the account id, the platform,
+the name. This is the whole command. The parts in angle brackets are yours to
+fill in, and everything else is typed as it stands:
+
+  printf "<account id>|<platform>|<name>\n" | ge accounts set
+
+Setting replaces the whole cache, so send every account, not just the new one.

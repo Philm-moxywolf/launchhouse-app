@@ -16,6 +16,12 @@
  * browser's calls answered 404, including every one on the way in. A founder who
  * WAS on the roster was told their address was wrong.
  *
+ * THAT ADDRESS NO LONGER EXISTS ON EITHER SIDE, and the way it went is this test
+ * working. Signing in is a form post to `/auth/signin` now, so the browser
+ * stopped calling `/api/auth/request-link` and the route behind it was deleted
+ * in the same change. Had only one side moved, the run below would have named
+ * it in one of the two directions.
+ *
  * Not one of those 795 tests could have caught it, because every one of them
  * tested a half. The server tests drove routes that exist. The browser tests
  * stubbed fetch. The gap between them was the product, and nothing was looking
@@ -308,7 +314,9 @@ test('THE SCAN READS BOTH SIDES, SO A PASS IS NOT AN EMPTY COMPARISON', async ()
 
   // Two specific addresses, one per side, so a regex that matches the wrong
   // half of the file is caught rather than counted.
-  assert.ok(calls.some((c) => c.method === 'POST' && c.path === '/api/auth/request-link'));
+  // One POST and one GET, on opposite sides of the file, so a pattern that
+  // matches only half of it is caught rather than counted.
+  assert.ok(calls.some((c) => c.method === 'POST' && c.path === '/api/setup/profile'));
   assert.ok(calls.some((c) => c.method === 'GET' && c.path === '/api/threads/:p/stream'));
   assert.ok(routes.some((r) => r.method === 'GET' && r.path === '/api/me'));
   await close();

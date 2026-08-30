@@ -4,55 +4,59 @@
  * WHAT THIS IS. The AuthStore over Drizzle and Postgres.
  *
  * WHY IT EXISTS. It is the other implementation of ./types.ts, and it holds the
- * three statements whose exact shape decides whether sign in is safe.
+ * two statements whose exact shape decides whether sign in is safe.
  *
- *   CONSUMPTION IS ONE CONDITIONAL UPDATE. `update ... where id = $1 and
- *   consumed_at is null returning id` is what makes a token single use. Reading
- *   the row, checking it, and then updating it is two statements with a gap
- *   between them, and two tabs and a mail scanner all land in that gap. Here
- *   Postgres decides the winner and returns it, and the caller is told whether
- *   it was them.
+ *   CLAIMING THE DEPLOYMENT IS ONE INSERT THE DATABASE IS ALLOWED TO REFUSE.
+ *   A remix gets a fresh database with no founder row in it, so the first
+ *   successful sign in creates one. Two tabs can reach that moment together.
+ *   Reading "is there an owner" and then inserting is two statements with a gap
+ *   between them that both tabs land in, and the loser meets a unique
+ *   constraint violation rendered as a 500 on the founder's own screen. Here it
+ *   is `insert ... on conflict do nothing` followed by a read, so the database
+ *   picks the winner and both callers end on the same row.
  *
- *   THE RATE LIMIT IS A COUNT OF ROWS THAT ALREADY EXIST. Not a counter table
- *   and not a Map, because the process restarts and a limiter that resets on a
- *   deploy is a limiter with a published bypass. Only the `.link` row of each
- *   pair is counted, because one request writes two rows and the limit is on
- *   requests.
+ *   THE REFUSAL COUNT IS A COUNT OF ROWS THAT ALREADY EXIST. Not a counter
+ *   table and not a Map, because the process restarts and a limiter that resets
+ *   on a redeploy is a limiter with a published bypass. `ge_event` is already
+ *   the durable record that an attempt happened.
  *
- *   NO TOKEN IS EVER STORED. Every lookup is by sha256. A database dump does
- *   not hand somebody 130 live sign in links.
+ *   NO SECRET IS EVER STORED. There is nothing to store: the passphrase lives
+ *   in Replit Secrets and the session id is a hash of a cookie and that
+ *   passphrase. A dump of this database contains no credential at all.
  *
- *   THE MENTOR QUEUE IS A ROW, NOT A LOG LINE. `recordMentorRequest` writes
- *   `mentor_requests`. It used to write `log.warn` and resolve, which meant the
- *   page that says "A mentor has been told" was shown after a call that had
- *   written nothing, and was shown just the same with the database down. Every
- *   sentence this store's callers put on a screen has to have something behind
- *   it, and for that one the something is a row.
+ * WHAT WENT, AND WHY IT WAS DEAD RATHER THAN UNUSED. `findFounderByEmail`,
+ * `countSigninRequests`, `insertSigninTokens`, `findSigninTokenBySha`,
+ * `consumeSigninToken`, `burnSigninRequest`, `burnLiveTokensForEmail` and
+ * `recordMentorRequest` were the roster, the magic link token pair and the
+ * mentor queue. One founder owns one deployment now. There is no roster to look
+ * an address up in, no token to consume, and no mentor to queue anybody for.
+ * `signin_tokens` and `mentor_requests` have no reader left in this codebase,
+ * and `mentor_requests` was the only table that held an email address on
+ * purpose, so dropping it removes a store of personal data from every founder's
+ * own deployment.
  *
  * WHAT CALLS IT. src/server/index.ts, which builds one and hands it to the auth
  * plugin.
  *
- * WHAT IT READS. founder, signin_tokens, sessions.
- * WHAT IT WRITES. signin_tokens, sessions, ge_event, mentor_requests.
+ * WHAT IT READS. founder, sessions, ge_event.
+ * WHAT IT WRITES. founder (once, on the first claim, including that founder's
+ * wrapped data key), sessions, ge_event.
  *
  * NOT YET EXECUTED AGAINST A REAL DATABASE. Every statement is typechecked
- * against the real schema and rendered in ../routes/store-pg.test.ts, which
- * catches a wrong column and a missing filter. It does not catch a permission
- * the app role does not have. That needs one run against a real database, and
- * that run has not happened.
- *
- * THE mentor_requests INSERT IS THE NEWEST OF THEM and the one to check first,
- * because it is the only statement here that writes a table added after 0000.
- * A deployment running migration 0000 and not 0001 answers every other route
- * and fails only this one, which is a founder who is not on the roster meeting
- * a 500 on the screen that exists so they never meet a dead end.
+ * against the real schema, which catches a wrong column and a missing filter.
+ * It does not catch a permission the app role does not have. That needs one run
+ * against a real database, and that run has not happened. THE INSERT IN
+ * `ensureOwner` IS THE ONE TO WATCH: it is the only statement in this file that
+ * writes the `founder` table, and it runs exactly once in the life of a
+ * deployment, on the first sign in, in a room.
  */
 
-import { and, eq, gte, isNull, like, sql } from 'drizzle-orm';
+import { and, eq, gte, sql } from 'drizzle-orm';
 
 import { getDb, type Db } from '../db/client.ts';
-import { founders, geEvent, mentorRequests, sessions, signinTokens } from '../db/schema.ts';
-import type { AuthStore, FounderRow, Logger, SessionRow, SigninTokenRow } from './types.ts';
+import { founders, geEvent, sessions } from '../db/schema.ts';
+import { createFounderKey } from '../storage/crypto.ts';
+import { OWNER_ROW_KEY, type AuthStore, type FounderRow, type Logger, type SessionRow } from './types.ts';
 
 const FOUNDER_COLUMNS = {
   id: founders.id,
@@ -64,16 +68,6 @@ const FOUNDER_COLUMNS = {
   deletedAt: founders.deletedAt,
 } as const;
 
-const TOKEN_COLUMNS = {
-  id: signinTokens.id,
-  email: signinTokens.email,
-  tokenSha: signinTokens.tokenSha,
-  founderId: signinTokens.founderId,
-  createdAt: signinTokens.createdAt,
-  expiresAt: signinTokens.expiresAt,
-  consumedAt: signinTokens.consumedAt,
-} as const;
-
 const SESSION_COLUMNS = {
   id: sessions.id,
   founderId: sessions.founderId,
@@ -83,94 +77,102 @@ const SESSION_COLUMNS = {
   revokedAt: sessions.revokedAt,
 } as const;
 
+export class OwnerRowMissing extends Error {
+  constructor() {
+    super(
+      'The owner row was inserted or already existed, and then could not be read back. The founder table is not answering, so nobody can sign in.',
+    );
+    this.name = 'OwnerRowMissing';
+  }
+}
+
 export class PgAuthStore implements AuthStore {
   constructor(
     private readonly log: Logger,
     private readonly db: Db = getDb(),
   ) {}
 
-  async findFounderByEmail(email: string): Promise<FounderRow | null> {
-    // `email` is citext, so the comparison is case folded by the database. A
-    // founder who booked as Sam.Taylor@Example.com signs in as
-    // sam.taylor@example.com without anybody having to remember to lower case.
-    const rows = await this.db.select(FOUNDER_COLUMNS).from(founders).where(eq(founders.email, email)).limit(1);
+  /**
+   * The owner row, created if this deployment has never been claimed.
+   *
+   * `founder.email` is unique, and the owner row always carries the same fixed
+   * word, so "there is exactly one owner" is enforced by Postgres rather than
+   * hoped for by this code. `onConflictDoNothing` is what turns the second
+   * caller's insert from an error into a no operation, and the read that
+   * follows gives both callers the row that won.
+   */
+  async ensureOwner(candidate: FounderRow): Promise<FounderRow> {
+    // The common path is a deployment that has already been claimed: one SELECT
+    // and no key generation. Reading first also keeps the AES wrap below off
+    // every sign in for the whole life of the deployment.
+    const already = await this.findOwner();
+    if (already !== null) return already;
+
+    /**
+     * THE WRAPPED KEY IS MADE HERE, AND THIS IS THE ONLY PLACE IN THE RUNTIME
+     * THAT MAKES ONE.
+     *
+     * `founder.wrapped_key` is NOT NULL, so the row cannot exist without it,
+     * which is the schema saying that a founder and their data key are one
+     * thing rather than two. Every blob this founder ever writes is encrypted
+     * under it. So it is created in the same statement as the row rather than
+     * by a caller who might one day insert a founder and wire the key up
+     * afterwards, leaving a window in which a founder exists and their files
+     * cannot be encrypted.
+     *
+     * IT IS NOT ON `FounderRow`, ON PURPOSE. That type is attached to every
+     * request as `request.founder` and read by route handlers. A wrapped key on
+     * it would be one careless `reply.send(founder)` away from being served to
+     * a browser.
+     *
+     * `onConflictDoNothing` is what makes a second caller's insert a no
+     * operation rather than an overwrite. Rewriting this key would make every
+     * blob the founder already owns undecryptable, which is the worst thing
+     * this method could do.
+     */
+    const { wrapped } = createFounderKey(candidate.id);
+
+    await this.db
+      .insert(founders)
+      .values({
+        id: candidate.id,
+        email: OWNER_ROW_KEY,
+        displayName: candidate.displayName,
+        timezone: candidate.timezone,
+        track: candidate.track,
+        wrappedKey: wrapped,
+        disabledAt: candidate.disabledAt,
+        deletedAt: candidate.deletedAt,
+      })
+      .onConflictDoNothing({ target: founders.email });
+
+    const row = await this.findOwner();
+    if (row === null) {
+      // Not a founder facing message. The route's error handler answers with
+      // its own sentence, and this one is for the log and for whoever reads it.
+      this.log.error({}, 'the owner row could not be read back after the claim insert');
+      throw new OwnerRowMissing();
+    }
+    if (row.id === candidate.id) {
+      this.log.info({ founderId: row.id }, 'this deployment has been claimed by its owner');
+    }
+    return row;
+  }
+
+  async findOwner(): Promise<FounderRow | null> {
+    // `email` is citext, so the comparison is case folded by the database, and
+    // the value written is a fixed lower case word in any case.
+    const rows = await this.db
+      .select(FOUNDER_COLUMNS)
+      .from(founders)
+      .where(eq(founders.email, OWNER_ROW_KEY))
+      .limit(1);
     return rows[0] ?? null;
   }
 
   async findFounderById(id: string): Promise<FounderRow | null> {
     const rows = await this.db.select(FOUNDER_COLUMNS).from(founders).where(eq(founders.id, id)).limit(1);
     return rows[0] ?? null;
-  }
-
-  async countSigninRequests(email: string, since: Date): Promise<number> {
-    const rows = await this.db
-      .select({ n: sql<string>`count(*)` })
-      .from(signinTokens)
-      .where(
-        and(
-          eq(signinTokens.email, email),
-          gte(signinTokens.createdAt, since),
-          // One request writes a link row and a code row. The limit is on
-          // requests, so only one of the pair is counted.
-          like(signinTokens.id, '%.link'),
-        ),
-      );
-    return Number(rows[0]?.n ?? 0);
-  }
-
-  async insertSigninTokens(rows: readonly SigninTokenRow[]): Promise<void> {
-    if (rows.length === 0) return;
-    await this.db.insert(signinTokens).values(
-      rows.map((r) => ({
-        id: r.id,
-        email: r.email,
-        tokenSha: r.tokenSha,
-        founderId: r.founderId,
-        createdAt: r.createdAt,
-        expiresAt: r.expiresAt,
-        consumedAt: r.consumedAt,
-      })),
-    );
-  }
-
-  async findSigninTokenBySha(tokenSha: string): Promise<SigninTokenRow | null> {
-    const rows = await this.db
-      .select(TOKEN_COLUMNS)
-      .from(signinTokens)
-      .where(eq(signinTokens.tokenSha, tokenSha))
-      .limit(1);
-    return rows[0] ?? null;
-  }
-
-  /**
-   * The race resolver. `and consumed_at is null` is the whole thing: without it
-   * two presses both update the row, both get a row back, and both are given a
-   * session on a token that was supposed to work once.
-   */
-  async consumeSigninToken(id: string, at: Date): Promise<boolean> {
-    const updated = await this.db
-      .update(signinTokens)
-      .set({ consumedAt: at })
-      .where(and(eq(signinTokens.id, id), isNull(signinTokens.consumedAt)))
-      .returning({ id: signinTokens.id });
-    return updated.length === 1;
-  }
-
-  async burnSigninRequest(requestId: string, at: Date): Promise<void> {
-    // The two rows of one request are `<requestId>.link` and `<requestId>.code`.
-    // The prefix is generated by us and is base64url, so it carries no LIKE
-    // metacharacter, and the value is bound rather than interpolated.
-    await this.db
-      .update(signinTokens)
-      .set({ consumedAt: at })
-      .where(and(like(signinTokens.id, `${requestId}.%`), isNull(signinTokens.consumedAt)));
-  }
-
-  async burnLiveTokensForEmail(email: string, at: Date): Promise<void> {
-    await this.db
-      .update(signinTokens)
-      .set({ consumedAt: at })
-      .where(and(eq(signinTokens.email, email), isNull(signinTokens.consumedAt)));
   }
 
   async insertSession(row: SessionRow): Promise<void> {
@@ -198,32 +200,19 @@ export class PgAuthStore implements AuthStore {
   }
 
   /**
-   * The mentor queue, for somebody who is not on the roster.
+   * The durable half of the defence on the passphrase.
    *
-   * ONE ROW, AND THE ROW IS THE PROMISE. The screen the caller shows next says "A
-   * mentor has been told. We have passed on <address>. Somebody will add you and
-   * email you a link." Until `mentor_requests` existed this method was one
-   * `log.warn` and a resolved promise, so that sentence was shown to a founder
-   * after a call that had written nothing, and it was shown just as readily with
-   * the database down, when the process could not write anything at all. The
-   * insert is what makes the sentence true, and its failure is what stops the
-   * sentence being shown.
-   *
-   * IT DOES NOT SWALLOW A FAILURE. There is no catch here on purpose. If this
-   * throws, the route never reaches the page, the error handler answers with the
-   * 500 that says "tell a mentor and quote LH...", and the founder is sent to a
-   * human. That is worse than working and much better than being told somebody
-   * has their address when nobody does.
-   *
-   * THE ADDRESS DOES NOT GO TO THE LOG. `ge_event` may never carry one, and pino's
-   * redact list does not name `email`, so a warn line carrying one would write a
-   * real person's address into every log sink for the life of the deployment. The
-   * row holds it, where a purge can reach it. The log line below records that a
-   * request happened and nothing about who made it.
+   * Filtered on founder id as well as verb, so it uses the
+   * `ge_event_founder_at_idx` index rather than reading the table. There is one
+   * founder, so the id narrows nothing today, and the index is the reason to
+   * write it this way anyway.
    */
-  async recordMentorRequest(email: string, note: string, at: Date): Promise<void> {
-    await this.db.insert(mentorRequests).values({ email, note, at });
-    this.log.warn({}, 'MENTOR QUEUE: somebody could not sign in and is waiting to be added');
+  async countAuthEvents(founderId: string, verb: string, since: Date): Promise<number> {
+    const rows = await this.db
+      .select({ n: sql<string>`count(*)` })
+      .from(geEvent)
+      .where(and(eq(geEvent.founderId, founderId), eq(geEvent.verb, verb), gte(geEvent.at, since)));
+    return Number(rows[0]?.n ?? 0);
   }
 
   async recordAuthEvent(
@@ -233,9 +222,10 @@ export class PgAuthStore implements AuthStore {
     subject: string | null,
     at: Date,
   ): Promise<void> {
-    // ge_event carries no founder text and no name. `actor` is 'founder' or
-    // 'mentor:<id>', and `subject` is a path or a slug or nothing. An address
-    // here would put a real person into the audit line a purge cannot reach.
+    // ge_event carries no founder text and no name. `actor` is 'founder' for a
+    // sign in and 'system' for a refused one, because a refused attempt was not
+    // necessarily the founder and writing that it was would put a claim in the
+    // audit line that is not true. `subject` is a path or a slug or nothing.
     await this.db.insert(geEvent).values({ founderId, actor, verb, subject, at });
   }
 }

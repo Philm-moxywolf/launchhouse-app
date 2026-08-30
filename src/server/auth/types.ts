@@ -2,20 +2,28 @@
  * src/server/auth/types.ts
  *
  * WHAT THIS IS. The seams between sign in and everything it does not own: the
- * database, the mailer and the clock. Interfaces only, no behaviour.
+ * database and the clock. Interfaces only, no behaviour.
  *
  * WHY IT EXISTS. Two failures, and the second is the one that matters.
  *
  *   A sign in flow that reaches straight into Postgres cannot be tested without
- *   Postgres, and a flow nobody has run is a flow nobody has proved. On 25
- *   September there are 130 people in a room and the first thing every one of
- *   them does is sign in. That path has to have been executed, many times, on a
- *   laptop with no database.
+ *   Postgres, and a flow nobody has run is a flow nobody has proved. Sign in is
+ *   the first thing the founder does with their own deployment, in a staffed
+ *   room, so it has to have been executed many times on a laptop with no
+ *   database.
  *
  *   And the founder id has exactly one source: the session cookie. Writing the
  *   store as an interface makes that visible. Nothing in here accepts a founder
  *   id from a caller who did not first present a cookie, because there is no
  *   method that takes one.
+ *
+ * WHAT CHANGED, AND WHY THE OLD SHAPE WAS WRONG RATHER THAN INCOMPLETE. This
+ * used to describe a roster of 130 people, one time sign in tokens and a
+ * mailer. One founder owns one deployment now. There is no roster to look an
+ * address up in, no cohort to be a member of, and no address to send anything
+ * to. `SigninTokenRow` and `Mailer` are gone rather than left unused, because
+ * an interface with no implementation reads in a review exactly like one that
+ * works.
  *
  * WHAT CALLS IT. Every file in src/server/auth/. Wired to Drizzle by
  * ./store-pg.ts and to a Map by ./test-fixtures.ts.
@@ -24,13 +32,28 @@
  */
 
 /**
- * One row of the pre seeded roster of 130.
+ * The one founder this deployment belongs to.
  *
- * The roster is `founder` rows, seeded from the ticket list before 4 September.
- * There is no sign up: a founder either exists here or is told so honestly.
+ * Still called a founder row, and it is still the `founder` table, because
+ * every other module in the app hangs off `founderId`: the storage paths, the
+ * spend ledger, the threads, the audit line. One row instead of 130 does not
+ * change any of that, and renaming the concept would touch files that have
+ * nothing to do with sign in.
  */
 export interface FounderRow {
   readonly id: string;
+  /**
+   * `founder.email` is `citext NOT NULL UNIQUE` in the schema, from the roster
+   * model. There is no address in this model, so the owner row carries the
+   * fixed word in OWNER_ROW_KEY below instead.
+   *
+   * THE COLUMN NOW EARNS ITS PLACE FOR A DIFFERENT REASON. Because it is
+   * unique, and because the owner row always carries the same value, "there is
+   * exactly one owner" is something Postgres enforces rather than something
+   * this code hopes for. Two browser tabs racing to claim a fresh deployment
+   * both insert, the database refuses the second, and both end up on the same
+   * row.
+   */
   readonly email: string;
   readonly displayName: string | null;
   readonly timezone: string;
@@ -40,26 +63,29 @@ export interface FounderRow {
 }
 
 /**
- * One sign in secret. The secret itself is never stored, only its sha256, so a
- * database dump does not hand somebody 130 live sign in links.
+ * The value written into `founder.email` for the owner row.
  *
- * `id` carries the request it belongs to: `<requestId>.link` and
- * `<requestId>.code`. One email carries both a link and a six digit code, and
- * using either one has to burn the other. Encoding the pairing in the primary
- * key is what lets that happen without a column the schema does not have.
+ * Not an address, and it cannot be mistaken for one: there is no at sign in it.
+ * Nothing in this build sends mail, so nothing can try.
  */
-export interface SigninTokenRow {
-  readonly id: string;
-  readonly email: string;
-  readonly tokenSha: string;
-  readonly founderId: string | null;
-  readonly createdAt: Date;
-  readonly expiresAt: Date;
-  readonly consumedAt: Date | null;
-}
+export const OWNER_ROW_KEY = 'owner';
+
+/**
+ * The timezone the owner row is created with, before the founder is asked.
+ *
+ * UTC is the honest answer to a question nobody has been asked yet. It is not a
+ * guess at where they are. `founder.timezone` is NOT NULL, so the row needs
+ * something, and the first run screen replaces it with a real zone before any
+ * date is written. The screen is reached because `display_name` is null, not
+ * because the zone is UTC, so this value is never load bearing.
+ */
+export const OWNER_PLACEHOLDER_TIMEZONE = 'UTC';
 
 export interface SessionRow {
-  /** sha256 of the cookie value. The cookie itself is never stored. */
+  /**
+   * The session id. NOT the cookie value, and not a plain hash of it either:
+   * see `sessionIdFor` in ./session.ts. The cookie itself is never stored.
+   */
   readonly id: string;
   readonly founderId: string;
   readonly createdAt: Date;
@@ -71,50 +97,40 @@ export interface SessionRow {
 /**
  * Everything sign in does to the database.
  *
- * Every method that can race is written so the database decides the winner.
- * `consumeSigninToken` returns whether this caller was the one that consumed
- * it, because two tabs and a mail scanner can arrive at the same millisecond
- * and exactly one of them may be given a session.
+ * Small on purpose. The old interface had eleven methods because a roster, a
+ * token pair, a rate limit counted in Postgres and a mentor queue all lived
+ * behind it. What is left is the owner row, sessions, and the audit line, and
+ * every one of those has a caller in this folder.
  */
 export interface AuthStore {
-  findFounderByEmail(email: string): Promise<FounderRow | null>;
+  /**
+   * Return the owner row, creating it if this deployment has never been
+   * claimed.
+   *
+   * WHY THIS IS ONE METHOD RATHER THAN A READ AND A WRITE. A remix gets a fresh
+   * database with no founder in it, so the first successful sign in is also the
+   * moment the owner row comes into existence. Two tabs can reach that moment
+   * at the same time. Splitting it into "is there one" and "make one" puts a
+   * gap between the two statements that both tabs land in, and the second
+   * insert fails on the unique constraint with a 500 on a founder's screen.
+   * Implementations insert and let the database refuse the loser, then read
+   * back whichever row won.
+   */
+  ensureOwner(candidate: FounderRow): Promise<FounderRow>;
+
+  /**
+   * The owner row, or null on a deployment nobody has signed in to yet.
+   *
+   * READ ONLY, AND THAT IS THE WHOLE REASON IT IS NOT `ensureOwner`. A wrong
+   * passphrase has to be counted somewhere, and the count hangs off the owner's
+   * id. If the only way to get that id also created the row, a stranger
+   * guessing badly at an unclaimed deployment would claim it by getting it
+   * wrong, which is exactly the failure the first run claim design was
+   * rejected for.
+   */
+  findOwner(): Promise<FounderRow | null>;
+
   findFounderById(id: string): Promise<FounderRow | null>;
-
-  /**
-   * How many sign in requests this address has made since `since`.
-   *
-   * Counted from the token rows themselves rather than from a counter table,
-   * because the rate limit has to survive a restart and the rows already are
-   * the durable record of a request having happened.
-   */
-  countSigninRequests(email: string, since: Date): Promise<number>;
-
-  insertSigninTokens(rows: readonly SigninTokenRow[]): Promise<void>;
-  findSigninTokenBySha(tokenSha: string): Promise<SigninTokenRow | null>;
-
-  /**
-   * Mark one token used, if it is not used already. True means this caller won
-   * and may be given a session. False means somebody, or something, got there
-   * first.
-   */
-  consumeSigninToken(id: string, at: Date): Promise<boolean>;
-
-  /**
-   * Burn every unused token of one request. Used after a win: the link and the
-   * six digit code are two ways into one sign in, and spending either must
-   * spend both.
-   */
-  burnSigninRequest(requestId: string, at: Date): Promise<void>;
-
-  /**
-   * Burn every live token for one address. Used after too many wrong codes.
-   *
-   * Keyed on the address rather than on a request because a wrong guess matches
-   * no row, so there is no request to name. This is the durable half of the
-   * defence on a six digit secret, and it is why the in memory attempt counter
-   * being lost on a restart does not matter.
-   */
-  burnLiveTokensForEmail(email: string, at: Date): Promise<void>;
 
   insertSession(row: SessionRow): Promise<void>;
   findSession(id: string): Promise<SessionRow | null>;
@@ -122,23 +138,22 @@ export interface AuthStore {
   revokeSession(id: string, at: Date): Promise<void>;
 
   /**
-   * A founder who is not on the roster asked for a mentor. Written where a
-   * mentor will see it, so the screen is never a dead end.
+   * How many audit lines with this verb the owner has since `since`.
    *
-   * The audit line takes a founder id and this person has none, so it is
-   * recorded against no founder and carries the address only in the place a
-   * mentor has to read it. Callers pass the address; implementations decide
-   * where it lands.
+   * This is the durable half of the defence on the passphrase. The process
+   * restarts, so a counter held in memory resets with it, and the cheapest way
+   * past an in memory limit is to wait for a redeploy. The audit lines are
+   * already the durable record that an attempt happened, so counting them costs
+   * one indexed query and no new table.
    */
-  recordMentorRequest(email: string, note: string, at: Date): Promise<void>;
+  countAuthEvents(founderId: string, verb: string, since: Date): Promise<number>;
 
   /**
-   * The audit line for a sign in, and for the one path where a mentor hands a
-   * founder access to their own account.
+   * The audit line for a sign in, and for a refused one.
    *
-   * `actor` is 'founder' or 'mentor:<id>'. NEVER a person's name, and `subject`
-   * is a path or a slug or nothing. That is the ge_event rule and it is written
-   * here as well because this is where the temptation to log an address is.
+   * `actor` is 'founder'. NEVER a person's name, and `subject` is a path or a
+   * slug or nothing. That is the ge_event rule and it is written here as well
+   * because this is where the temptation to log something identifying is.
    */
   recordAuthEvent(
     founderId: string,
@@ -149,29 +164,23 @@ export interface AuthStore {
   ): Promise<void>;
 }
 
-/**
- * The mailer.
- *
- * Fails closed outside prod: the recipient is checked against MAIL_ALLOWLIST
- * and a miss throws. A seeded founder with a plausible address must not be able
- * to cause a real email to a real person.
- */
-export interface Mailer {
-  send(message: OutboundMail): Promise<void>;
-}
-
-export interface OutboundMail {
-  readonly to: string;
-  readonly subject: string;
-  readonly text: string;
-}
-
 /** Injected so tests do not sleep and so expiry can be wound forward. */
 export interface Clock {
   now(): Date;
 }
 
 export const systemClock: Clock = { now: () => new Date() };
+
+/**
+ * Waiting, injected for the same reason the clock is.
+ *
+ * ./owner.ts slows a wrong passphrase down deliberately. A test that proved
+ * that by actually waiting two seconds would be a test somebody deletes, so the
+ * wait is a function and the test records what it was asked for.
+ */
+export type Sleep = (ms: number) => Promise<void>;
+
+export const realSleep: Sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /** Structured logging. pino in production, a collector in tests. */
 export interface Logger {

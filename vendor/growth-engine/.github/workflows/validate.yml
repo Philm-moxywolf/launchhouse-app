@@ -1,0 +1,144 @@
+# validate.yml: the automated checks for this repository, on every push and every
+# pull request.
+#
+# WHY THIS FILE EXISTS. Two jobs, and they answer two different questions.
+#
+#   validate      Does the writing hold? Broken JSON, a command that routes to a skill
+#                 that is not there, an unstamped placeholder, a banned dash, a banned
+#                 word. Static, fast, and it is the gate a human runs before a commit.
+#
+#   golden-suite  Does ge still produce the same bytes? It is the only part of this
+#                 product that has ever been tested, and until this job existed it was
+#                 green only when somebody remembered to run it by hand. A suite that
+#                 runs when somebody remembers is a suite that is red for a week before
+#                 anybody finds out, and the week it is red is the week the toolkit
+#                 freezes.
+#
+# WHY THREE SHELLS AND NOT ONE. ge is POSIX sh, and the families disagree about what
+# POSIX sh is. Run this and read the three answers:
+#
+#   for s in sh dash bash; do $s -c 'x=$(case a in a) echo yes;; esac); echo "$x"'; done
+#
+# dash prints yes. bash and a Mac's sh, which is bash, both stop on a syntax error at the
+# ";;". So a change that reads fine on the machine it was written on can be a program that
+# will not parse on the machine it ships to. On Linux, and on this runner, sh is dash;
+# under Git Bash, which is what a founder on Windows has, it is bash. A single pass proves
+# the suite ran, not that the product runs for the cohort. So the suite runs three times,
+# once per shell, and the matrix names which one went red.
+#
+# WHY THE SUITE IS A SEPARATE JOB AND NOT A LINE INSIDE validate.sh. validate.sh is the
+# pre-commit gate and it takes seconds. The golden suite spawns a few thousand processes
+# and takes minutes. Folded into validate.sh it would be the reason somebody commits with
+# --no-verify, and then neither check runs. Separate, they also fail separately, so the
+# summary says whether the docs broke a style rule or ge changed its output.
+#
+# HOW IT GOES RED. Any case whose output differs from its fixture, on any of the three
+# shells: tests/run.sh exits 1 and takes the job with it. A machine with no dash also
+# ends red rather than quietly running half the proof.
+name: validate
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  validate:
+    name: writing and structure
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run the repo validator
+        run: bash scripts/validate.sh
+
+      # ge runs on two surfaces: this plugin inside Claude Code, which the team uses to
+      # rehearse, and the Launchhouse app, where 130 founders never see a terminal. A
+      # recovery line naming /growth-engine:something is right on one of them and wrong on
+      # the other: in a shell it is a "not found", and in the app it becomes a button with
+      # nothing behind it, because the app turns everything after "run: " into a button.
+      # Twenty eight of these had accumulated, and one of them named a command that had
+      # already been renamed. ge names the step in words now and names no surface.
+      #
+      # Kept as a grep rather than a rule inside validate.sh so it reads in one line and
+      # so it covers ge's shell tree, which is what founders actually see the output of.
+      - name: ge names no Claude Code command
+        run: |
+          # Checked first. grep over a directory that is not there exits non-zero, which
+          # this `if` would read as "no matches" and pass on, so a tree missing from the
+          # checkout would look like a tree that is clean.
+          for dir in plugins/growth-engine/bin plugins/growth-engine/scripts; do
+            [ -d "$dir" ] || { echo "FAIL  $dir is not in the checkout, so this check read nothing." >&2; exit 1; }
+          done
+          if grep -rn '/growth-engine:' plugins/growth-engine/bin plugins/growth-engine/scripts; then
+            echo "" >&2
+            echo "FAIL  ge printed a Claude Code command name." >&2
+            echo "      ge runs inside the plugin and inside the app. A slash command works" >&2
+            echo "      in one of those and is a dead button in the other. Name the step in" >&2
+            echo "      words, on a bare arrow, the way scripts/cmd/ledger.sh does." >&2
+            exit 1
+          fi
+
+  golden-suite:
+    # The shell is in the job name so a red run says which family broke without anybody
+    # opening the log.
+    name: ge golden suite (${{ matrix.shell }})
+    runs-on: ubuntu-latest
+    # No case in the suite takes more than a few seconds. Twenty minutes is not a
+    # performance budget, it is a stop for a case that waits on stdin for ever: without
+    # it a hung case holds a runner until GitHub's own six hour limit.
+    timeout-minutes: 20
+    strategy:
+      # Every shell reports. Stopping at the first failure would hide whether a change
+      # broke one family or all three, and that is the first thing worth knowing.
+      fail-fast: false
+      matrix:
+        shell: [sh, dash, bash]
+    steps:
+      - uses: actions/checkout@v4
+
+      # A checkout holds tracked files and nothing else. If the suite or ge is not
+      # committed, `sh tests/run.sh` fails with "cannot open tests/run.sh", which reads
+      # as a broken workflow and gets the workflow edited. This says what is actually
+      # wrong. It is not hypothetical: on 28 August tests/ and plugins/growth-engine/bin,
+      # schemas and scripts were all untracked in this repository, so this job could not
+      # have run at all.
+      - name: The suite and ge are actually in the checkout
+        run: |
+          missing=''
+          for path in tests/run.sh tests/cases tests/fixtures \
+                      plugins/growth-engine/bin/ge plugins/growth-engine/scripts; do
+            [ -e "$path" ] || missing="$missing $path"
+          done
+          if [ -n "$missing" ]; then
+            echo "FAIL  these are not in the checkout, so nothing here can be tested:" >&2
+            for path in $missing; do echo "        $path" >&2; done
+            echo "      A checkout holds tracked files only. Commit them, and check" >&2
+            echo "      .gitignore is not swallowing them." >&2
+            exit 1
+          fi
+
+      # dash is /bin/sh on Ubuntu, so it is already here. Installed explicitly anyway:
+      # the day a runner image drops it, the failure should name the missing package
+      # rather than appear as a suite that ran half of itself.
+      - name: Make sure all three shells are present
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y dash
+          command -v sh dash bash
+
+      # Invoked as `sh tests/run.sh` rather than `./tests/run.sh`, so the run does not
+      # depend on the executable bit surviving a checkout.
+      - name: Run the 36 cases
+        run: sh tests/run.sh --shell ${{ matrix.shell }}
+
+      # A red job that says "see tests/.work/<shell>/<case>/diff.txt" is no use when that
+      # folder lives on a runner that has already gone. The diff is the evidence.
+      - name: Keep the diffs from a failed run
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: golden-suite-diffs-${{ matrix.shell }}
+          path: tests/.work/
+          retention-days: 7
+          if-no-files-found: ignore

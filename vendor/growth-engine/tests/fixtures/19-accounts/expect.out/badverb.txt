@@ -1,0 +1,4 @@
+FAIL  ge accounts has no verb called "refresh".
+      The three it has are set, list and clear.
+      This prints them, with what each one takes.
+      → run: ge accounts

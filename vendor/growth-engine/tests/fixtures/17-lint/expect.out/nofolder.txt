@@ -1,0 +1,8 @@
+FAIL  no growth-engine folder was found.
+      ge looked here, in every folder above here, and in your home folder, on
+      your Desktop, in Documents and in Downloads.
+      Nothing was checked.
+      If you already have one, it is in a folder ge does not look in. Go to it
+      and run this again. A second folder would split your work in two.
+      If you have none, this is the folder your work will be kept in.
+      → run: ge init

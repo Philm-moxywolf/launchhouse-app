@@ -1,0 +1,2 @@
+FAIL  ge lint does not take "--nope".
+      → run: ge lint

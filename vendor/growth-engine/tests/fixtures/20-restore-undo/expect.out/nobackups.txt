@@ -1,0 +1,4 @@
+FAIL  there are no backups of memory.md.
+      ge makes one every time it changes a file, so ge has not changed this one yet.
+      This makes one now, and then there is something to put back.
+      → run: ge snapshot memory.md

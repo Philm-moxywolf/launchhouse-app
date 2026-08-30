@@ -1,0 +1,11 @@
+branch=gnu
+now_epoch=1790294400
+utc_stamp=20260925T000000Z
+today_iso=2026-09-25
+now_local=2026-09-25 00:00
+iso_to_epoch [1970-01-01] rc=0 out=[0]
+iso_to_epoch [2026-09-25] rc=0 out=[1790294400]
+iso_to_epoch [2026-09-25T09:30:00] rc=0 out=[1790328600]
+iso_to_epoch [2026-01-01] rc=0 out=[1767225600]
+iso_to_epoch [not-a-date] rc=1 out=[]
+iso_to_epoch [] rc=1 out=[]

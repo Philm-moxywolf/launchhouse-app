@@ -11,6 +11,7 @@ The nine skill bodies are the product. Everything else in this repository is del
 | `skills/` | The nine ported skill bodies | Only with an allowlist row |
 | `skill-allowlist.ts` | Every authorised difference from the public repo | Yes, on purpose |
 | `skill-diff.ts` | The diff and the check that runs it | Yes |
+| `content-pin.ts` | Holds `vendor/growth-engine/` to the commit `vendor/content-pin.json` names | Yes |
 | `routes.ts` | The routing table, and the only place Track and Model become a route name | Yes |
 | `gates.md` | Byte for byte copy of `plugins/growth-engine/schemas/gates.md` | No |
 | `gates-parse.ts` | Turns `gates.md` into data | Yes |
@@ -19,16 +20,30 @@ The nine skill bodies are the product. Everything else in this repository is del
 | `scopes.ts` | The seven GoHighLevel scopes, and the three that were cut | Yes |
 | `ghl-walk.ts` | Every string in the token walk | Yes. This is where the copy is edited |
 
+## Where the content comes from
+
+The public content repo, `Philm-moxywolf/Atlanta`, is copied into `vendor/growth-engine/` as ordinary committed files. It used to be a git submodule. It is not any more, and the difference matters: a founder who forks this app or remixes it on Replit gets the content with the code, and needs no access to a second repository. A submodule is a pointer, and a pointer to a private repo is an empty folder and a stalled Monday morning.
+
+What holds the copy honest is `vendor/content-pin.json`. It records the commit and every file's git blob hash, which are the same numbers git stores, so anyone can check the copy against the public repo with `git ls-tree -r <commit>`.
+
+**Vendored files are never edited here.** Editing one is how a changed skill body could be made to agree with a changed original and pass the diff test. `app/content/content-pin.test.ts` fails on any edit to any of them.
+
 ## Where prose is edited
 
-Skill bodies are edited in the public content repo, `Philm-moxywolf/Atlanta`, and nowhere else. That repo is the review surface. This one is private and holds 130 founders' business data, so it is not where a sentence gets reviewed.
+Skill bodies are edited in the public content repo and nowhere else. That repo is the review surface. This one is private and holds 130 founders' business data, so it is not where a sentence gets reviewed.
 
 To change a skill body:
 
-1. Edit it in the content repo. Run `./scripts/validate.sh` there.
-2. Tag the content repo and move the submodule pin here.
+1. Edit it in the content repo. Run `./scripts/validate.sh` there. Commit and tag.
+2. Bring it in here. This is the only supported way, and it prints what moved before it moves it:
+
+   ```
+   npm run engine:bump -- --to <ref> --from <a checkout of the content repo>
+   ```
+
 3. Run the diff test. It fails, naming the line that changed.
 4. Copy the change into `skills/`, and if the app's copy has to differ from the original, add a row to `PORT_ALLOWLIST` with the group and the reason.
+5. Run `npm run skills:gen`, or every founder gets yesterday's prose from a map that claims to be today's.
 
 A row that matches nothing also fails, so an allowlist rule cannot outlive the change it was written for.
 
@@ -42,13 +57,27 @@ A row that matches nothing also fails, so an allowlist rule cannot outlive the c
 npm test
 ```
 
-Before the submodule is checked out, point the diff at a local content repo:
+There is nothing to check out or initialise first. The content is in the repository.
+
+The diff can no longer be aimed at another copy of the content. `GE_CONTENT_ROOT` used to do that, and it is gone: a diff test that an environment variable can point somewhere else is not a diff test.
+
+To check the copy on its own, without running everything:
 
 ```
-GE_CONTENT_ROOT=../Atlanta npm test
+npm run engine:bump -- --verify
 ```
 
-That override is refused when `CI` is set, because the pinned submodule is the version that actually ships.
+It names every vendored file that is missing, changed, or should never have been copied in, and exits non-zero if there are any.
+
+## Running the ge golden suite
+
+Thirty six cases against the engine itself. It is the only tested thing in the content repo, and it runs from here:
+
+```
+cd vendor/growth-engine && ./tests/run.sh
+```
+
+It writes to `vendor/growth-engine/tests/.work/`, which is a sandbox rebuilt on every run and ignored by git.
 
 ## Regenerating gates.ts
 

@@ -1,0 +1,1 @@
+set people/sam-northfield-io.md  status  candidate -> contacted_ok

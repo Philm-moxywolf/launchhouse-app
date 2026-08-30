@@ -1,0 +1,2 @@
+FAIL  ge context does not take "nonsense".
+      → run: ge context

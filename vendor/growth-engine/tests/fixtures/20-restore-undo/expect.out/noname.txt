@@ -1,0 +1,3 @@
+FAIL  ge restore needs the name of the file to put back.
+      ge index prints every file ge knows about, so you can pick the name.
+      → run: ge index

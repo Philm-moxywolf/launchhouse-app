@@ -1,39 +1,39 @@
 /**
  * src/server/auth/pages.ts
  *
- * WHAT THIS IS. Every word a founder reads while signing in, and the small
+ * WHAT THIS IS. Every word the founder reads while signing in, and the small
  * amount of HTML that carries it. Pure functions from state to a string.
  *
  * WHY IT EXISTS. Three reasons.
  *
- *   Sign in cannot depend on the browser bundle. The verify page has to work
- *   with JavaScript switched off and before dist/web exists at all, because a
- *   founder who cannot sign in cannot report that they cannot sign in. Server
- *   rendered HTML with a plain form has no such dependency.
+ *   Sign in cannot depend on the browser bundle. These screens have to work
+ *   with JavaScript switched off and before dist/web exists at all, because
+ *   somebody who cannot sign in cannot report that they cannot sign in. Server
+ *   rendered HTML with a plain form has no such dependency, and on a first
+ *   deployment the bundle is the most likely thing to be missing.
  *
- *   The verify page must contain a POST and nothing else that changes state. A
- *   single page app rendering this screen would be a page whose behaviour
- *   depends on whether the mail scanner runs JavaScript, and several of them
- *   do. A form with a submit button cannot be triggered by a fetch.
+ *   Prose is testable when it is a function. The rules for anything a founder
+ *   reads are: no dashes, short sentences, name the doubt first, end on an
+ *   action, and never a promise we cannot keep. A test can assert that over a
+ *   string. It cannot assert it over a template buried in a route handler.
  *
- *   Prose is testable when it is a function. The writing rules for anything a
- *   founder reads are: no dashes, short sentences, name the doubt first, end on
- *   an action, and never a promise we cannot keep. A test can assert that over
- *   a string. It cannot assert it over a template buried in a route handler.
+ *   And the screens have to say what to DO. This deployment belongs to one
+ *   person and there is nobody to ask. So the sentence that tells them where
+ *   their own passphrase is written down appears on every screen where they
+ *   might need it, rather than once.
  *
- * WHAT CALLS IT. ./plugin.ts for the screens, ./magic-link.ts for the email.
+ * WHAT CALLS IT. ./plugin.ts for the screens. `escapeHtml` and `layout` are
+ * also used by ../routes/errors.ts, which is why they are exported and why
+ * their signatures have not changed.
+ *
  * WHAT IT READS AND WRITES. Nothing. Strings in, strings out.
  */
 
-import type { LinkState, RefusalReason } from './magic-link.ts';
-import type { RosterMiss } from './roster.ts';
-import { missMessage } from './roster.ts';
-
 /**
  * Escape before interpolation, every time, with no exceptions made for values
- * that "cannot" contain markup. The address on the roster miss screen is typed
- * by whoever is at the keyboard, and echoing it back is the whole point of that
- * screen.
+ * that "cannot" contain markup. Kept exactly as it was: the sign in screens no
+ * longer echo anything a stranger typed, and this is not the file to remove an
+ * escape from on the strength of that.
  */
 export function escapeHtml(value: string): string {
   return value
@@ -66,10 +66,12 @@ export function layout(title: string, body: string): string {
   main { width: 100%; max-width: 34rem; }
   h1 { font-size: 1.5rem; line-height: 1.25; margin: 0 0 1rem; }
   p { margin: 0 0 1rem; }
+  ol { margin: 0 0 1rem; padding-left: 1.3rem; }
+  li { margin: 0 0 0.6rem; }
   .quiet { opacity: 0.75; font-size: 0.95rem; }
   form { margin: 1.5rem 0 0; }
   label { display: block; font-weight: 600; margin: 0 0 0.4rem; }
-  input[type=email], input[type=text] {
+  input[type=email], input[type=text], input[type=password] {
     font: inherit; width: 100%; box-sizing: border-box; padding: 0.7rem 0.8rem;
     border: 1px solid currentColor; border-radius: 8px; background: transparent; color: inherit; }
   button { font: inherit; font-weight: 600; margin-top: 1rem; padding: 0.75rem 1.4rem;
@@ -86,177 +88,146 @@ ${body}
 `;
 }
 
-/** The email itself. Plain text, because a link that renders is a link that gets clicked. */
-export function signInEmail(args: {
-  url: string;
-  code: string;
-  minutes: number;
-  firstName: string | null;
-}): string {
-  const hello = args.firstName === null ? 'Hello,' : `Hello ${args.firstName},`;
-  return [
-    hello,
-    '',
-    'Here is your sign in link for Launchhouse. There is no password.',
-    '',
-    args.url,
-    '',
-    `The link works for ${String(args.minutes)} minutes. Open it and press the button on the page.`,
-    '',
-    'If your mail app will not open a browser, type this code into the sign in screen instead:',
-    '',
-    `    ${args.code}`,
-    '',
-    'You will need the email address you booked with as well as the code.',
-    '',
-    'If you did not ask for this, ignore it. Nothing happens until somebody presses the button.',
-  ].join('\n');
+/**
+ * The one sentence that makes forgetting the passphrase a non event.
+ *
+ * It is a constant and it is used on three screens rather than written three
+ * times, because the day somebody changes the name of the variable is the day
+ * two of the three would still say the old one.
+ */
+export const WHERE_THE_PASSPHRASE_IS =
+  'Cannot remember it? Open this project on Replit, click Secrets, and read OWNER_PASSPHRASE there.';
+
+/** Notices the sign in screen can carry, named rather than passed as text. */
+export type SignInNotice = 'signed_out' | 'wrong_passphrase' | 'account_closed' | 'session_ended';
+
+/**
+ * WHY THESE ARE KEYS AND NOT A STRING FROM THE QUERY.
+ *
+ * The old screen took `?notice=` and printed it. Escaped, so it was not a
+ * scripting hole, but it still meant anybody could send the founder a link to
+ * their own app carrying any sentence they liked above the passphrase box.
+ * "Your passphrase has expired, type the old one and the new one" is a
+ * convincing thing to read on a real address with a real padlock. A fixed set
+ * of keys removes that entirely, and there are only four things this screen
+ * ever has to say.
+ */
+export function signInNotice(notice: SignInNotice): string {
+  switch (notice) {
+    case 'signed_out':
+      return 'You are signed out on this device. Your work is where you left it.';
+    case 'wrong_passphrase':
+      return 'That passphrase is not right. Check for a capital letter you missed, then try again.';
+    case 'account_closed':
+      return 'This app is closed. Its owner row in the database is switched off, so nobody can sign in until that is cleared.';
+    case 'session_ended':
+      return 'You were signed out because the passphrase changed. Sign in with the new one.';
+  }
 }
 
-/** One email field, one button, and the sentence that stops a founder hunting for a password. */
-export function signInPage(args: { prefill?: string; notice?: string } = {}): string {
-  const prefill = args.prefill === undefined ? '' : escapeHtml(args.prefill);
-  const notice = args.notice === undefined ? '' : `<p>${escapeHtml(args.notice)}</p>`;
+/** Read a notice key out of a query string, or nothing. Never trusts the value. */
+export function asSignInNotice(value: unknown): SignInNotice | null {
+  return value === 'signed_out' || value === 'wrong_passphrase' || value === 'account_closed' || value === 'session_ended'
+    ? value
+    : null;
+}
+
+/**
+ * One passphrase box and one button.
+ *
+ * IT NAMES THE DOUBT IN THE FIRST SENTENCE. The doubt on this screen is not
+ * "which password did I use", it is "I never made an account, so what is it
+ * asking me for". Answering that before the box is what stops somebody hunting
+ * for a sign up link that does not exist.
+ */
+export function signInPage(args: { notice?: SignInNotice } = {}): string {
+  const notice = args.notice === undefined ? '' : `<p>${escapeHtml(signInNotice(args.notice))}</p>`;
   return layout(
-    'Sign in to Launchhouse',
+    'Sign in',
     `<h1>Sign in</h1>
 ${notice}
-<p>No password. We send you a link.</p>
-<form method="POST" action="/auth/request">
-  <label for="email">The email address you booked with</label>
-  <input id="email" name="email" type="email" autocomplete="email" autocapitalize="none"
-         spellcheck="false" required value="${prefill}">
-  <button type="submit">Send me a link</button>
+<p>There is no account to make. This app belongs to one person, and the passphrase is the one
+you put into Replit Secrets under the name OWNER_PASSPHRASE. A Replit Secret is a private
+setting for your app that nobody else can read.</p>
+<form method="POST" action="/auth/signin">
+  <label for="passphrase">Your passphrase</label>
+  <input id="passphrase" name="passphrase" type="password" autocomplete="current-password"
+         autocapitalize="none" spellcheck="false" required autofocus>
+  <button type="submit">Sign in</button>
 </form>
-<div class="row">
-  <p class="quiet">Already have a six digit code? <a href="/auth/code">Type it here</a>.</p>
-</div>`,
-  );
-}
-
-/** After a request, whether or not anything was sent. The two must read the same. */
-export function checkYourEmailPage(email: string, minutes: number): string {
-  return layout(
-    'Check your email',
-    `<h1>Check your email</h1>
-<p>We have sent a link to ${escapeHtml(email)}. It works for ${String(minutes)} minutes.</p>
-<p>Open it and press the button on the page. One extra press, and it means a mail scanner
-cannot use up your link before you do.</p>
-<p class="quiet">Nothing there after a minute? Check your junk folder, then
-<a href="/auth/signin">ask for another one</a>.</p>`,
+<p class="quiet row">${escapeHtml(WHERE_THE_PASSPHRASE_IS)}</p>`,
   );
 }
 
 /**
- * The roster miss. Not a dead end: what they typed, the two usual reasons, and
- * two buttons. This screen is why the roster is not treated as a secret. It is
- * a closed event with a known guest list, and a founder who cannot get in is a
- * mentor pulled out of a live session.
- */
-export function notOnRosterPage(miss: RosterMiss): string {
-  const { heading, body } = missMessage(miss);
-  const typed = miss.kind === 'malformed' ? miss.typed : miss.email;
-  const paragraphs = body.map((line) => `<p>${escapeHtml(line)}</p>`).join('\n');
-  return layout(
-    heading,
-    `<h1>${escapeHtml(heading)}</h1>
-${paragraphs}
-<form method="GET" action="/auth/signin">
-  <label for="email">Try another address</label>
-  <input id="email" name="email" type="email" autocomplete="email" autocapitalize="none"
-         spellcheck="false" required value="${escapeHtml(typed)}">
-  <button type="submit">Try this one</button>
-</form>
-<form method="POST" action="/auth/help">
-  <input type="hidden" name="email" value="${escapeHtml(typed)}">
-  <button type="submit">Tell a mentor</button>
-</form>`,
-  );
-}
-
-/** The mentor queue confirmation. Says what happens next, and when. */
-export function mentorAskedPage(email: string): string {
-  return layout(
-    'A mentor has been told',
-    `<h1>A mentor has been told</h1>
-<p>We have passed on ${escapeHtml(email)}. Somebody will add you and email you a link.</p>
-<p>If you are at the event, find a mentor in the room. That is faster.</p>`,
-  );
-}
-
-/**
- * THE PAGE THE PREFETCH PROBLEM EXISTS FOR.
+ * The deployment has no usable passphrase, so nobody can sign in, including the
+ * founder.
  *
- * A GET renders this and changes nothing. The button POSTs. Mail scanners fetch
- * every URL in an incoming message before the human sees it, and several of them
- * follow redirects, but none of them submit forms.
+ * THIS SCREEN IS THE FAIL CLOSED STATE MADE READABLE. The app refuses every
+ * request while it is in this state. That is only defensible if the person who
+ * meets it is told exactly what to do, in the order they have to do it, with
+ * the name of the variable spelled out.
  */
-export function verifyPage(state: LinkState, token: string, minutes: number): string {
-  if (state.kind === 'valid') {
-    return layout(
-      'One press and you are in',
-      `<h1>One press and you are in</h1>
-<p>Signing in as ${escapeHtml(state.email)}.</p>
-<form method="POST" action="/auth/verify">
-  <input type="hidden" name="t" value="${escapeHtml(token)}">
-  <button type="submit">Sign me in</button>
-</form>
-<p class="quiet row">Why the extra press? Some company mail systems open every link in a
-message before you do. Without this page, they would use your link up and you would arrive
-at a dead one.</p>`,
-    );
-  }
+export function notSetUpPage(reason: 'missing' | 'too_short' | 'too_easy', minLength: number): string {
+  const heading =
+    reason === 'missing'
+      ? 'This app has no passphrase yet'
+      : reason === 'too_short'
+        ? 'The passphrase is too short'
+        : 'That passphrase is too easy to guess';
 
-  const heading = state.kind === 'used' ? 'That link has already been used' : 'That link will not work';
-  const explain =
-    state.kind === 'used'
-      ? 'Somebody has signed in with it already. If that was you on another device, you are still signed in there.'
-      : state.kind === 'expired'
-        ? `Links last ${String(minutes)} minutes. This one is past that.`
-        : 'We do not recognise it. It may have been cut in half by your mail app.';
+  const doubt =
+    reason === 'missing'
+      ? 'Nobody can sign in, and that includes you. It is on purpose. An app on a public web address with no passphrase is an app anybody can open.'
+      : reason === 'too_short'
+        ? `OWNER_PASSPHRASE is set, and it is under ${String(minLength)} characters. Short passphrases are guessed, and this one is the only thing between the internet and your files.`
+        : 'OWNER_PASSPHRASE is set to one of the ones people try first. Anybody who found this address would try it too.';
+
+  const third =
+    reason === 'missing'
+      ? `Add a secret named OWNER_PASSPHRASE. Make it at least ${String(minLength)} characters. A short sentence you will remember is ideal.`
+      : reason === 'too_short'
+        ? `Change OWNER_PASSPHRASE to at least ${String(minLength)} characters. A short sentence you will remember is ideal.`
+        : 'Change OWNER_PASSPHRASE to something only you would type. A short sentence about your own business works well.';
+
   return layout(
     heading,
     `<h1>${escapeHtml(heading)}</h1>
-<p>${escapeHtml(explain)}</p>
-<p>Ask for a fresh one. It takes a few seconds.</p>
-<form method="GET" action="/auth/signin">
-  <button type="submit">Send me a new link</button>
-</form>`,
+<p>${escapeHtml(doubt)}</p>
+<p>Four steps and you are in.</p>
+<ol>
+  <li>Open this project on Replit.</li>
+  <li>Click Secrets in the tools list on the left.</li>
+  <li>${escapeHtml(third)}</li>
+  <li>Redeploy, then reload this page.</li>
+</ol>
+<p class="quiet">Nothing you have made is affected while you do this. The passphrase decides who gets in, and nothing else.</p>`,
   );
 }
 
-/** The six digit code screen, for a mail app that will not open a browser. */
-export function codePage(args: { prefill?: string; notice?: string } = {}): string {
-  const prefill = args.prefill === undefined ? '' : escapeHtml(args.prefill);
-  const notice = args.notice === undefined ? '' : `<p>${escapeHtml(args.notice)}</p>`;
+/**
+ * Too many wrong answers from one device.
+ *
+ * SAYS WHEN, NOT JUST NO. A screen that says "try again later" with no time on
+ * it is a dead end, and a dead end on the sign in screen of an app somebody
+ * owns is where they decide it is broken.
+ */
+export function tooManyTriesPage(retryAfterMs: number): string {
   return layout(
-    'Type your code',
-    `<h1>Type your code</h1>
-${notice}
-<p>The code is in the same email as the link. It is six digits.</p>
-<form method="POST" action="/auth/code">
-  <label for="email">The email address you booked with</label>
-  <input id="email" name="email" type="email" autocomplete="email" autocapitalize="none"
-         spellcheck="false" required value="${prefill}">
-  <label for="code" class="row">Your six digit code</label>
-  <input id="code" name="code" type="text" inputmode="numeric" autocomplete="one-time-code"
-         maxlength="9" required>
-  <button type="submit">Sign me in</button>
-</form>`,
+    'Too many tries',
+    `<h1>Too many wrong tries from this device</h1>
+<p>${escapeHtml(waitSentence(retryAfterMs))}</p>
+<p>That limit is what stops somebody guessing their way into your app from the internet, so it
+applies to you as well.</p>
+<p class="quiet">${escapeHtml(WHERE_THE_PASSPHRASE_IS)}</p>`,
   );
 }
 
-/** What a refused code says. Never which half was wrong, and never how many tries are left. */
-export function codeRefusedNotice(reason: RefusalReason): string {
-  switch (reason) {
-    case 'no_attempts_left':
-      return 'Too many tries on that code. Ask for a new email and use the code in it.';
-    case 'expired':
-      return 'That code has expired. Ask for a new email.';
-    case 'used':
-      return 'That code has been used already. Ask for a new email.';
-    case 'wrong_code':
-    case 'unknown':
-      return 'That address and code do not go together. Check both and try again.';
-  }
+/**
+ * How long to wait, rounded up to a whole minute, because a founder reading a
+ * screen does not count seconds and "in 47 seconds" invites a stopwatch.
+ */
+export function waitSentence(retryAfterMs: number): string {
+  const minutes = Math.max(1, Math.ceil(retryAfterMs / 60_000));
+  return minutes === 1 ? 'Wait a minute, then try again.' : `Wait ${String(minutes)} minutes, then try again.`;
 }

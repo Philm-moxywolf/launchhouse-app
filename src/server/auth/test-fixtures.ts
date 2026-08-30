@@ -1,28 +1,32 @@
 /**
  * src/server/auth/test-fixtures.ts
  *
- * WHAT THIS IS. An AuthStore held in Maps, a clock that can be wound forward,
- * and a logger that collects instead of printing.
+ * WHAT THIS IS. An AuthStore held in Maps, a clock that can be wound forward, a
+ * wait that records instead of waiting, and a logger that collects instead of
+ * printing.
  *
  * WHY IT EXISTS. There is no Postgres on a laptop here, and there will not be
- * one in CI before the freeze. Sign in is the path every one of 130 founders
- * takes first, so it is the last path that may go untested. Everything in
- * ./types.ts is an interface for this reason, and this is the other
- * implementation.
+ * one in CI before the freeze. Sign in is the first thing the founder does with
+ * their own deployment, in a staffed room, so it is the last path that may go
+ * untested. Everything in ./types.ts is an interface for this reason, and this
+ * is the other implementation.
  *
- * IT COPIES THE DATABASE'S BEHAVIOUR WHERE THAT BEHAVIOUR IS THE POINT.
- * `founder.email` is citext, so lookups here are case folded. `token_sha` is
- * unique, so a duplicate insert throws here too. `consumeSigninToken` is a
- * conditional update that returns whether this caller won, because the race
- * between two tabs is a real race and a fixture that lets both win would prove
- * the opposite of what the test claims.
+ * IT COPIES THE DATABASE'S BEHAVIOUR WHERE THAT BEHAVIOUR IS THE POINT. The
+ * owner row is keyed on `founder.email`, which is unique in the schema, so
+ * `ensureOwner` here refuses a second insert exactly as Postgres does. A
+ * fixture that let two callers each create an owner would prove the opposite of
+ * what the test claims.
+ *
+ * THE SLEEP RECORDS RATHER THAN SLEEPS. ./owner.ts slows a wrong passphrase
+ * down deliberately, and a test that proved that by waiting two seconds is a
+ * test somebody deletes. `RecordingSleep` remembers what it was asked for, so
+ * the guard can be shown to fire before it is trusted to fire.
  *
  * WHAT CALLS IT. The tests in this folder and in ../routes/.
  * WHAT IT READS AND WRITES. Its own Maps. Nothing on disk, nothing over a socket.
  */
 
-import { requestIdOf } from './tokens.ts';
-import type { AuthStore, Clock, FounderRow, Logger, SessionRow, SigninTokenRow } from './types.ts';
+import { OWNER_ROW_KEY, type AuthStore, type Clock, type FounderRow, type Logger, type SessionRow } from './types.ts';
 
 export class TestClock implements Clock {
   constructor(private at: Date = new Date('2026-09-25T13:00:00.000Z')) {}
@@ -34,6 +38,18 @@ export class TestClock implements Clock {
   }
   set(at: Date): void {
     this.at = new Date(at.getTime());
+  }
+}
+
+/** Every wait that was asked for, in order, in milliseconds. Nothing actually waits. */
+export class RecordingSleep {
+  readonly waits: number[] = [];
+  readonly fn = (ms: number): Promise<void> => {
+    this.waits.push(ms);
+    return Promise.resolve();
+  };
+  get total(): number {
+    return this.waits.reduce((a, b) => a + b, 0);
   }
 }
 
@@ -56,12 +72,6 @@ export class TestLogger implements Logger {
   }
 }
 
-export interface MentorRequest {
-  readonly email: string;
-  readonly note: string;
-  readonly at: Date;
-}
-
 export interface AuthEvent {
   readonly founderId: string;
   readonly actor: string;
@@ -72,15 +82,13 @@ export interface AuthEvent {
 
 export class MemoryAuthStore implements AuthStore {
   readonly founders = new Map<string, FounderRow>();
-  readonly tokens = new Map<string, SigninTokenRow>();
   readonly sessions = new Map<string, SessionRow>();
-  readonly mentorRequests: MentorRequest[] = [];
   readonly events: AuthEvent[] = [];
 
   addFounder(row: Partial<FounderRow> & { id: string; email: string }): FounderRow {
     const full: FounderRow = {
       displayName: null,
-      timezone: 'America/New_York',
+      timezone: 'UTC',
       track: null,
       disabledAt: null,
       deletedAt: null,
@@ -91,68 +99,20 @@ export class MemoryAuthStore implements AuthStore {
     return full;
   }
 
-  findFounderByEmail(email: string): Promise<FounderRow | null> {
-    const wanted = email.toLowerCase();
-    for (const row of this.founders.values()) if (row.email === wanted) return Promise.resolve(row);
-    return Promise.resolve(null);
+  ensureOwner(candidate: FounderRow): Promise<FounderRow> {
+    const existing = this.ownerRow();
+    // `founder.email` is unique in the schema and the owner row always carries
+    // the same word, so a second claim inserts nothing and reads back the first.
+    if (existing !== null) return Promise.resolve(existing);
+    return Promise.resolve(this.addFounder({ ...candidate, email: OWNER_ROW_KEY }));
+  }
+
+  findOwner(): Promise<FounderRow | null> {
+    return Promise.resolve(this.ownerRow());
   }
 
   findFounderById(id: string): Promise<FounderRow | null> {
     return Promise.resolve(this.founders.get(id) ?? null);
-  }
-
-  countSigninRequests(email: string, since: Date): Promise<number> {
-    const wanted = email.toLowerCase();
-    let n = 0;
-    for (const row of this.tokens.values()) {
-      // One request writes two rows, a link and a code. The limit counts
-      // requests, so only one of the pair is counted, exactly as the SQL does.
-      if (row.email === wanted && row.id.endsWith('.link') && row.createdAt >= since) n += 1;
-    }
-    return Promise.resolve(n);
-  }
-
-  insertSigninTokens(rows: readonly SigninTokenRow[]): Promise<void> {
-    for (const row of rows) {
-      for (const existing of this.tokens.values()) {
-        if (existing.tokenSha === row.tokenSha) {
-          // token_sha is unique in the schema. A fixture that swallowed this
-          // would hide the collision the code hash is salted to prevent.
-          throw new Error('duplicate token_sha');
-        }
-      }
-      this.tokens.set(row.id, { ...row, email: row.email.toLowerCase() });
-    }
-    return Promise.resolve();
-  }
-
-  findSigninTokenBySha(tokenSha: string): Promise<SigninTokenRow | null> {
-    for (const row of this.tokens.values()) if (row.tokenSha === tokenSha) return Promise.resolve(row);
-    return Promise.resolve(null);
-  }
-
-  consumeSigninToken(id: string, at: Date): Promise<boolean> {
-    const row = this.tokens.get(id);
-    if (row === undefined || row.consumedAt !== null) return Promise.resolve(false);
-    this.tokens.set(id, { ...row, consumedAt: at });
-    return Promise.resolve(true);
-  }
-
-  burnSigninRequest(requestId: string, at: Date): Promise<void> {
-    for (const [id, row] of this.tokens) {
-      if (requestIdOf(id) === requestId && row.consumedAt === null) {
-        this.tokens.set(id, { ...row, consumedAt: at });
-      }
-    }
-    return Promise.resolve();
-  }
-
-  burnLiveTokensForEmail(email: string, at: Date): Promise<void> {
-    const wanted = email.toLowerCase();
-    for (const [id, row] of this.tokens) {
-      if (row.email === wanted && row.consumedAt === null) this.tokens.set(id, { ...row, consumedAt: at });
-    }
-    return Promise.resolve();
   }
 
   insertSession(row: SessionRow): Promise<void> {
@@ -176,36 +136,54 @@ export class MemoryAuthStore implements AuthStore {
     return Promise.resolve();
   }
 
-  recordMentorRequest(email: string, note: string, at: Date): Promise<void> {
-    this.mentorRequests.push({ email, note, at });
-    return Promise.resolve();
+  countAuthEvents(founderId: string, verb: string, since: Date): Promise<number> {
+    let n = 0;
+    for (const e of this.events) {
+      if (e.founderId === founderId && e.verb === verb && e.at.getTime() >= since.getTime()) n += 1;
+    }
+    return Promise.resolve(n);
   }
 
   recordAuthEvent(founderId: string, actor: string, verb: string, subject: string | null, at: Date): Promise<void> {
     this.events.push({ founderId, actor, verb, subject, at });
     return Promise.resolve();
   }
+
+  private ownerRow(): FounderRow | null {
+    for (const row of this.founders.values()) if (row.email === OWNER_ROW_KEY) return row;
+    return null;
+  }
 }
 
-/** Two founders, ULID shaped ids, because storage/paths.ts refuses anything else. */
+/**
+ * Two ids, ULID shaped, because storage/paths.ts refuses anything else.
+ *
+ * FOUNDER_B IS KEPT EVEN THOUGH THIS APP HAS ONE FOUNDER. The tenancy tests in
+ * ../routes/ use it to prove that a request holding one founder's session
+ * cannot reach another founder's files. That property is currently unnecessary,
+ * because there is only ever one row, and it is exactly the kind of check
+ * somebody removes as dead and then needs. A second id costs one line.
+ */
 export const FOUNDER_A = '01J0AAAAAAAAAAAAAAAAAAAAAA';
 export const FOUNDER_B = '01J0BBBBBBBBBBBBBBBBBBBBBB';
 
+/**
+ * A store where the deployment has already been claimed, which is the state
+ * almost every test wants to start in.
+ *
+ * FOUNDER_A is the owner. FOUNDER_B is a row that exists only so the tenancy
+ * tests have somebody else's id to be refused.
+ */
 export function seededStore(): MemoryAuthStore {
   const store = new MemoryAuthStore();
-  store.addFounder({ id: FOUNDER_A, email: 'ama@example.com', displayName: 'Ama Boateng', track: 'b2b' });
-  store.addFounder({ id: FOUNDER_B, email: 'ben@example.com', displayName: 'Ben Ortiz', track: 'b2c' });
+  store.addFounder({ id: FOUNDER_A, email: OWNER_ROW_KEY, displayName: 'Ama Boateng', timezone: 'America/New_York', track: 'b2b' });
+  store.addFounder({ id: FOUNDER_B, email: 'not-the-owner', displayName: 'Ben Ortiz', timezone: 'America/New_York', track: 'b2c' });
   return store;
 }
 
-/** Pull the link and the code out of what the mailer collected. */
-export function readSignInEmail(text: string): { url: string; code: string } {
-  const url = /https?:\/\/\S+/.exec(text)?.[0] ?? '';
-  const code = /^ {4}(\d{6})$/m.exec(text)?.[1] ?? '';
-  return { url, code };
-}
-
-/** The token from a verify URL, decoded exactly as the route would decode it. */
-export function tokenFromUrl(url: string): string {
-  return new URL(url).searchParams.get('t') ?? '';
-}
+/**
+ * A passphrase that passes ./owner.ts readiness, for tests that need a real one
+ * rather than a placeholder. Written once so a change to the floor does not
+ * quietly turn a dozen tests into tests of the refusal path.
+ */
+export const TEST_PASSPHRASE = 'the shed on wolf lane';

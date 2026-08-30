@@ -21,7 +21,6 @@
 
 import type { FastifyInstance } from 'fastify';
 
-import { registerAuthApiRoutes } from './auth-api.ts';
 import { registerFileRoutes } from './files.ts';
 import { registerGateRoutes } from './gates.ts';
 import { registerHomeRoute } from './home.ts';
@@ -37,10 +36,21 @@ export interface RegisteredRoutes {
 
 export async function registerApiRoutes(app: FastifyInstance, deps: RouteDeps): Promise<RegisteredRoutes> {
   const streams = new OpenStreams();
-  // Sign in first, because it is the only group a signed out browser can
-  // reach, and reading this list top to bottom should follow a founder's own
-  // order through the app: get in, see where you are, set up, work, take it away.
-  await registerAuthApiRoutes(app, deps);
+  /**
+   * SIGN IN IS NOT IN THIS LIST, AND THAT IS THE CHANGE WORTH READING.
+   *
+   * There used to be a ./auth-api.ts registered first, holding the three JSON
+   * calls the browser made on the way in: ask for a link, tell a mentor, sign
+   * out. The first two went with the magic link and the roster. The third moved
+   * into src/server/auth/plugin.ts, next to the form route it mirrors, because
+   * the session id is derived from the cookie AND the passphrase now and that
+   * comparison cannot be made outside that folder.
+   *
+   * So `createAuth(...).register` is the whole of the sign in surface, and
+   * src/server/index.ts registers it before this function is called. The list
+   * below is everything behind the door, in a founder's own order: see where
+   * you are, set up, work, take it away.
+   */
   await registerHomeRoute(app, deps);
   await registerSetupRoutes(app, deps);
   await registerGateRoutes(app, deps);

@@ -1,0 +1,4 @@
+FAIL  ge receipt has no verb called "fetch".
+      The two it has are set and show.
+      This prints them, with what each one takes.
+      → run: ge receipt

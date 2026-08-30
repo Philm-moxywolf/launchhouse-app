@@ -7,10 +7,10 @@
  * WHY IT EXISTS. So there is exactly one list of what the HTTP layer depends
  * on. A route that reaches for a module directly is a route that cannot be run
  * in a test, and the four properties this build has to prove are properties of
- * these routes: one founder never sees another's workspace, an address that is
- * not on the roster is refused, a double sent message is stored once, and a
- * queued founder is given a number. None of those can be proved against code
- * that imports Postgres at the top of the file.
+ * these routes: a session reaches only the founder row it belongs to, a
+ * stranger with the URL reaches nothing, a double sent message is stored once,
+ * and a queued founder is given a number. None of those can be proved against
+ * code that imports Postgres at the top of the file.
  *
  * WHAT CALLS IT. Every file in src/server/routes/. Filled in by
  * src/server/index.ts.

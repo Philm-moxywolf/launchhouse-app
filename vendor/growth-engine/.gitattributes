@@ -1,0 +1,20 @@
+# Auto detect text files and perform LF normalization
+* text=auto
+
+# Shell entry points must stay LF in the WORKING TREE on every platform.
+#
+# WHY: `* text=auto` above normalises to LF inside the repository, but on
+# checkout it converts to the platform's native ending, which on Windows is
+# CRLF. A CRLF on a shebang line gives "bad interpreter: /bin/sh^M" under Git
+# Bash, and Git Bash is how every Windows Home founder runs this plugin. The
+# failure is invisible on macOS and Linux, so nothing else would catch it.
+#
+# Scoped rather than a blanket `* text=auto eol=lf`, so no existing file is
+# renormalised into a large noisy diff.
+*.sh text eol=lf
+plugins/growth-engine/bin/ge text eol=lf
+
+# The Social Planner CSV fixture is compared byte for byte against generated
+# output by two tasks. A CRLF checkout on Windows would fail that comparison
+# for a reason that has nothing to do with the content being wrong.
+*.csv text eol=lf

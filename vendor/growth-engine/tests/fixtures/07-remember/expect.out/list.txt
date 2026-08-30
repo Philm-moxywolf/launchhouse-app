@@ -1,0 +1,2 @@
+decision  1  @DATE@ b2b track, my buyers are agencies
+voice     1  @DATE@ no exclamation marks, ever (detail → ops-log.md)

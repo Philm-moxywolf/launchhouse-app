@@ -3,12 +3,19 @@
  *
  * WHAT THIS IS. Tests for src/server/env.ts.
  *
- * WHY IT EXISTS. env.ts exists to stop the process. A boot guard that has never been
- * watched refusing anything is not a guard, it is a comment. Each test here is one thing
- * that must stop a deploy, and the ones at the bottom are the ones that matter most: a
- * process wide vendor credential is refused, because a credential with no founder attached
- * is how founder A's post ends up in founder B's account, and no secret survives a
- * JSON.stringify, because that is how an API key reaches a log and then a screenshot.
+ * WHY IT EXISTS, AND WHY IT IS NOW THE OPPOSITE OF WHAT IT WAS. This file used to prove
+ * that env.ts stopped the process for each of thirteen missing variables. It now proves the
+ * reverse for every one of them, and the first test is the whole point: AN EMPTY
+ * ENVIRONMENT BOOTS. A founder remixing this app into their own Replit account gets every
+ * secret name copied with an empty value, and if any of those emptied names could stop the
+ * process there would be no screen to tell them what to set.
+ *
+ * WHAT STAYED. A value that is present and unusable still stops the process, and those
+ * tests are unchanged in substance. Absent is now fine. Wrong never was, and still is not.
+ *
+ * THE GUARDS ARE PROVED TO FAIL BEFORE THEY ARE TRUSTED TO PASS. Every refusal below is
+ * asserted by making the thing go wrong, not by asserting that a correct environment is
+ * accepted. A guard only ever watched passing is a comment.
  *
  * RUNNER. node:test, which is what most of this repository uses. See README.
  */
@@ -21,15 +28,28 @@ import {
   assertFullIcu,
   assertNoAmbientVendorCredentials,
   assertUtcProcessClock,
+  deriveAppBaseUrl,
   describeEnv,
   formatProblems,
+  installMasterKey,
+  lateSettings,
   parseEnv,
+  resetEnvCacheForTests,
 } from "../../src/server/env.ts";
 
 const key = randomBytes(32).toString("base64");
 
-/** A complete, valid preview environment. Every test varies one thing from this. */
-const base = (): Record<string, string> => ({
+/** Any file that certainly exists, so the ge presence check is not what a test is measuring. */
+const GE_STAND_IN = resolve(process.cwd(), "package.json");
+
+/**
+ * A complete environment, of the kind somebody who set everything by hand would have.
+ *
+ * IT IS NO LONGER THE STARTING POINT FOR THE TESTS THAT MATTER. It exists so a test that
+ * varies one value has a clean background to vary it against. The important tests start
+ * from an empty object, because that is what a founder actually has.
+ */
+const full = (): Record<string, string> => ({
   NODE_ENV: "production",
   APP_ENV: "preview",
   TZ: "UTC",
@@ -38,15 +58,13 @@ const base = (): Record<string, string> => ({
   DATABASE_ENV_TAG: "preview",
   GE_MASTER_KEY: key,
   ANTHROPIC_API_KEY: "test-key-not-real",
+  OWNER_PASSPHRASE: "a sentence i will remember",
   MODEL_PRIMARY: "a-model-id",
   MODEL_UTILITY: "another-model-id",
-  MAIL_FROM: "hello@example.test",
-  MAIL_ALLOWLIST: "team@example.test, mentor@example.test",
   TURN_SPEND_CAP_USD: "2.50",
   FOUNDER_SPEND_CAP_USD: "40",
   COHORT_DAILY_CAP_USD: "400",
-  // Any file that certainly exists, so the ge presence check passes without the submodule.
-  GE_BIN: resolve(process.cwd(), "package.json"),
+  GE_BIN: GE_STAND_IN,
 });
 
 /** The variables env.ts refused, or an empty list if it accepted everything. */
@@ -65,124 +83,235 @@ const refuses = (raw: Record<string, string>, variable: string): void => {
   assert.ok(named.includes(variable), `expected ${variable} to be refused, got: ${named.join(", ") || "nothing"}`);
 };
 
-describe("parseEnv, the happy path", () => {
-  test("accepts a complete environment and applies the documented defaults", () => {
-    const env = parseEnv(base());
-    assert.equal(env.APP_ENV, "preview");
+const accepts = (raw: Record<string, string>): void => {
+  const named = refused(raw);
+  assert.deepEqual(named, [], `expected this to be accepted, and it refused: ${named.join(", ")}`);
+};
+
+// =========================================================================================
+// The property the whole file now turns on
+// =========================================================================================
+
+describe("an empty environment starts the app", () => {
+  test("parseEnv accepts {} and refuses nothing at all", () => {
+    // THIS IS THE TEST. A founder in a room, with a remix that copied every secret name and
+    // no value, has to reach a screen. Anything that makes this throw takes the screen away.
+    accepts({});
+  });
+
+  test("every variable that used to be required is now absent and fine", () => {
+    // Named one at a time rather than asserted in bulk, so that re-requiring any single one
+    // of them fails here with that variable's own name in the message.
+    for (const name of [
+      "NODE_ENV",
+      "APP_ENV",
+      "APP_BASE_URL",
+      "DATABASE_URL",
+      "GE_MASTER_KEY",
+      "ANTHROPIC_API_KEY",
+      "MODEL_PRIMARY",
+      "MODEL_UTILITY",
+      "TURN_SPEND_CAP_USD",
+      "FOUNDER_SPEND_CAP_USD",
+      "COHORT_DAILY_CAP_USD",
+      "TZ",
+      "OWNER_PASSPHRASE",
+    ]) {
+      const raw = full();
+      delete raw[name];
+      const named = refused(raw);
+      assert.ok(!named.includes(name), `${name} is still required, and nothing may be required any more`);
+    }
+  });
+
+  test("a whole environment of empty strings is read as absent, which is what a remix produces", () => {
+    // Replit's own words: "Secret names, not values. Your Remix lists them so you know what
+    // to fill in, with empty values." So this shape is every founder's first boot.
+    const blanked: Record<string, string> = {};
+    for (const name of Object.keys(full())) blanked[name] = "";
+    accepts(blanked);
+    assert.equal(parseEnv(blanked).ANTHROPIC_API_KEY, undefined);
+  });
+
+  test("the defaults a founder who set nothing actually gets", () => {
+    const env = parseEnv({});
+    assert.equal(env.APP_ENV, "prod");
+    assert.equal(env.NODE_ENV, "production");
     assert.equal(env.PORT, 5000);
+    assert.equal(env.TZ, "UTC");
+    assert.equal(env.MODEL_PRIMARY, "claude-opus-5");
+    assert.equal(env.MODEL_UTILITY, "claude-haiku-4-5");
+    assert.equal(env.TURN_SPEND_CAP_USD, 2.5);
+    assert.equal(env.COHORT_DAILY_CAP_USD, 25);
+    assert.equal(env.FOUNDER_SPEND_CAP_USD, 100);
+    assert.equal(env.DATABASE_URL, undefined);
+    assert.equal(env.ANTHROPIC_API_KEY, undefined);
+    assert.equal(env.OWNER_PASSPHRASE, "");
     assert.equal(env.MAX_CONCURRENT_RUNS, 24);
     assert.equal(env.MAX_LIVE_SESSIONS, 60);
     assert.equal(env.SESSION_IDLE_MS, 600_000);
     assert.equal(env.SSE_HEARTBEAT_MS, 15_000);
-    assert.equal(env.SIGNIN_TOKEN_TTL_MINUTES, 30);
     assert.equal(env.SESSION_TTL_DAYS, 90);
     assert.equal(env.GE_SHELL, "/bin/sh");
     assert.equal(env.WORKSPACE_ROOT, "/tmp/ge");
-    assert.deepEqual([...env.MAIL_ALLOWLIST], ["team@example.test", "mentor@example.test"]);
   });
 
-  test("says out loud that the nightly backup is off rather than pretending it ran", () => {
-    assert.match(parseEnv(base()).warnings.join(" "), /nightly per founder backup is OFF/);
+  test("the default turn cap sits under the default founder cap, so the defaults cannot refuse each other", () => {
+    // The one pair of defaults that could contradict. Checked because a later edit to either
+    // number would otherwise stop an empty environment booting, which is the property above.
+    const env = parseEnv({});
+    assert.ok(env.TURN_SPEND_CAP_USD < env.FOUNDER_SPEND_CAP_USD);
   });
 
-  test("warns that the SSE heartbeat is still a guess until the probe measures it", () => {
-    assert.match(parseEnv(base()).warnings.join(" "), /deployment probe/);
+  test("says out loud what is missing rather than passing over it in silence", () => {
+    // GE_BIN is not in this list on purpose: the submodule IS checked out in this
+    // repository, so an empty environment finds it. Its absence is warned about by the
+    // test further down that points GE_BIN at nothing.
+    const w = parseEnv({}).warnings.join(" ");
+    for (const fragment of ["DATABASE_URL", "ANTHROPIC_API_KEY", "OWNER_PASSPHRASE", "Spend caps", "Model ids"]) {
+      assert.match(w, new RegExp(fragment), `a founder who set nothing should be told about ${fragment}`);
+    }
   });
 });
 
-describe("parseEnv refuses to boot", () => {
-  test("names every missing variable at once, not one per restart", () => {
-    const raw = base();
-    delete raw["ANTHROPIC_API_KEY"];
-    delete raw["MODEL_PRIMARY"];
-    delete raw["DATABASE_URL"];
-    const named = refused(raw);
-    for (const v of ["ANTHROPIC_API_KEY", "MODEL_PRIMARY", "DATABASE_URL"]) {
-      assert.ok(named.includes(v), `${v} should have been named`);
-    }
+// =========================================================================================
+// Absent is fine. Present and wrong is not.
+// =========================================================================================
+
+describe("a value that is set and unusable still stops the process", () => {
+  test("refuses a TZ that is not UTC, because it states an intention this app cannot honour", () => {
+    refuses({ ...full(), TZ: "America/New_York" }, "TZ");
   });
 
-  test("treats a variable set to an empty string as missing", () => {
-    // A .env file or a Replit Secret left blank arrives as "", and a required variable set
-    // to nothing must not pass as present.
-    refuses({ ...base(), ANTHROPIC_API_KEY: "   " }, "ANTHROPIC_API_KEY");
-  });
-
-  test("refuses a TZ that is not UTC", () => {
-    refuses({ ...base(), TZ: "America/New_York" }, "TZ");
+  test("accepts no TZ at all, because the process clock is asserted separately", () => {
+    const raw = full();
+    delete raw["TZ"];
+    accepts(raw);
   });
 
   test("refuses a master key that is not 32 bytes once decoded", () => {
     // 32 characters is not 32 bytes, and that is exactly the mistake this catches.
-    refuses({ ...base(), GE_MASTER_KEY: "0123456789abcdef0123456789abcdef" }, "GE_MASTER_KEY");
-    refuses({ ...base(), GE_MASTER_KEY: randomBytes(16).toString("base64") }, "GE_MASTER_KEY");
+    refuses({ ...full(), GE_MASTER_KEY: "0123456789abcdef0123456789abcdef" }, "GE_MASTER_KEY");
+    refuses({ ...full(), GE_MASTER_KEY: randomBytes(16).toString("base64") }, "GE_MASTER_KEY");
   });
 
   test("refuses a database tag that disagrees with APP_ENV", () => {
-    // The accident that ends this project is a preview process holding the prod string.
-    refuses({ ...base(), DATABASE_ENV_TAG: "prod" }, "DATABASE_ENV_TAG");
-  });
-
-  test("requires the database tag in prod", () => {
-    refuses(
-      { ...base(), APP_ENV: "prod", DATABASE_ENV_TAG: "", MAIL_TRANSPORT: "smtp", SMTP_URL: "smtp://mail.example.test" },
-      "DATABASE_ENV_TAG",
-    );
-  });
-
-  test("refuses a log mailer in prod, because sign in is a magic link", () => {
-    refuses({ ...base(), APP_ENV: "prod", DATABASE_ENV_TAG: "prod", MAIL_TRANSPORT: "log" }, "MAIL_TRANSPORT");
-  });
-
-  test("requires a mail allowlist outside prod, so the mailer fails closed", () => {
-    const raw = base();
-    delete raw["MAIL_ALLOWLIST"];
-    refuses(raw, "MAIL_ALLOWLIST");
-  });
-
-  test("requires SMTP_URL when the transport is smtp", () => {
-    refuses({ ...base(), MAIL_TRANSPORT: "smtp" }, "SMTP_URL");
+    refuses({ ...full(), DATABASE_ENV_TAG: "prod" }, "DATABASE_ENV_TAG");
   });
 
   test("refuses a live session pool smaller than the concurrent run limit", () => {
     // Otherwise a founder mid turn is evicted, which reads as the app forgetting them.
-    refuses({ ...base(), MAX_CONCURRENT_RUNS: "24", MAX_LIVE_SESSIONS: "10" }, "MAX_LIVE_SESSIONS");
+    refuses({ ...full(), MAX_CONCURRENT_RUNS: "24", MAX_LIVE_SESSIONS: "10" }, "MAX_LIVE_SESSIONS");
   });
 
-  test("refuses a turn cap larger than a founder's whole allowance", () => {
-    refuses({ ...base(), TURN_SPEND_CAP_USD: "80", FOUNDER_SPEND_CAP_USD: "40" }, "TURN_SPEND_CAP_USD");
+  test("refuses a turn cap larger than the whole allowance, defaults included", () => {
+    refuses({ ...full(), TURN_SPEND_CAP_USD: "80", FOUNDER_SPEND_CAP_USD: "40" }, "TURN_SPEND_CAP_USD");
+    // And with only the turn cap set, so the comparison is against the DEFAULT founder cap
+    // rather than against another value set in the same test.
+    refuses({ TURN_SPEND_CAP_USD: "500" }, "TURN_SPEND_CAP_USD");
   });
 
   test("refuses a spend cap that is not a number", () => {
-    refuses({ ...base(), TURN_SPEND_CAP_USD: "two dollars fifty" }, "TURN_SPEND_CAP_USD");
+    refuses({ ...full(), TURN_SPEND_CAP_USD: "two dollars fifty" }, "TURN_SPEND_CAP_USD");
   });
 
   test("refuses a base URL with a trailing slash, because paths are appended to it", () => {
-    refuses({ ...base(), APP_BASE_URL: "https://preview.example.test/" }, "APP_BASE_URL");
+    refuses({ ...full(), APP_BASE_URL: "https://preview.example.test/" }, "APP_BASE_URL");
   });
 
-  test("refuses a http base URL in prod, because the session cookie is Secure", () => {
-    refuses(
-      {
-        ...base(),
-        APP_ENV: "prod",
-        DATABASE_ENV_TAG: "prod",
-        MAIL_TRANSPORT: "smtp",
-        SMTP_URL: "smtp://mail.example.test",
-        APP_BASE_URL: "http://app.example.test",
-      },
-      "APP_BASE_URL",
-    );
+  test("refuses a late variable that cannot be read, so a founder does not meet it mid turn", () => {
+    refuses({ ...full(), GE_TIMEOUT_MS: "20s" }, "GE_TIMEOUT_MS");
   });
 
-  test("refuses a missing ge in preview and prod, and only warns in dev", () => {
-    const missing = { ...base(), GE_BIN: "/nowhere/growth-engine/bin/ge" };
-    refuses(missing, "GE_BIN");
+  test("treats a variable set to whitespace as missing rather than as present and empty", () => {
+    accepts({ ...full(), ANTHROPIC_API_KEY: "   " });
+    assert.equal(parseEnv({ ...full(), ANTHROPIC_API_KEY: "   " }).ANTHROPIC_API_KEY, undefined);
+  });
 
-    const dev = { ...missing, APP_ENV: "dev", NODE_ENV: "development", DATABASE_ENV_TAG: "dev" };
-    assert.match(parseEnv(dev).warnings.join(" "), /GE_BIN/);
+  test("names every problem at once, not one per restart", () => {
+    const named = refused({ ...full(), TZ: "Europe/London", TURN_SPEND_CAP_USD: "free", MAX_LIVE_SESSIONS: "1" });
+    for (const v of ["TZ", "TURN_SPEND_CAP_USD", "MAX_LIVE_SESSIONS"]) {
+      assert.ok(named.includes(v), `${v} should have been named`);
+    }
   });
 });
+
+describe("what used to be fatal and is now a warning", () => {
+  test("a missing ge warns and starts, because a remix may not have copied the submodule", () => {
+    // This is the one the whole workstream exists for. A founder whose copy arrived without
+    // vendor/growth-engine must reach a screen, not a container that will not start.
+    const raw = { ...full(), GE_BIN: "/nowhere/growth-engine/bin/ge" };
+    accepts(raw);
+    assert.match(parseEnv(raw).warnings.join(" "), /GE_BIN/);
+  });
+
+  test("a missing database warns and starts", () => {
+    const raw = full();
+    delete raw["DATABASE_URL"];
+    accepts(raw);
+    assert.match(parseEnv(raw).warnings.join(" "), /DATABASE_URL is not set/);
+  });
+
+  test("a http base URL in prod warns and starts, and says nobody can sign in", () => {
+    const raw = { ...full(), APP_ENV: "prod", DATABASE_ENV_TAG: "prod", APP_BASE_URL: "http://app.example.test" };
+    accepts(raw);
+    assert.match(parseEnv(raw).warnings.join(" "), /Secure over https only/);
+  });
+});
+
+// =========================================================================================
+// The base URL, derived rather than asked for
+// =========================================================================================
+
+describe("APP_BASE_URL is worked out rather than typed in", () => {
+  test("an explicit value wins over anything Replit says", () => {
+    const got = deriveAppBaseUrl({ APP_BASE_URL: "https://mine.example", REPLIT_DOMAINS: "theirs.replit.app" }, 5000);
+    assert.deepEqual(got, { url: "https://mine.example", from: "APP_BASE_URL" });
+  });
+
+  test("reads REPLIT_DOMAINS whether it holds one host or several", () => {
+    assert.equal(deriveAppBaseUrl({ REPLIT_DOMAINS: "app.replit.app" }, 5000).url, "https://app.replit.app");
+    // The separator is not documented anywhere we have read, so a list is handled without
+    // the code depending on there being one. A single value takes the same path.
+    assert.equal(deriveAppBaseUrl({ REPLIT_DOMAINS: "first.replit.app,second.example" }, 5000).url, "https://first.replit.app");
+    assert.equal(deriveAppBaseUrl({ REPLIT_DOMAINS: " first.replit.app , second.example " }, 5000).url, "https://first.replit.app");
+  });
+
+  test("survives a scheme or a path being in there, because neither is ruled out", () => {
+    assert.equal(deriveAppBaseUrl({ REPLIT_DOMAINS: "https://app.replit.app" }, 5000).url, "https://app.replit.app");
+    assert.equal(deriveAppBaseUrl({ REPLIT_DOMAINS: "https://app.replit.app/some/path" }, 5000).url, "https://app.replit.app");
+  });
+
+  test("falls back to the workspace domain, then to localhost, and never throws", () => {
+    assert.deepEqual(deriveAppBaseUrl({ REPLIT_DEV_DOMAIN: "dev.replit.dev" }, 5000), {
+      url: "https://dev.replit.dev",
+      from: "REPLIT_DEV_DOMAIN",
+    });
+    assert.deepEqual(deriveAppBaseUrl({}, 5000), { url: "http://localhost:5000", from: "localhost" });
+    assert.equal(deriveAppBaseUrl({}, 3000).url, "http://localhost:3000");
+  });
+
+  test("ignores a value it cannot make a host out of rather than building a broken URL", () => {
+    // Fail closed. Whatever REPLIT_DOMAINS really contains, a wrong link is better than a
+    // crash, and a half parsed host is worse than both.
+    for (const junk of ["", "   ", ",,,", "/", "https://"]) {
+      assert.equal(
+        deriveAppBaseUrl({ REPLIT_DOMAINS: junk }, 5000).from,
+        "localhost",
+        `should have ignored: ${JSON.stringify(junk)}`,
+      );
+    }
+  });
+
+  test("parseEnv uses it, so a deployment gets a real base URL with nothing set", () => {
+    const env = parseEnv({ REPLIT_DOMAINS: "founder-app.replit.app" });
+    assert.equal(env.APP_BASE_URL, "https://founder-app.replit.app");
+  });
+});
+
+// =========================================================================================
+// The checks that are about a wrong thing being present
+// =========================================================================================
 
 describe("no ambient vendor credential exists", () => {
   test("refuses to boot when a process level vendor token is set", () => {
@@ -203,36 +332,9 @@ describe("no ambient vendor credential exists", () => {
     assert.deepEqual(assertNoAmbientVendorCredentials({ GHL_TOKEN: "" }), []);
   });
 
-  test("is wired into parseEnv, not only available beside it", () => {
-    refuses({ ...base(), APOLLO_API_KEY: "x" }, "APOLLO_API_KEY");
-  });
-});
-
-describe("secrets do not leak through a log line", () => {
-  test("keeps the API key and the master key out of JSON.stringify", () => {
-    const serialised = JSON.stringify(parseEnv(base()));
-    assert.ok(!serialised.includes("test-key-not-real"), "the API key reached a serialised env");
-    assert.ok(!serialised.includes(key), "the master key reached a serialised env");
-    assert.match(serialised, /\[set, not shown\]/);
-  });
-
-  test("describeEnv names every secret without showing one", () => {
-    const described = describeEnv(parseEnv(base()));
-    assert.equal(described["ANTHROPIC_API_KEY"], "[set, not shown]");
-    assert.equal(described["GE_MASTER_KEY"], "[set, not shown]");
-    assert.equal(described["DATABASE_URL"], "[set, not shown]");
-    assert.equal(described["APP_ENV"], "preview");
-  });
-});
-
-describe("the boot report", () => {
-  test("names the variable, the problem and what it is for", () => {
-    const text = formatProblems([
-      { variable: "ANTHROPIC_API_KEY", problem: "is required and is not set", whatItIsFor: "The key funding all 130 founders." },
-    ]);
-    for (const fragment of ["ANTHROPIC_API_KEY", "is required and is not set", "What it is for", ".env.example"]) {
-      assert.ok(text.includes(fragment), `the boot report should say: ${fragment}`);
-    }
+  test("is wired into parseEnv, not only available beside it, and an empty environment is no way round it", () => {
+    refuses({ ...full(), APOLLO_API_KEY: "x" }, "APOLLO_API_KEY");
+    refuses({ APOLLO_API_KEY: "x" }, "APOLLO_API_KEY");
   });
 });
 
@@ -246,5 +348,97 @@ describe("the runtime assertions", () => {
     const resolved = Intl.DateTimeFormat().resolvedOptions().timeZone;
     if (resolved === "UTC" || resolved === "Etc/UTC") assert.deepEqual(problems, []);
     else assert.ok(problems.map((p) => p.variable).includes("TZ"));
+  });
+});
+
+// =========================================================================================
+// Secrets, and the seam the master key arrives through
+// =========================================================================================
+
+describe("secrets do not leak through a log line", () => {
+  test("keeps the API key and the passphrase out of JSON.stringify", () => {
+    const serialised = JSON.stringify(parseEnv(full()));
+    assert.ok(!serialised.includes("test-key-not-real"), "the API key reached a serialised env");
+    assert.ok(!serialised.includes("a sentence i will remember"), "the passphrase reached a serialised env");
+    assert.match(serialised, /\[set, not shown\]/);
+  });
+
+  test("describeEnv names every secret without showing one, set or not", () => {
+    const described = describeEnv(parseEnv(full()));
+    assert.equal(described["ANTHROPIC_API_KEY"], "[set, not shown]");
+    assert.equal(described["DATABASE_URL"], "[set, not shown]");
+    assert.equal(described["OWNER_PASSPHRASE"], "[set, not shown]");
+    assert.equal(described["APP_ENV"], "preview");
+
+    // Absent is a real answer and it has to be said, or a support thread cannot tell an
+    // unset key from a line somebody forgot to print.
+    const empty = describeEnv(parseEnv({}));
+    assert.equal(empty["ANTHROPIC_API_KEY"], "[not set]");
+    assert.equal(empty["DATABASE_URL"], "[not set]");
+    assert.equal(empty["OWNER_PASSPHRASE"], "[not set]");
+  });
+});
+
+describe("installMasterKey, the seam the resolved key arrives through", () => {
+  test("puts a key where storage/crypto.ts looks for it", () => {
+    resetEnvCacheForTests();
+    const fresh = randomBytes(32).toString("base64");
+    installMasterKey(fresh, 1);
+    assert.equal(lateSettings().masterKeys.get(1), fresh);
+    resetEnvCacheForTests();
+  });
+
+  test("installing the same key twice is a no op, so a restart is harmless", () => {
+    resetEnvCacheForTests();
+    const fresh = randomBytes(32).toString("base64");
+    installMasterKey(fresh, 1);
+    installMasterKey(fresh, 1);
+    assert.equal(lateSettings().masterKeys.get(1), fresh);
+    resetEnvCacheForTests();
+  });
+
+  test("REFUSES a different key over a live one, because that orphans every file already written", () => {
+    resetEnvCacheForTests();
+    installMasterKey(randomBytes(32).toString("base64"), 1);
+    assert.throws(() => {
+      installMasterKey(randomBytes(32).toString("base64"), 1);
+    }, /already installed/);
+    resetEnvCacheForTests();
+  });
+
+  test("refuses a version outside the rotation range rather than storing it", () => {
+    resetEnvCacheForTests();
+    for (const bad of [0, 10, 1.5]) {
+      assert.throws(() => {
+        installMasterKey(randomBytes(32).toString("base64"), bad);
+      }, /version/);
+    }
+    resetEnvCacheForTests();
+  });
+
+  test("the keyring never prints a key, even when one is installed", () => {
+    resetEnvCacheForTests();
+    const fresh = randomBytes(32).toString("base64");
+    installMasterKey(fresh, 1);
+    const printed = JSON.stringify(lateSettings());
+    assert.ok(!printed.includes(fresh), "the master key reached a serialised late settings object");
+    assert.match(printed, /version\(s\) held, values not shown/);
+    resetEnvCacheForTests();
+  });
+});
+
+describe("the boot report", () => {
+  test("names the variable, the problem and what it is for", () => {
+    const text = formatProblems([
+      { variable: "TURN_SPEND_CAP_USD", problem: "is not a number", whatItIsFor: "Hard ceiling for one turn." },
+    ]);
+    for (const fragment of ["TURN_SPEND_CAP_USD", "is not a number", "What it is for", ".env.example"]) {
+      assert.ok(text.includes(fragment), `the boot report should say: ${fragment}`);
+    }
+  });
+
+  test("says that nothing in it is a missing variable, because missing no longer stops anything", () => {
+    const text = formatProblems([{ variable: "TZ", problem: "is wrong", whatItIsFor: "The clock." }]);
+    assert.match(text, /Missing is fine/);
   });
 });

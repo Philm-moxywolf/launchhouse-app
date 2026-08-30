@@ -1,0 +1,9 @@
+FAIL  1 of the lines could not be read, so nothing was written.
+      Your cached accounts are exactly as they were.
+      line 2 is not an account row
+        just one field
+      A row has three parts with the | character between them:
+        <account id>|<platform>|<name>
+      Correct what is named above, then pipe the whole set in again.
+      This shows what is cached now.
+      → run: ge accounts list

@@ -8,11 +8,38 @@
  * WHY IT EXISTS, and the order in it is the file.
  *
  *   loadEnv() IS THE FIRST STATEMENT. Before Fastify, before the database,
- *   before anything is imported for its side effects. A missing
- *   ANTHROPIC_API_KEY found when a founder presses send is a support
- *   conversation during a live session with 65 people in a room. The same
- *   variable found at boot is a deploy that refuses to start and one line of
- *   output naming it. Those are the same bug and they cost different amounts.
+ *   before anything is imported for its side effects. Everything the process
+ *   is allowed to believe about its configuration is settled on that line.
+ *
+ *   IT NO LONGER REFUSES TO START, AND THAT IS THE BIGGEST CHANGE IN THIS FILE.
+ *   This process used to exit for a missing ANTHROPIC_API_KEY, a missing
+ *   database, a missing ge, and eleven other things. Every one of those exits
+ *   was right for ONE deployment that we operated. There are now 130, one per
+ *   founder, each in the founder's own Replit account, set up by that founder
+ *   in a room with sixty four other people in it. An exit there is not a
+ *   readable line of output. It is a container that restarts for ever behind a
+ *   URL that never answers, and a blank page that cannot tell a missing
+ *   database from a missing key.
+ *
+ *   So main() now GATHERS rather than exits. Each check returns a fact, the
+ *   facts become a list of blockers in boot/readiness.ts, the list becomes the
+ *   first screen a founder sees, and every route that could act on missing
+ *   state is refused with the same words that are on that screen. Nothing got
+ *   more permissive: a turn with no engine behind it is still refused, and an
+ *   API call with no database behind it is still refused. What changed is that
+ *   a founder can now read why.
+ *
+ *   WHAT STILL EXITS. Two things, and both are a wrong thing being present
+ *   rather than a missing thing. A value that is set and unusable, which
+ *   env.ts reports and exits on. And assertContractsReady, which throws when a
+ *   switched on feature rests on a vendor detail no spike has verified. That is
+ *   a mistake in this repository, not a condition of the founder's machine.
+ *
+ *   THE MASTER KEY IS RESOLVED HERE, AFTER THE DATABASE ANSWERS. It used to be
+ *   a Replit Secret we set by hand. A founder cannot be asked to generate 32
+ *   random bytes, so boot/master-key.ts finds or makes one and keeps it where a
+ *   redeploy cannot lose it. Read that file before changing this order: the key
+ *   has to be installed before anything signs a cookie or opens a blob.
  *
  *   THE BOOT ASSERTIONS ARE CALLED HERE, WHICH IS NEW. Two of them said in
  *   their own headers that this file called them and it did not:
@@ -100,13 +127,14 @@ import { SessionPool } from './agent/session-pool.ts';
 import { createSessionStore } from './agent/session-store.ts';
 import type { QueryFn, RunnerConfig, RunnerDeps } from './agent/runner.ts';
 import type { FounderContext } from './agent/types.ts';
-import { closeDb, getDb } from './db/client.ts';
+import { closeDb, getDb, type Db } from './db/client.ts';
 import { assertGeInstalled, assertGeInterface, runGe } from './ge/run.ts';
 import { assertContractsReady, FEATURES_ON } from './integrations/contracts/index.ts';
 import { createAuth } from './auth/plugin.ts';
-import { createMailer } from './auth/mailer.ts';
-import { DEFAULT_RATE_LIMIT } from './auth/rate-limit.ts';
 import { PgAuthStore } from './auth/store-pg.ts';
+import { ensureMasterKey, type MasterKeyOutcome } from './boot/master-key.ts';
+import { ReadinessState, installReadinessGates, type ReadinessFacts } from './boot/readiness.ts';
+import { assertMasterKeyPresent } from './storage/crypto.ts';
 import { ContentRouteCatalogue, GeneratedSkillBodies } from './routes/agent-content.ts';
 import { TurnEventBus, TurnEvents } from './routes/events.ts';
 import { ERRORS, errorBody, installErrorHandler, wantsHtml, founderErrorPage } from './routes/errors.ts';
@@ -199,29 +227,38 @@ const ids: IdSource = {
 /**
  * Ask the database whether it is there, once, at boot.
  *
- * FATAL OUTSIDE dev, AND THE REASON IS THE RULE ABOUT WRITES. Postgres is the
- * record. A process that accepts founder messages while it cannot reach the
- * record either loses them or reports work as done that was never stored, and
- * both of those are worse than not starting. In dev the answer is different on
- * purpose: a laptop with no database must still be able to boot the process and
- * serve the sign in screens, and every write path there fails loudly with
- * nobody's work at stake.
+ * IT USED TO BE FATAL OUTSIDE dev AND IT IS NOT FATAL ANYWHERE NOW. The rule it
+ * was protecting has not changed: Postgres is the record, and a process that
+ * accepts founder messages while it cannot reach the record either loses them
+ * or reports work as done that was never stored. What changed is where that
+ * rule is enforced. Exiting enforced it by making the app unreachable, which
+ * on a founder's own deployment means a restart loop and a blank page. The gate
+ * in boot/readiness.ts enforces the same rule by refusing every API request
+ * with a sentence, while the start page stays reachable and says which pane on
+ * Replit to open. Same amount of work lost, which is none. A founder who can
+ * act, instead of one who cannot see.
+ *
+ * A MISSING DATABASE_URL IS NOT AN ERROR HERE EITHER. Replit supplies it when
+ * the database exists, so its absence means the founder has not created one
+ * yet. Asking the pool for a connection in that state throws from
+ * db/client.ts, so this checks the variable first and reports the honest
+ * answer rather than a stack trace about a URL nobody set.
  */
 async function checkDatabase(): Promise<boolean> {
+  if (env.DATABASE_URL === undefined) {
+    log.warn({}, 'DATABASE_URL is not set, so there is no database to answer. The start page says how to create one.');
+    return false;
+  }
   try {
     await getDb().execute(sql`select 1`);
     log.info({ appEnv: env.APP_ENV }, 'the database answered');
     return true;
   } catch (err) {
     const detail = err instanceof Error ? err.message : String(err);
-    if (env.APP_ENV === 'dev') {
-      log.warn(
-        { detail },
-        'DATABASE_URL does not answer. Sign in screens will render and every founder write will fail. This is fatal outside dev.',
-      );
-      return false;
-    }
-    log.fatal({ detail }, 'DATABASE_URL does not answer. Postgres is the record, so there is nothing to serve without it.');
+    log.warn(
+      { detail },
+      'the database did not answer. The app serves the start page and refuses every API request until it does.',
+    );
     return false;
   }
 }
@@ -236,9 +273,34 @@ export interface BuiltServer {
   readonly pool: SessionPool;
   /** Held so shutdown can write the last transcript batches out of memory. */
   readonly transcripts: PgTranscriptStore;
+  /** Held so whoever stores a pasted key can tell the gates the world changed. */
+  readonly readiness: ReadinessState;
 }
 
-export async function buildServer(): Promise<BuiltServer> {
+/**
+ * What buildServer needs that it cannot work out for itself.
+ *
+ * BOTH OF THESE ARE SETTLED AFTER loadEnv AND BEFORE ANY ROUTE EXISTS, which is
+ * exactly why they are arguments rather than module state. The master key comes
+ * out of Postgres, so it cannot be on the frozen Env. The readiness list is the
+ * result of asking the machine three questions. Passing them in is what makes
+ * the order in main() the only order, instead of one of several that happen to
+ * work today.
+ */
+export interface BuildOptions {
+  readonly readiness: ReadinessState;
+  /**
+   * The resolved master key, or an empty string when boot/master-key.ts refused.
+   *
+   * Empty is a real state and it is safe: readiness is already carrying that
+   * refusal as a blocker that stops every API request, so nothing reaches a
+   * cookie signed with nothing. @fastify/cookie will not accept an empty
+   * secret, so a placeholder is used and named as one below.
+   */
+  readonly masterKey: string;
+}
+
+export async function buildServer(options: BuildOptions): Promise<BuiltServer> {
   const app: FastifyInstance = Fastify({
     // `loggerInstance`, not `logger`. Fastify 5 reads `logger` as a config
     // object to build its own pino from, and hands back
@@ -279,45 +341,75 @@ export async function buildServer(): Promise<BuiltServer> {
    */
   installErrorHandler(app, logger);
 
-  const authStore = new PgAuthStore(logger);
-  const appStore = new PgAppStore();
+  /**
+   * THE READINESS GATES GO ON SECOND, BEFORE THE FIRST ROUTE AND BEFORE AUTH.
+   *
+   * A Fastify hook applies to routes registered after it and to nothing before
+   * it, so this line's position is the whole of its behaviour. Before auth on
+   * purpose: a founder missing three things should read three things on one
+   * screen, rather than being sent round the passphrase screen and finding the
+   * database missing afterwards.
+   */
+  installReadinessGates(app, options.readiness);
 
-  const mailer = createMailer(
-    {
-      transport: env.MAIL_TRANSPORT,
-      from: env.MAIL_FROM,
-      appEnv: env.APP_ENV,
-      allowlist: env.MAIL_ALLOWLIST,
-      smtpUrl: env.SMTP_URL,
+  /**
+   * A database handle that does not open a pool until something actually uses it.
+   *
+   * WHY IT EXISTS, and it was found by booting this process with an empty environment
+   * rather than by reading it. `PgAuthStore` and `PgAppStore` both take their handle as
+   * `db: Db = getDb()`, a DEFAULT ARGUMENT, which runs the moment the object is
+   * constructed. `getDb()` with no DATABASE_URL throws by design. So the two lines below
+   * used to take the whole process down before Fastify had a single route on it, and the
+   * founder who has not created their database yet got a stack trace instead of the screen
+   * telling them to create one. Nothing in the type system says a default argument reaches
+   * for a socket, and nothing in a code review looks wrong.
+   *
+   * THE RULE IS NOT WEAKENED. Any real use still resolves the pool, and still throws the
+   * same sentence from db/client.ts if there is no URL. What changed is WHEN: at the first
+   * query rather than at construction, by which point boot/readiness.ts is already refusing
+   * every API request with words a founder can act on. Building the object graph is not
+   * using the database.
+   *
+   * A Proxy rather than a wrapper class, because `Db` is drizzle's whole surface and a
+   * wrapper would be a second thing to keep in step with it. Methods are bound to the real
+   * handle, or drizzle loses its own `this` the first time one is called through here.
+   */
+  const lazyDb = new Proxy({} as Db, {
+    get(_target, prop) {
+      const real = getDb() as unknown as Record<string | symbol, unknown>;
+      const value = real[prop];
+      return typeof value === 'function' ? (value as (...args: unknown[]) => unknown).bind(real) : value;
     },
-    logger,
-  );
+  });
 
-  // A Secure cookie over http is never sent back, so a laptop on http could
-  // never sign in. env.ts already refuses a http base URL in prod, which is
-  // where Secure matters.
-  const session = {
-    cookieName: env.SESSION_COOKIE_NAME,
-    ttlDays: env.SESSION_TTL_DAYS,
-    secure: env.APP_BASE_URL.startsWith('https://'),
-  };
+  const authStore = new PgAuthStore(logger, lazyDb);
+  const appStore = new PgAppStore(lazyDb);
 
   const { register: registerAuth, context: auth } = createAuth({
     store: authStore,
-    mailer,
     clock: { now: () => new Date() },
     log: logger,
-    session,
-    magicLink: {
-      appBaseUrl: env.APP_BASE_URL,
-      tokenTtlMinutes: env.SIGNIN_TOKEN_TTL_MINUTES,
-      mentorCodeTtlMinutes: 10,
-      session,
+    passphrase: env.OWNER_PASSPHRASE,
+    // A Secure cookie over http is never sent back, so a laptop on http could
+    // never sign in. env.ts warns when the base URL is not https, which is
+    // where Secure matters.
+    cookie: {
+      name: env.SESSION_COOKIE_NAME,
+      ttlDays: env.SESSION_TTL_DAYS,
+      secure: env.APP_BASE_URL.startsWith('https://'),
     },
-    rateLimit: DEFAULT_RATE_LIMIT,
-    // Not the session secret. The session id in the cookie is already 32 random
-    // bytes, and @fastify/cookie wants a key before it will sign anything.
-    cookieSecret: env.GE_MASTER_KEY,
+    /**
+     * Not the session secret. The session id is already derived from 32 random
+     * bytes and the passphrase; @fastify/cookie simply wants a key before it
+     * will sign anything.
+     *
+     * THE PLACEHOLDER IS NAMED RATHER THAN HIDDEN. When boot/master-key.ts
+     * refused, there is no key, and the alternative to a placeholder is a crash
+     * inside a library. Readiness is already refusing every API request in that
+     * state, so no session minted under this string can do anything. Naming it
+     * is what stops somebody later reading an empty fallback as a working one.
+     */
+    cookieSecret: options.masterKey === '' ? 'no-master-key-resolved-this-boot' : options.masterKey,
   });
   await registerAuth(app);
 
@@ -330,7 +422,9 @@ export async function buildServer(): Promise<BuiltServer> {
       founderCapUsd: env.FOUNDER_SPEND_CAP_USD,
       cohortDailyCapUsd: env.COHORT_DAILY_CAP_USD,
     },
-    new PgSpendReader(),
+    // The third constructor that resolves the pool in a default argument. Same reason as
+    // the two above: building the object graph is not using the database.
+    new PgSpendReader(lazyDb),
     logger,
   );
 
@@ -404,7 +498,15 @@ export async function buildServer(): Promise<BuiltServer> {
     primaryModel: env.MODEL_PRIMARY,
     utilityModel: env.MODEL_UTILITY,
     fallbackModel: env.MODEL_FALLBACK,
-    anthropicApiKey: env.ANTHROPIC_API_KEY,
+    /**
+     * Empty until the founder pastes one in, and that is a state this process
+     * runs in rather than refuses to start in. Nothing gets as far as using it
+     * while it is empty: readiness carries "your Anthropic key is not set" as a
+     * blocker and the two routes that start a turn are refused with it. The
+     * empty string here is what the SDK is handed if that gate is ever removed,
+     * so the gate is the thing to keep, not this line.
+     */
+    anthropicApiKey: env.ANTHROPIC_API_KEY ?? '',
     path: subprocessPath,
     // Under /tmp on purpose. The CLI's own config and its local transcript copy
     // are a cache; Postgres is the record. See routes/transcripts-pg.ts.
@@ -543,6 +645,17 @@ export async function buildServer(): Promise<BuiltServer> {
       ok: db,
       appEnv: env.APP_ENV,
       db,
+      /**
+       * What is missing, in the same words the founder's own screen uses.
+       *
+       * WHY IT IS HERE. The process no longer exits for a missing key or a
+       * missing engine, so "the container is up" stopped being the same
+       * sentence as "the app can do its job". This is where the second
+       * sentence lives, and it is the first thing to read when somebody in the
+       * room says the app is not working. It carries headings and actions, and
+       * never a value of anything.
+       */
+      readiness: options.readiness.describe(),
       streams: routes.streams.size,
       running: stats.running,
       waiting: stats.waiting,
@@ -557,7 +670,7 @@ export async function buildServer(): Promise<BuiltServer> {
 
   await registerBrowserBundle(app);
   pool.start();
-  return { app, routes, queue, executor, store: appStore, pool, transcripts };
+  return { app, routes, queue, executor, store: appStore, pool, transcripts, readiness: options.readiness };
 }
 
 /**
@@ -693,16 +806,21 @@ async function shutdown(built: BuiltServer, signal: string): Promise<void> {
 }
 
 /**
- * Is ge actually in this image.
+ * Is ge actually in this copy of the app.
  *
- * IT SHIPS AS A CHECKED OUT SUBMODULE AND AN IMAGE CAN BE BUILT WITHOUT IT. The
- * failure hides: everything boots, founders sign in, and the first time a model
- * calls `remember` the spawn exits 127 with a message that names nothing.
- * Resolving the path at boot turns that into a deploy that refuses to start and
- * one line saying where it looked. Build document, step 0.
+ * IT SHIPS AS A CHECKED OUT SUBMODULE AND A COPY CAN EXIST WITHOUT IT. The
+ * failure hides: everything boots, the founder signs in, and the first time a
+ * model calls `remember` the spawn exits 127 with a message that names nothing.
+ * Resolving the path at boot is what turns that into a sentence.
  *
- * A laptop is different on purpose. In dev the submodule is often not checked
- * out and everything except the two ge tools still works, so it warns.
+ * IT USED TO EXIT OUTSIDE dev AND IT DOES NOT NOW, and this one is the reason
+ * the whole workstream exists. However the engine reaches a founder's copy,
+ * this process cannot know it arrived until it looks, and a copy that arrived
+ * without it has no skills, no schemas and no engine. Exiting there means sixty
+ * five people looking at a URL that never answers and nobody able to say why.
+ * Returning a fact means a screen that names the folder and tells them who to
+ * ask. The answer to "did it arrive" belongs to whoever ships it. The answer to
+ * "what does the founder see when it did not" belongs here.
  */
 async function checkGe(): Promise<boolean> {
   try {
@@ -711,11 +829,7 @@ async function checkGe(): Promise<boolean> {
     return true;
   } catch (err) {
     const detail = err instanceof Error ? err.message : String(err);
-    if (env.APP_ENV === 'dev') {
-      log.warn({ detail }, 'ge is not resolvable. The two ge tools will fail when a model calls them. This is fatal outside dev.');
-      return false;
-    }
-    log.fatal({ detail }, 'ge is not resolvable, so the two verbs a model can call would fail at the first spawn.');
+    log.warn({ detail }, 'ge is not resolvable, so nothing that writes founder files can run. The start page says so and turns are refused.');
     return false;
   }
 }
@@ -725,16 +839,16 @@ async function checkGe(): Promise<boolean> {
  *
  * `assertGeInterface` runs `ge init` with GE_HOME naming folder A while the working
  * directory is folder B, and checks that A was built and B was left alone. Against a
- * ge that walks the working directory to find a folder, B gets it, and on this server
- * B is whatever the last founder's turn left behind.
+ * ge that walks the working directory to find a folder, B gets it instead.
  *
  * ITS HEADER SAID "CALLED AT BOOT" WHILE ONLY ITS OWN TEST CALLED IT. That is the
  * whole reason this function exists. A probe nobody runs is a probe that reads as a
  * guarantee in a review and is absent in the container, and this one costs 150 ms.
  *
- * FATAL OUTSIDE DEV, WARN IN DEV, matching checkGe directly above. A laptop has one
- * founder and a tree nobody else can reach. A deployment has 130, and a ge that does
- * not honour the pin must not serve them.
+ * A FAILURE HERE COUNTS AS "NO ENGINE", not as a reason to exit. One deployment
+ * holds one founder now, so a ge that walks the working directory can reach that
+ * founder's own other folders and nobody else's. That is still wrong and still
+ * refuses every turn. It is no longer a reason to make the app unreachable.
  */
 async function checkGePin(): Promise<boolean> {
   try {
@@ -744,12 +858,46 @@ async function checkGePin(): Promise<boolean> {
     return true;
   } catch (err) {
     const detail = err instanceof Error ? err.message : String(err);
-    if (env.APP_ENV === 'dev') {
-      log.warn({ detail }, 'ge did not honour the GE_HOME pin. This is fatal outside dev, because it is how one founder reaches another founder tree.');
-      return false;
-    }
-    log.fatal({ detail }, 'ge did not honour the GE_HOME pin, so one founder could reach another founder tree.');
+    log.warn({ detail }, 'ge did not honour the GE_HOME pin, so turns are refused. A ge that walks the working directory writes into the wrong folder.');
     return false;
+  }
+}
+
+/**
+ * Find or make the master key, and say what happened in one line.
+ *
+ * IT IS ONLY CALLED WHEN THE DATABASE ANSWERED. The key lives in Postgres, so
+ * there is nothing to ask before then, and asking anyway would produce a
+ * connection error dressed up as a key problem.
+ */
+async function resolveMasterKey(): Promise<MasterKeyOutcome> {
+  try {
+    const outcome = await ensureMasterKey({ db: getDb() });
+    if (!outcome.ok) {
+      log.error({ detail: outcome.detail }, 'the master key was refused. Nothing has been written under a different key.');
+      return outcome;
+    }
+    for (const w of outcome.warnings) log.warn({}, w);
+    if (outcome.created) {
+      log.info(
+        { source: outcome.source, version: outcome.version },
+        'a master key was created for this deployment and stored in Postgres. Every file this founder makes is encrypted under it.',
+      );
+    }
+    // Installed is not the same as usable. This decodes it, checks the length,
+    // and refuses a placeholder, which is the difference between a key being
+    // present and a key working. It costs one function call.
+    const version = assertMasterKeyPresent();
+    log.info({ version, source: outcome.source }, 'the master key is usable');
+    return outcome;
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    log.error({ detail }, 'the master key could not be resolved');
+    return {
+      ok: false,
+      founderMessage: 'The key that opens your files could not be read. Nothing has been lost. Show this screen to somebody from the Launchhouse team.',
+      detail,
+    };
   }
 }
 
@@ -775,22 +923,70 @@ async function main(): Promise<void> {
   // the shortest answer to "what is switched on in this deployment".
   log.info({ featuresOn: FEATURES_ON }, 'contracts checked. Nothing switched on rests on an unverified vendor detail.');
 
-  const geUp = await checkGe();
-  if (!geUp && env.APP_ENV !== 'dev') process.exit(1);
+  /* ---------------------------------------------------------------------- *
+   * ASK THE MACHINE EVERY QUESTION, THEN DECIDE. Not one question, one exit.
+   *
+   * The old order asked a question, exited on the answer, and asked the next
+   * one. A founder whose copy was missing the engine AND the database learned
+   * about the engine, fixed it, redeployed, and learned about the database.
+   * That is two restarts and two trips to whoever is running the room, for one
+   * conversation that could have been had once. Nothing below stops the walk.
+   * ---------------------------------------------------------------------- */
 
-  // Only worth asking if ge is there at all. In dev without the submodule, checkGe
-  // has already said so and this would repeat it in a way that reads like a second
-  // fault.
-  if (geUp) {
-    const pinned = await checkGePin();
-    if (!pinned && env.APP_ENV !== 'dev') process.exit(1);
-  }
+  // The short circuit is deliberate. Asking whether ge honours the GE_HOME pin when ge is
+  // not there at all spawns nothing and reports a second fault for one cause, and a founder
+  // reading two lines about a folder they do not have is a founder who reads neither.
+  const geUp = (await checkGe()) && (await checkGePin());
 
   const dbUp = await checkDatabase();
-  if (!dbUp && env.APP_ENV !== 'dev') process.exit(1);
 
-  const built = await buildServer();
-  if (dbUp) await restoreQueuedTurns(built);
+  // The key lives in Postgres, so there is only a question to ask when the
+  // database answered. With no database the founder is told about the database,
+  // which is the thing to fix first, and the key is asked for on the next boot.
+  const key = dbUp ? await resolveMasterKey() : undefined;
+
+  const facts: ReadinessFacts = {
+    databaseUrlSet: env.DATABASE_URL !== undefined,
+    databaseAnswered: dbUp,
+    engineReady: geUp,
+    masterKeyRefusal: key !== undefined && !key.ok ? key.founderMessage : undefined,
+    anthropicKeySet: env.ANTHROPIC_API_KEY !== undefined,
+    passphraseSet: env.OWNER_PASSPHRASE !== '',
+  };
+  const readiness = new ReadinessState(facts);
+
+  // One line that answers "is this app able to do its job", separately from "is
+  // the container up". Those stopped being the same question when this file
+  // stopped exiting.
+  if (readiness.ready()) log.info({}, 'nothing is missing. Every part of the app is usable.');
+  else log.warn(readiness.describe(), 'the app is starting with things missing. The start page names them and every affected route is refused.');
+
+  const built = await buildServer({
+    readiness,
+    masterKey: key !== undefined && key.ok ? key.base64 : '',
+  });
+  /**
+   * WORK IS ONLY PUT BACK IN LINE IF IT CAN ACTUALLY RUN, and the second half of
+   * that condition is new.
+   *
+   * The HTTP gate refuses the two routes that start a turn while the engine or
+   * the key is missing. This submits straight to the executor and never touches
+   * a route, so without this check it would walk round its own gate: every turn
+   * that was queued when the container stopped would be resubmitted into an
+   * executor that cannot finish one, and the founder would watch a row of
+   * "That one did not finish" for work they had already sent.
+   *
+   * Leaving them alone costs nothing. They stay `queued` in the turns table,
+   * which is the record, and the next boot that has everything picks them up.
+   */
+  const cannotRunTurns = readiness.blockingTurns();
+  if (dbUp && cannotRunTurns.length === 0) await restoreQueuedTurns(built);
+  else if (dbUp) {
+    log.warn(
+      { because: cannotRunTurns.map((b) => b.id) },
+      'work that was queued when this app last stopped has been left queued, because it cannot be finished yet. It resumes on the first boot that has everything.',
+    );
+  }
   // 0.0.0.0, never localhost. A container that binds the loopback answers its
   // own health check and nothing else.
   const address = await built.app.listen({ host: '0.0.0.0', port: env.PORT });

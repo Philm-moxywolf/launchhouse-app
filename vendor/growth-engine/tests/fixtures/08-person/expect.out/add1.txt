@@ -1,0 +1,2 @@
+added people/sam-carter-northfield-io.md  prospect  candidate  sam.carter@northfield.io
+  this folder now holds real people's details. Keep it to yourself and do not copy it anywhere else

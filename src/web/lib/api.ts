@@ -316,45 +316,33 @@ export async function fetchSession(): Promise<Result<Session>> {
   };
 }
 
-/** What the sign in screen learns. `not_on_roster` is a normal answer, not an error. */
-export type SignInAnswer =
-  | { readonly sent: true }
-  | {
-      readonly sent: false;
-      /**
-       * Four reasons, kept apart because they are four different next actions.
-       *
-       * `rate_limited` is here for completeness and the server never sends it:
-       * a limited request answers `sent: true`, exactly as the server rendered
-       * screen shows the same "check your email" page. Anything else turns the
-       * limit into a way of asking which addresses are on the roster.
-       */
-      readonly reason: "not_on_roster" | "not_an_address" | "disabled" | "rate_limited";
-    };
-
-/** ASSUMED path, registered in src/server/routes/auth-api.ts. */
-export function requestSignInLink(email: string): Promise<Result<SignInAnswer>> {
-  return post<SignInAnswer>("/api/auth/request-link", { email });
-}
-
 /**
- * "Tell a mentor" from the sign in screen.
+ * THERE IS NO SIGN IN CALL IN THIS FILE, AND ITS ABSENCE IS THE DESIGN.
  *
- * Section 6: no dead ends. A founder whose address is not on the roster gets a human, and
- * this is the write into the mentor queue.
+ * `requestSignInLink` and `tellAMentor` used to live here. Both were the magic
+ * link: one asked the server to email a link to an address on a roster of 130,
+ * the other wrote into the mentor queue for somebody whose address was not on
+ * it. One founder owns one deployment now. There is no roster to be on, no
+ * address to send anything to, and no mentor queue to escalate into.
  *
- * ASSUMED path.
+ * Signing in is a plain HTML form posting to `/auth/signin`, which the browser
+ * submits itself, so it works with JavaScript switched off and before this
+ * bundle exists. See src/web/routes/SignIn.tsx. Nothing here should grow a JSON
+ * sign in call to sit beside it: two renderings of one journey is exactly how
+ * the front door broke last time.
+ *
+ * Signing out stays here, because the bundle cannot follow a 303 into a page.
  */
-export function tellAMentor(email: string, note: string): Promise<Result<{ readonly queued: true }>> {
-  return post<{ readonly queued: true }>("/api/auth/mentor-note", { email, note });
-}
 
 /**
- * ASSUMED path, registered in src/server/routes/auth-api.ts.
+ * Sign out, on this device only.
  *
- * This device only. Sessions are per device with no limit, because founders
- * sign in again on a phone on event day, and signing out of a laptop must not
- * take the phone with it.
+ * Registered in src/server/auth/plugin.ts, next to the form route it mirrors,
+ * because the session id is derived from the cookie and the passphrase together
+ * and only that module holds the passphrase.
+ *
+ * Sessions are per device with no limit, because a founder signs in again on a
+ * phone on event day, and signing out of a laptop must not take the phone with it.
  */
 export function signOut(): Promise<Result<void>> {
   return postVoid("/api/auth/sign-out");

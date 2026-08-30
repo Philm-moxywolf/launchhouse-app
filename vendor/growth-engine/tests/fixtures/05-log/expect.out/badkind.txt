@@ -1,0 +1,3 @@
+FAIL  "shout" is not a kind of log entry.
+      The four kinds are: decision, result, blocker, note.
+      → run: ge log note "what happened, in one line"

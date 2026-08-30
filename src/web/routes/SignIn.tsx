@@ -3,217 +3,92 @@
  * src/web/routes/SignIn.tsx
  *
  * WHAT IT IS
- * The first screen anybody sees. One email box, one button, and an honest answer for an
- * address that is not on the roster.
+ * The first screen anybody sees on their own deployment. One passphrase box, one button.
  *
  * WHY IT EXISTS
- * Three failures, and two of them are support conversations during a live session.
+ * Three failures, and the third one is the reason this screen is shaped the way it is.
  *
- * One, hunting for a password field. There are 130 known people and no passwords anywhere,
- * so the screen says so before the founder starts looking. A founder who spends five
- * minutes looking for something that does not exist arrives at the event believing the
- * software is broken.
+ * One, hunting for a sign up link. This app belongs to one person and there is no account
+ * to make, so the screen says that before the founder starts looking. Somebody who spends
+ * five minutes looking for something that does not exist decides the software is broken.
  *
- * Two, the scanner problem. Microsoft 365 Safe Links and several corporate scanners fetch
- * every URL in an incoming email before the human sees it, so a link that signs you in on
- * GET is already spent by the time the founder clicks it. The fix lives on the server: the
- * link lands on a page with one button, and the button posts. This screen says that out
- * loud in the "check your email" state, because a founder who is told to expect one more
- * click does not think the link is broken.
+ * Two, not knowing what passphrase is being asked for. It is OWNER_PASSPHRASE, a Replit
+ * Secret they set in the same minute they pasted the three keys. The screen names the
+ * variable and says where to read it, because on a single tenant deployment there is
+ * nobody to ask and no email to send.
  *
- * Three, the dead end. Section 6 is explicit: an address that is not on the roster gets a
- * real answer, not a generic "check your email" that leaves somebody staring at an empty
- * inbox. This is a closed event with a known guest list, the roster is not a secret worth
- * protecting, and the two usual explanations are named with what they typed shown back to
- * them. Two ways forward, always. Never a dead end.
+ * THREE, TWO RENDERINGS OF ONE JOURNEY DISAGREEING. This used to be a React screen that
+ * posted JSON to `/api/auth/request-link` while the server rendered a form that posted to
+ * `/auth/request`. Two implementations of one decision, and they drifted: for a while the
+ * JSON path answered 404 and a founder who WAS on the roster was told their address was
+ * wrong. So this is a plain HTML form now, posting to the same `/auth/signin` route the
+ * server rendered screen posts to. There is one code path, one set of sentences, and no
+ * public JSON endpoint for signing in at all.
+ *
+ * WHAT THAT COSTS, NAMED RATHER THAN HIDDEN. A refused passphrase lands on the server
+ * rendered screen, which is plainer than this one. It happens once, it says the same
+ * thing, and it is worth it: the alternative is a second copy of every refusal in two
+ * places, and the second copy is the one that goes stale.
  *
  * WHAT CALLS IT
  * app.tsx, when nobody is signed in.
  *
  * WHAT IT READS AND WRITES
- * Calls requestSignInLink and tellAMentor. Holds the typed address in component state and
- * nowhere else.
+ * Nothing. It holds no state, calls nothing, and the browser posts the form itself. That
+ * is also why it works with the API unreachable.
  */
 
-import { useState } from "react";
-import type { ReactElement, ReactNode } from "react";
-import { requestSignInLink, tellAMentor } from "../lib/api.ts";
-import { Notice } from "../components/Notice.tsx";
-import { Working } from "../components/Working.tsx";
+import type { ReactElement } from "react";
 
-type Stage =
-  | { readonly kind: "asking" }
-  | { readonly kind: "sending" }
-  | { readonly kind: "sent" }
-  | { readonly kind: "not_on_roster" }
-  | { readonly kind: "mentor" }
-  | { readonly kind: "mentor_sent" }
-  | { readonly kind: "problem"; readonly text: string };
+/**
+ * The one sentence that makes forgetting the passphrase a non event.
+ *
+ * The same words as `WHERE_THE_PASSPHRASE_IS` in src/server/auth/pages.ts.
+ * `signin-agrees.test.ts` asserts the two screens say the same thing, so this cannot
+ * quietly drift from the screen a founder meets after a wrong answer.
+ */
+const WHERE_IT_IS =
+  "Cannot remember it? Open this project on Replit, click Secrets, and read OWNER_PASSPHRASE there.";
 
 export function SignIn(): ReactElement {
-  const [email, setEmail] = useState("");
-  const [note, setNote] = useState("");
-  const [stage, setStage] = useState<Stage>({ kind: "asking" });
-
-  const submit = (): void => {
-    const address = email.trim();
-    if (address === "") return;
-    setStage({ kind: "sending" });
-    void requestSignInLink(address).then((result) => {
-      if (!result.ok) {
-        setStage({ kind: "problem", text: result.problem.text });
-        return;
-      }
-      // A rate limited attempt shows the same screen as a sent one, on purpose. Anything
-      // else turns the limit into a way of asking whether an address is on the list.
-      setStage(
-        result.value.sent || result.value.reason === "rate_limited"
-          ? { kind: "sent" }
-          : { kind: "not_on_roster" },
-      );
-    });
-  };
-
-  const sendMentorNote = (): void => {
-    setStage({ kind: "sending" });
-    void tellAMentor(email.trim(), note.trim()).then((result) => {
-      setStage(result.ok ? { kind: "mentor_sent" } : { kind: "problem", text: result.problem.text });
-    });
-  };
-
-  if (stage.kind === "sending") {
-    return (
-      <SignInFrame>
-        <Working what="Sending." />
-      </SignInFrame>
-    );
-  }
-
-  if (stage.kind === "sent") {
-    return (
-      <SignInFrame>
-        <Notice
-          tone="good"
-          title="Check your email"
-          lines={[
-            `We have sent a link to ${email.trim()}. It works for 30 minutes.`,
-            "The link opens a page with one button on it. Press the button and you are in.",
-            "Some work email systems open links before you do, which is why there is a button rather than nothing.",
-            "Nothing after a minute or two? Look in your spam folder.",
-          ]}
-          actionLabel="Use a different address"
-          onAction={() => setStage({ kind: "asking" })}
-        />
-      </SignInFrame>
-    );
-  }
-
-  if (stage.kind === "not_on_roster") {
-    return (
-      <SignInFrame>
-        <Notice
-          tone="problem"
-          title="We cannot find that address"
-          lines={[
-            `You typed ${email.trim()}.`,
-            "Two things cause this nearly every time. You booked your ticket with a different address, often a personal one rather than a work one. Or there is a typo in what you typed.",
-            "Try the other address first. If you are sure it is right, a mentor will sort it out with you.",
-          ]}
-        >
-          <div className="button-row">
-            <button type="button" className="button" onClick={() => setStage({ kind: "asking" })}>
-              Try another address
-            </button>
-            <button type="button" className="button button-quiet" onClick={() => setStage({ kind: "mentor" })}>
-              Tell a mentor
-            </button>
-          </div>
-        </Notice>
-      </SignInFrame>
-    );
-  }
-
-  if (stage.kind === "mentor") {
-    return (
-      <SignInFrame>
-        <h2>Tell a mentor</h2>
-        <p>A person reads this. Say which address you booked with, if you know it.</p>
-        <label className="field">
-          <span className="field-label">Your message</span>
-          <textarea
-            className="field-input"
-            rows={4}
-            value={note}
-            onChange={(event) => setNote(event.target.value)}
-          />
-        </label>
-        <div className="button-row">
-          <button type="button" className="button" onClick={sendMentorNote}>
-            Send it
-          </button>
-          <button type="button" className="button button-quiet" onClick={() => setStage({ kind: "asking" })}>
-            Back
-          </button>
-        </div>
-      </SignInFrame>
-    );
-  }
-
-  if (stage.kind === "mentor_sent") {
-    return (
-      <SignInFrame>
-        <Notice
-          tone="good"
-          title="A mentor has it"
-          lines={[
-            "Someone will get back to you today.",
-            "If you remember the address you booked with in the meantime, try it here.",
-          ]}
-          actionLabel="Try another address"
-          onAction={() => setStage({ kind: "asking" })}
-        />
-      </SignInFrame>
-    );
-  }
-
-  return (
-    <SignInFrame>
-      {stage.kind === "problem" ? <Notice tone="problem" lines={[stage.text]} /> : null}
-      <form
-        className="signin-form"
-        onSubmit={(event) => {
-          event.preventDefault();
-          submit();
-        }}
-      >
-        <label className="field">
-          <span className="field-label">The email address you booked with</span>
-          <input
-            className="field-input"
-            type="email"
-            autoComplete="email"
-            autoCapitalize="off"
-            spellCheck={false}
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-          />
-        </label>
-        <button type="submit" className="button button-big" disabled={email.trim() === ""}>
-          Send me a link
-        </button>
-      </form>
-      <p className="signin-note">There is no password. Nobody has one. We send you a link instead.</p>
-    </SignInFrame>
-  );
-}
-
-function SignInFrame({ children }: { readonly children: ReactNode }): ReactElement {
   return (
     <div className="signin">
       <div className="signin-card">
         <h1 className="signin-title">Launchhouse</h1>
         <p className="signin-sub">Atlanta, 25 to 27 September 2026.</p>
-        {children}
+
+        <p>
+          There is no account to make. This app belongs to one person, and the passphrase is
+          the one you put into Replit Secrets under the name OWNER_PASSPHRASE. A Replit Secret
+          is a private setting for your app that nobody else can read.
+        </p>
+
+        {/*
+          A real form post, not a fetch. The browser sends it, the server answers 303, and
+          the next page is the app. No JavaScript is involved, so this screen still works on
+          a deployment where the bundle is stale or the API is down.
+        */}
+        <form method="POST" action="/auth/signin">
+          <label className="field" htmlFor="passphrase">
+            <span className="field-label">Your passphrase</span>
+            <input
+              className="field-input"
+              id="passphrase"
+              name="passphrase"
+              type="password"
+              autoComplete="current-password"
+              autoCapitalize="off"
+              spellCheck={false}
+              autoFocus
+              required
+            />
+          </label>
+          <button type="submit" className="button button-big">
+            Sign in
+          </button>
+        </form>
+
+        <p className="signin-note">{WHERE_IT_IS}</p>
       </div>
     </div>
   );

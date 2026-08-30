@@ -1,0 +1,5 @@
+FAIL  entry 1 under Decisions does not say what you expected it to say, so nothing was changed.
+      looked for: not what it says
+      found:      b2b track, my buyers are agencies
+      The list shows the line as it reads now. Edit it by hand, or use ge remember forget.
+      → run: ge remember list decision
