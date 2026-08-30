@@ -15,8 +15,11 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { join } from 'node:path';
 
-import { checkProse } from './prose.ts';
+import { contentRoot } from './content-root.ts';
+import { checkProse, readReplyPromise } from './prose.ts';
 import { exampleBrain } from './test-fixtures.ts';
 import type { Artifact } from './types.ts';
 
@@ -26,6 +29,21 @@ const EN = String.fromCodePoint(0x2013);
 
 function post(text: string): Artifact {
   return { path: 'content-30.md', text, authored: 'model' };
+}
+
+/** Every markdown file under the nine skills, as [name, text]. */
+function skillFiles(): Array<[string, string]> {
+  const root = join(contentRoot(), 'plugins', 'growth-engine', 'skills');
+  const out: Array<[string, string]> = [];
+  const walk = (dir: string): void => {
+    for (const entry of readdirSync(dir)) {
+      const full = join(dir, entry);
+      if (statSync(full).isDirectory()) walk(full);
+      else if (full.endsWith('.md')) out.push([full.slice(root.length + 1), readFileSync(full, 'utf8')]);
+    }
+  };
+  walk(root);
+  return out;
 }
 
 test('both worked example brains pass the house style gate', () => {
@@ -157,6 +175,163 @@ test('saying replies are never promised is not itself a promise', () => {
     post('Nobody can promise a reply. Twenty five good messages is the work.'),
   );
   assert.deepEqual(result.violations, []);
+});
+
+/* ---------------------------------------------------------------------- */
+/* Rule 3: the sentence written to honour it must not be the one refused   */
+/* ---------------------------------------------------------------------- */
+
+/**
+ * Every way a person disclaims a promise, and none of them may be refused.
+ *
+ * THE FIRST FOUR ARE THE BUG. The old check ran `validate.sh`'s six word
+ * negation filter over the whole line: never, not, cannot, no one, nobody, none
+ * of. It holds "nobody" and it does not hold "nothing", so the plainest
+ * disclaimer in English was refused, and a refusal costs the founder work they
+ * cannot get back.
+ *
+ * The rest are here because the answer to a list that missed one is not a list
+ * with one more word in it. Negation in English is a closed class, so it is
+ * written out and then asked about position. If a shape below ever fails, the
+ * class is wrong rather than the sentence.
+ */
+const DISCLAIMERS = [
+  'Nothing here promises a reply.',
+  'Nothing in this plan guarantees a reply.',
+  'It would be wrong to promise a reply.',
+  'No part of this guarantees a response.',
+  'This sequence never promises a reply.',
+  'Nobody can promise a reply.',
+  'We do not promise a reply.',
+  'None of this guarantees a reply.',
+  'Neither the plan nor the sequence promises a reply.',
+  'At no point does this guarantee a reply.',
+  'Nowhere does it promise a reply.',
+  'There is no way to guarantee a reply.',
+  'No sequence guarantees a reply.',
+  'It is not our place to guarantee a reply.',
+  'You cannot promise a reply and you should not try.',
+  'Rather than promise a reply, say what the work is.',
+  'Say what the work is instead of promising a reply.',
+  'Avoid anything that would promise a reply.',
+  'Refuse to promise a reply, however the founder asks.',
+  'Stop before you promise a reply.',
+  'It is dishonest to guarantee a reply.',
+  'The line is wrong if it promises a reply.',
+  'Nothing about 25 messages guarantees a reply.',
+  'Do not promise a reply.',
+  'Never promise replies. Replies depend on list quality, timing and offer.',
+];
+
+test('NO WAY OF DISCLAIMING A PROMISE IS REFUSED', () => {
+  const refused: string[] = [];
+  for (const line of DISCLAIMERS) {
+    for (const v of checkProse(post(line)).violations) {
+      refused.push(`${v.severity} ${v.code}: ${line}`);
+    }
+  }
+  assert.deepEqual(refused, []);
+});
+
+test('the disclaimer list above can fail, so its passing means something', () => {
+  // The negative control. If the promise pattern stopped matching, or checkProse
+  // stopped running rule 3, the test above would pass on nothing at all.
+  const control = checkProse(post('We guarantee a reply.'));
+  assert.equal(control.violations[0]?.code, 'prose.promise-reply');
+  assert.equal(control.violations[0]?.severity, 'block');
+});
+
+test('a negation about something else does not excuse a promise in the next sentence', () => {
+  // The hole the old filter left open. It matched anywhere on the line, so one
+  // "not" bought the rest of the line, however many sentences it ran to.
+  const result = checkProse(
+    post('This is not a volume machine. Send these and we guarantee a reply.'),
+  );
+  assert.equal(result.ok, false);
+  assert.equal(result.violations[0]?.code, 'prose.promise-reply');
+});
+
+test('A LINE THE RULE CANNOT PLACE IS KEPT, WITH A NOTE AGAINST IT', () => {
+  // The same two halves in one sentence. The negation is real, it is about
+  // something else, and the rule cannot prove which half it belongs to. A note
+  // rather than a refusal is the whole point: a guess must not cost a founder
+  // work they cannot get back.
+  const result = checkProse(post('We do not automate anything and we guarantee a reply.'));
+  assert.equal(result.ok, true, 'a sentence the rule could not read cost the founder the turn');
+  assert.equal(result.violations[0]?.code, 'prose.promise-reply-unclear');
+  assert.equal(result.violations[0]?.severity, 'warn');
+});
+
+test('a line describing the rule rather than breaking it is kept', () => {
+  const result = checkProse(post('A sequence that promises a reply is a sequence to rewrite.'));
+  assert.equal(result.ok, true);
+  assert.equal(result.violations[0]?.severity, 'warn');
+});
+
+test('each shape of rule 3 is read for the right reason', () => {
+  // The reading is pinned, not only the answer. A disclaimer that passes through
+  // the wrong branch is a disclaimer that will fail on the next sentence, and
+  // this is the only place that is visible.
+  const read = (line: string): string => readReplyPromise(line, line.search(/guarantee|promise/i));
+  assert.equal(read('Nothing here promises a reply.'), 'disclaimed');
+  assert.equal(read('It would be wrong to promise a reply.'), 'disclaimed');
+  assert.equal(read('We guarantee a reply.'), 'promised');
+  assert.equal(read('We do not automate anything and we guarantee a reply.'), 'unclear');
+});
+
+test('THE TOOLKIT CANNOT REFUSE ITS OWN COPY, house style and rule 3 together', () => {
+  // The nine skills are what 130 founders read and what the model is handed as
+  // its own instructions. If the runtime gate refuses a line of it, the gate is
+  // wrong. `outreach-b2b/SKILL.md` carries rule 3 in as many words, which is the
+  // exact shape this section is about.
+  const files = skillFiles();
+  assert.ok(files.length >= 9, `only ${files.length} skill files were read`);
+  const refused: string[] = [];
+  for (const [name, text] of files) {
+    for (const v of checkProse({ path: 'content-30.md', text, authored: 'model' }).violations) {
+      refused.push(`${name} line ${v.where.line}: ${v.code} on ${v.found}`);
+    }
+  }
+  assert.deepEqual(refused, []);
+});
+
+test('the skills corpus can fail, so its passing means something', () => {
+  // If the walk stopped finding files, the test above would pass on an empty
+  // list. This proves the same harness still refuses the thing rule 3 forbids.
+  assert.ok(skillFiles().length >= 9);
+  assert.equal(
+    checkProse(post('Send these and we guarantee a reply.')).violations[0]?.code,
+    'prose.promise-reply',
+  );
+});
+
+test('rule 3 does not break its own rule in the sentence it refuses with', () => {
+  // The note added for the unclear case is new founder-facing copy, and
+  // index.test.ts cannot reach it: its fixtures only produce the refusal. A
+  // sentence that says "this line promises a reply" would trip this rule while
+  // enforcing it, which has happened here once already.
+  const produced = [
+    ...checkProse(post('We guarantee a reply.')).violations,
+    ...checkProse(post('We do not automate anything and we guarantee a reply.')).violations,
+  ];
+  assert.equal(produced.length, 2);
+  const failures: string[] = [];
+  for (const v of produced) {
+    for (const text of [v.message, v.why, v.recovery.label]) {
+      for (const bad of checkProse(post(text)).violations) {
+        failures.push(`${v.code}: ${bad.code} on "${bad.found}" in: ${text}`);
+      }
+    }
+  }
+  assert.deepEqual(failures, []);
+});
+
+test('two promises on one line are both reported, at their own columns', () => {
+  const result = checkProse(post('We guarantee a reply and we promise a reply.'));
+  assert.deepEqual(
+    result.violations.map((v) => `${v.found}@${String(v.where.column)}`),
+    ['guarantee a reply@4', 'promise a reply@29'],
+  );
 });
 
 test('the founder\'s own writing is left alone by default', () => {

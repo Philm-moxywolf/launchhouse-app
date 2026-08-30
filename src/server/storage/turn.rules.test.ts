@@ -1,9 +1,9 @@
 /**
  * src/server/storage/turn.rules.test.ts
  *
- * WHAT THIS IS. The proof that an artifact carrying a banned word never reaches
- * ge_file. A real turn, a real folder, a real walk and a real hash, against a
- * database handle that throws on any write.
+ * WHAT THIS IS. The proof that a file which failed a rule never reaches ge_file,
+ * AND that the files written beside it do. A real turn, a real folder, a real walk
+ * and a real hash, against two fake database handles.
  *
  * WHY IT EXISTS. rules/index.ts states as fact that the gate sits between the model
  * writing a file and storage saving it, and that nothing reaches ge_file until it
@@ -11,16 +11,29 @@
  * caller outside its own folder. A sentence in a header is worth what the test
  * under it is worth, so this is that test.
  *
- * THE REFUSAL IS THE ASSERTION. The fake handle answers exactly the two SELECTs a
- * turn makes and throws a named sentence on any INSERT, UPDATE or DELETE. So there
- * are only two outcomes and they are both meaningful:
+ * TWO HANDLES, BECAUSE THERE ARE NOW TWO CLAIMS.
  *
- *   the gate refused    the test sees RulesRefused, and no write was attempted
- *   the gate let it by  the test sees "a write was attempted", and fails
+ *   refusingDb   answers the SELECTs a turn makes and throws a named sentence on
+ *                any write to the founder's content. Used where the claim is "this
+ *                never reached ge_file": reaching the throw IS the failure, and
+ *                seeing RulesRefused instead is the pass.
+ *   recordingDb  answers the same SELECTs and writes nowhere, keeping the list of
+ *                paths applyHarvest tried to store. Used where the claim is "these
+ *                two saved and that one did not", which a handle that throws on the
+ *                first write cannot tell you.
  *
- * There is no third outcome where a violation is recorded and the file is saved
- * anyway, which is the thing the build document rules out in one line: a write that
- * cannot be proved must not be reported as done.
+ * THE HOLD IS THE PART TO READ. A blocking violation used to cost the whole turn:
+ * one banned word in one file rolled back a growth plan, an outreach sequence and a
+ * prospect CSV, and removed the folder. These rules are vocabulary lists and they
+ * are wrong about ordinary sentences, so that trade was the wrong way round. Now the
+ * file is held and the turn commits, and the tests below hold both halves of it:
+ * the held file is not in the write list, and the other two are.
+ *
+ * WHAT STILL COSTS THE WHOLE TURN, and is tested here as carefully as the hold: an
+ * offer to automate cold DMs, and nothing else. That rule was measured against
+ * twelve sentences about DMs and fired only on the three that were real offers. The
+ * argument, and the measurement that kept rule 5 off the list, are in
+ * rules/harvest-gate.ts.
  *
  * WHY IT DOES NOT NEED POSTGRES. turn.db.test.ts covers the real ROLLBACK and skips
  * without a DATABASE_URL, which means it does not run on most machines most of the
@@ -40,9 +53,10 @@ import { afterEach, beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
 import type { Db, Queryable } from '../db/client.ts';
-import { founders, geEvent } from '../db/schema.ts';
+import { founders, geBlob, geEvent, geFile } from '../db/schema.ts';
 import { RulesRefused } from '../rules/harvest-gate.ts';
 import { createFounderKey } from './crypto.ts';
+import { readEpoch } from './materialise.ts';
 import { founderRoot, geHome } from './paths.ts';
 import { runTurn } from './turn.ts';
 
@@ -145,79 +159,237 @@ function refusingDb(): Db {
   } as unknown as Db;
 }
 
-describe('an artifact with a banned word never reaches ge_file', () => {
-  it('REFUSES THE TURN, AND ATTEMPTS NO WRITE', async () => {
-    await assert.rejects(
-      () =>
-        runTurn({ founderId: FOUNDER, actor: 'model', verb: 'agent-run', db: refusingDb() }, async (ctx) => {
-          await writeFile(join(ctx.home, 'founder-brain.md'), CLEAN_BRAIN, 'utf8');
-          await writeFile(
-            join(ctx.home, 'content-30.md'),
-            '## Post 1\n\nThis will supercharge your pipeline.\n',
-            'utf8',
-          );
-          return 'the model finished';
-        }),
-      (err: unknown) => {
-        // If this is the sentence the fake throws, the gate let the file past and
-        // the turn was already writing when it spoke.
-        assert.ok(
-          err instanceof RulesRefused,
-          `expected the turn to be refused by the rules gate, got: ${String(err)}`,
-        );
-        assert.equal(err.code, 'rules_refused');
-        assert.ok(err.paths.includes('content-30.md'));
-        const banned = err.answer.blocked.find((v) => v.rule === 'prose');
-        assert.ok(banned, 'the refusal should name the house style rule that caught it');
-        assert.equal(banned.where.path, 'content-30.md');
-        assert.equal(banned.where.line, 3);
-        return true;
+/**
+ * A builder that answers whatever it is chained with, and resolves to `rows`.
+ *
+ * Drizzle's insert and update read as `.values().onConflictDoNothing().returning()`
+ * and the exact chain differs per call site. Answering every link with the same
+ * thenable keeps this fake about the one thing it is for, which is which paths were
+ * written, rather than about mirroring an ORM.
+ */
+function chain(rows: unknown[]): Record<string, unknown> {
+  const node: Record<string, unknown> = {
+    then: (ok?: ((value: unknown[]) => unknown) | null, no?: ((err: unknown) => unknown) | null) =>
+      Promise.resolve(rows).then(ok ?? undefined, no ?? undefined),
+  };
+  for (const link of ['values', 'set', 'where', 'onConflictDoNothing', 'onConflictDoUpdate', 'returning']) {
+    node[link] = (): Record<string, unknown> => node;
+  }
+  return node;
+}
+
+/**
+ * A handle that lets a turn commit and remembers which ge_file rows it wrote.
+ *
+ * The list it returns is the assertion for every hold test: a held path in it means
+ * the founder's folder now holds a file that failed a rule, and a missing clean path
+ * means the hold took a neighbour down with it.
+ */
+function recordingDb(): { db: Db; written: string[] } {
+  const { wrapped } = createFounderKey(FOUNDER);
+  const founderRow = {
+    version: 1,
+    wrappedKey: wrapped,
+    timezone: 'America/New_York',
+    track: 'b2b',
+    disabledAt: null,
+    deletedAt: null,
+  };
+  const written: string[] = [];
+
+  const tx = {
+    execute: async () => [],
+    select: () => ({
+      from: (table: unknown) => ({
+        where: async () => (table === founders ? [founderRow] : []),
+      }),
+    }),
+    insert: (table: unknown) => ({
+      values: (row: Record<string, unknown>) => {
+        if (table === geFile) written.push(String(row['path']));
+        // putBlob reads `.returning()` for its inserted flag, and nothing else
+        // downstream reads a row back from an insert.
+        return chain(table === geBlob ? [{ sha: row['sha'] }] : []);
       },
-    );
-  });
+    }),
+    // One row back, which is what the version check in T2 requires to continue.
+    update: () => chain([{ version: 2 }]),
+    delete: () => chain([]),
+  } as unknown as Queryable;
 
-  it('leaves nothing behind on disk, so the next turn cannot read the refused file', async () => {
-    await assert.rejects(
-      () =>
-        runTurn({ founderId: FOUNDER, actor: 'model', verb: 'agent-run', db: refusingDb() }, async (ctx) => {
-          await writeFile(join(ctx.home, 'founder-brain.md'), CLEAN_BRAIN, 'utf8');
-          await writeFile(join(ctx.home, 'content-30.md'), '## Post 1\n\nA seamless experience.\n', 'utf8');
-          return null;
-        }),
-      RulesRefused,
-    );
-    assert.equal(await exists(founderRoot(FOUNDER)), false, 'the refused turn left its folder behind');
-  });
+  return {
+    db: { transaction: async (fn: (t: Queryable) => Promise<unknown>) => fn(tx) } as unknown as Db,
+    written,
+  };
+}
 
-  it('tells the founder something they can act on', async () => {
-    // Not a rule name and not a stack trace. A sentence, then the reason, then a
-    // button. Test case 21 in the content repo holds the whole toolkit to this.
-    const err = await runTurn(
-      { founderId: FOUNDER, actor: 'model', verb: 'agent-run', db: refusingDb() },
+describe('a file that fails a rule is held, and its neighbours are saved', () => {
+  it('THE OTHER TWO FILES REACH ge_file AND THE HELD ONE DOES NOT', async () => {
+    // The Sunday turn, in miniature: a plan, a sequence and thirty posts. One
+    // sentence in the posts trips a word list. The old behaviour deleted all three
+    // and removed the folder.
+    const { db, written } = recordingDb();
+    const outcome = await runTurn(
+      { founderId: FOUNDER, actor: 'model', verb: 'agent-run', db },
       async (ctx) => {
         await writeFile(join(ctx.home, 'founder-brain.md'), CLEAN_BRAIN, 'utf8');
-        await writeFile(join(ctx.home, 'content-30.md'), '## Post 1\n\nAn effortless win.\n', 'utf8');
-        return null;
+        await writeFile(
+          join(ctx.home, '90-day-plan.md'),
+          '# The plan\n\nWeek one: write the plan and book the calls.\n',
+          'utf8',
+        );
+        await writeFile(
+          join(ctx.home, 'outreach-sequence.md'),
+          '# Sequence\n\nStep one: one short note about their onboarding.\n',
+          'utf8',
+        );
+        await writeFile(
+          join(ctx.home, 'content-30.md'),
+          '## Post 1\n\nThis will supercharge your pipeline.\n',
+          'utf8',
+        );
+        return 'the model finished';
       },
-    ).then(
-      () => null,
-      (e: unknown) => e,
     );
 
-    assert.ok(err instanceof RulesRefused);
-    assert.ok(err.message.length > 20, 'the founder gets a sentence, not a code');
-    assert.doesNotMatch(err.message, /—|–/, 'the refusal itself follows the house style it enforces');
-    for (const violation of err.answer.blocked) {
-      assert.ok(violation.recovery.label.length > 0, 'every refusal ends on a way out');
-      assert.ok(violation.why.length > 0);
-    }
+    assert.deepEqual(
+      [...written].sort(),
+      ['90-day-plan.md', 'founder-brain.md', 'outreach-sequence.md'],
+      'the clean files were saved and the held one was not',
+    );
+    assert.deepEqual(outcome.gate.held.map((h) => h.path), ['content-30.md']);
+    assert.deepEqual(
+      outcome.plan.changes.map((c) => c.path).sort(),
+      ['90-day-plan.md', 'founder-brain.md', 'outreach-sequence.md'],
+      'the outcome describes what was committed, not what was attempted',
+    );
+    assert.equal(outcome.value, 'the model finished');
+    assert.equal(outcome.versionAfter, 2, 'the turn committed');
   });
 
-  it('refuses an offer to automate DMs, which is rule 2 on what the model wrote', async () => {
+  it('TELLS THE FOUNDER WHAT THEY GOT, WHAT WAS HELD, WHICH LINE, AND WHAT TO DO', async () => {
+    const { db } = recordingDb();
+    const outcome = await runTurn(
+      { founderId: FOUNDER, actor: 'model', verb: 'agent-run', db },
+      async (ctx) => {
+        await writeFile(join(ctx.home, 'founder-brain.md'), CLEAN_BRAIN, 'utf8');
+        await writeFile(join(ctx.home, '90-day-plan.md'), '# The plan\n\nWeek one: write it.\n', 'utf8');
+        await writeFile(
+          join(ctx.home, 'content-30.md'),
+          '## Post 1\n\nThis will supercharge your pipeline.\n',
+          'utf8',
+        );
+        return null;
+      },
+    );
+
+    // The founder reads this off gate.notes, which is what routes/run-turn.ts
+    // already puts on the screen beside the work.
+    const first = outcome.gate.notes[0];
+    assert.ok(first, 'a held file has to say something, or the founder asks a mentor');
+    assert.match(first.message, /90-day-plan\.md/, 'what they got');
+    assert.match(first.message, /held back and not saved: content-30\.md/, 'what was held');
+    assert.match(first.message, /line 3/, 'which line');
+    assert.match(first.message, /This will supercharge your pipeline\./, 'the sentence itself');
+    assert.match(first.message, /Ask for content-30\.md again\./, 'what to do now');
+    assert.doesNotMatch(first.message, /prose\.|proof\.|track\.|ownership\.|dm\./, 'never a rule code');
+  });
+
+  it('LEAVES THE FOLDER UNSTAMPED, so the held bytes cannot be read by the next turn', async () => {
+    // The held file is still on disk holding the words that failed. Writing the
+    // epoch would tell the next turn the folder matches the record, and the model
+    // would then read a file the founder was told was not saved.
+    const { db } = recordingDb();
+    await runTurn({ founderId: FOUNDER, actor: 'model', verb: 'agent-run', db }, async (ctx) => {
+      await writeFile(join(ctx.home, 'founder-brain.md'), CLEAN_BRAIN, 'utf8');
+      await writeFile(join(ctx.home, 'content-30.md'), '## Post 1\n\nAn effortless win.\n', 'utf8');
+      return null;
+    });
+    assert.equal(await readEpoch(FOUNDER), null, 'a turn that held a file must not stamp the folder');
+    assert.equal(await exists(founderRoot(FOUNDER)), true, 'a hold is not a rollback');
+  });
+
+  it('a clean turn still stamps the folder, so the hold is what changed and not the epoch', async () => {
+    const { db } = recordingDb();
+    await runTurn({ founderId: FOUNDER, actor: 'model', verb: 'agent-run', db }, async (ctx) => {
+      await writeFile(join(ctx.home, 'founder-brain.md'), CLEAN_BRAIN, 'utf8');
+      return null;
+    });
+    assert.equal(await readEpoch(FOUNDER), 2);
+  });
+
+  it('DOES NOT MOVE THE TRACK CACHE FROM A BRAIN IT HELD', async () => {
+    // founder.track is a cache of the Track line in the file. If a held Brain could
+    // still move it, rule 1 would be anchored to a file nobody has.
+    const { db, written } = recordingDb();
+    const outcome = await runTurn(
+      { founderId: FOUNDER, actor: 'model', verb: 'agent-run', db },
+      async (ctx) => {
+        await writeFile(
+          join(ctx.home, 'founder-brain.md'),
+          CLEAN_BRAIN.replace('- **Track:** b2b', '- **Track:** b2c'),
+          'utf8',
+        );
+        return null;
+      },
+    );
+    assert.deepEqual(outcome.gate.held.map((h) => h.path), ['founder-brain.md']);
+    assert.deepEqual(written, [], 'a held Brain is not stored');
+    assert.equal(outcome.trackAfter, 'b2b', 'the cache still describes the Brain that is stored');
+  });
+
+  it('A CUSTOMER COUNT NOBODY GAVE IT NEVER REACHES ge_file', async () => {
+    // Rule 5 at its strongest reading, against a handle that would have accepted
+    // the write. The number is not stored, which is the thing rule 5 is for, and
+    // the plan written beside it is. The measurement behind holding rather than
+    // refusing is in the note under WORTH_THE_WHOLE_TURN.
+    const { db, written } = recordingDb();
+    const outcome = await runTurn(
+      { founderId: FOUNDER, actor: 'model', verb: 'agent-run', db },
+      async (ctx) => {
+        await writeFile(join(ctx.home, 'founder-brain.md'), CLEAN_BRAIN, 'utf8');
+        await writeFile(join(ctx.home, '90-day-plan.md'), '# The plan\n\nWeek one: write it.\n', 'utf8');
+        await writeFile(
+          join(ctx.home, 'content-30.md'),
+          '## Post 1\n\nWe have 214 customers on the platform today.\n',
+          'utf8',
+        );
+        return null;
+      },
+    );
+    assert.ok(!written.includes('content-30.md'), 'the invented count reached ge_file');
+    assert.deepEqual([...written].sort(), ['90-day-plan.md', 'founder-brain.md']);
+    assert.ok(outcome.gate.held[0]?.violations.some((v) => v.code === 'proof.invented-result'));
+  });
+
+  it('holds the other track\'s file, which is rule 1 held at the write', async () => {
+    // Holding is the whole of rule 1's job here. A file that is never stored is a
+    // file the founder is never shown, and the clean work beside it survives.
+    const { db, written } = recordingDb();
+    const outcome = await runTurn(
+      { founderId: FOUNDER, actor: 'model', verb: 'agent-run', db },
+      async (ctx) => {
+        await writeFile(join(ctx.home, 'founder-brain.md'), CLEAN_BRAIN, 'utf8');
+        // hook-bank.md belongs to B2C. The founder row above says b2b.
+        await writeFile(join(ctx.home, 'hook-bank.md'), '# Hooks\n\nTen openers for your feed.\n', 'utf8');
+        return null;
+      },
+    );
+    assert.deepEqual(outcome.gate.held.map((h) => h.path), ['hook-bank.md']);
+    assert.ok(outcome.gate.held[0]?.violations.some((v) => v.code === 'track.wrong-track-file'));
+    assert.deepEqual(written, ['founder-brain.md']);
+  });
+});
+
+describe('what still costs the whole turn', () => {
+  it('REFUSES AN OFFER TO AUTOMATE DMs, AND ATTEMPTS NO WRITE', async () => {
+    // Rule 2. If the fake's sentence comes back instead, the gate let the file past
+    // and the turn was already writing when it spoke.
     await assert.rejects(
       () =>
         runTurn({ founderId: FOUNDER, actor: 'model', verb: 'agent-run', db: refusingDb() }, async (ctx) => {
           await writeFile(join(ctx.home, 'founder-brain.md'), CLEAN_BRAIN, 'utf8');
+          await writeFile(join(ctx.home, '90-day-plan.md'), '# The plan\n\nWeek one: write it.\n', 'utf8');
           await writeFile(
             join(ctx.home, 'ops-workflow.md'),
             '# Ops\n\nWe can automate DMs for you overnight.\n',
@@ -226,28 +398,65 @@ describe('an artifact with a banned word never reaches ge_file', () => {
           return null;
         }),
       (err: unknown) => {
-        assert.ok(err instanceof RulesRefused, String(err));
-        assert.ok(err.answer.blocked.some((v) => v.rule === 'no-dm-automation'));
+        assert.ok(
+          err instanceof RulesRefused,
+          `expected the turn to be refused by the rules gate, got: ${String(err)}`,
+        );
+        assert.equal(err.code, 'rules_refused');
+        assert.ok(err.answer.blocked.some((v) => v.code === 'dm.offered'));
         return true;
       },
     );
   });
 
-  it('refuses the other track\'s file, which is rule 1 held at the write', async () => {
+  it('THE ROLLBACK STILL WORKS: nothing is left on disk for the next turn to read', async () => {
+    const { db, written } = recordingDb();
     await assert.rejects(
       () =>
-        runTurn({ founderId: FOUNDER, actor: 'model', verb: 'agent-run', db: refusingDb() }, async (ctx) => {
+        runTurn({ founderId: FOUNDER, actor: 'model', verb: 'agent-run', db }, async (ctx) => {
           await writeFile(join(ctx.home, 'founder-brain.md'), CLEAN_BRAIN, 'utf8');
-          // hook-bank.md belongs to B2C. The founder row above says b2b.
-          await writeFile(join(ctx.home, 'hook-bank.md'), '# Hooks\n\nTen openers for your feed.\n', 'utf8');
+          await writeFile(join(ctx.home, '90-day-plan.md'), '# The plan\n\nWeek one: write it.\n', 'utf8');
+          await writeFile(
+            join(ctx.home, 'ops-workflow.md'),
+            '# Ops\n\nWe can automate DMs for you overnight.\n',
+            'utf8',
+          );
           return null;
         }),
-      (err: unknown) => {
-        assert.ok(err instanceof RulesRefused, String(err));
-        assert.ok(err.answer.blocked.some((v) => v.code === 'track.wrong-track-file'));
-        return true;
-      },
+      RulesRefused,
     );
+    // A handle that would have accepted every write, so an empty list is the gate's
+    // doing rather than the fake's.
+    assert.deepEqual(written, [], 'a refused turn writes nothing, not even the clean files');
+    assert.equal(await exists(founderRoot(FOUNDER)), false, 'the refused turn left its folder behind');
+  });
+
+  it('tells the founder nothing was saved, and gives them something to act on', async () => {
+    // Not a rule name and not a stack trace. What happened, then the reason, then a
+    // way out. Test case 21 in the content repo holds the whole toolkit to this.
+    const err = await runTurn(
+      { founderId: FOUNDER, actor: 'model', verb: 'agent-run', db: refusingDb() },
+      async (ctx) => {
+        await writeFile(join(ctx.home, 'founder-brain.md'), CLEAN_BRAIN, 'utf8');
+        await writeFile(
+          join(ctx.home, 'ops-workflow.md'),
+          '# Ops\n\nWe can automate DMs for you overnight.\n',
+          'utf8',
+        );
+        return null;
+      },
+    ).then(
+      () => null,
+      (e: unknown) => e,
+    );
+
+    assert.ok(err instanceof RulesRefused);
+    assert.match(err.message, /Nothing from that request was saved\./);
+    assert.doesNotMatch(err.message, /—|–/, 'the refusal itself follows the house style it enforces');
+    for (const violation of err.answer.blocked) {
+      assert.ok(violation.recovery.label.length > 0, 'every refusal ends on a way out');
+      assert.ok(violation.why.length > 0);
+    }
   });
 });
 

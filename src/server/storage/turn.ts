@@ -21,9 +21,27 @@
  * always said the gate sits between the model writing a file and storage saving it.
  * This is the seat it was talking about, and the order below is what makes the
  * sentence true: planHarvest reads the bytes, gateHarvest answers on them, and only
- * then does applyHarvest touch ge_file. A blocking violation throws, which rolls the
- * transaction back, so an artifact that failed a rule never reaches ge_file at all.
- * Nothing here can be reordered without the test beside this file failing.
+ * then does applyHarvest touch ge_file. Nothing here can be reordered without the
+ * test beside this file failing.
+ *
+ * A FAILED FILE COSTS THE FILE. IT USED TO COST THE TURN. The gate now answers per
+ * file, and this file is what makes that answer real:
+ *
+ *   report.held        those paths come out of the plan before applyHarvest sees
+ *                      it, so they never reach ge_file, and everything else the
+ *                      turn wrote commits. See withoutHeldFiles below.
+ *   RulesRefused       still thrown, still rolls the whole transaction back, still
+ *                      removes the folder. Reserved for the one violation that says
+ *                      the RUN went wrong rather than one file, an offer to
+ *                      automate cold DMs. The list, the argument, and the
+ *                      measurement that keeps it one line long, are in
+ *                      rules/harvest-gate.ts.
+ *
+ * WHY THE SPLIT IS WORTH THE COMPLICATION. The rules are vocabulary lists. When one
+ * is wrong about an ordinary sentence, the old behaviour deleted a growth plan, an
+ * outreach sequence and a prospect CSV, and told the founder they invented proof. A
+ * heuristic must not be able to destroy work a founder cannot get back, and a held
+ * file is still never stored, so nothing is saved that could not be proved.
  *
  * WHAT CALLS IT
  *   The agent runner around a model run, ge/verbs.ts around a single ge spawn, and
@@ -123,7 +141,7 @@ import {
 } from '../db/client.ts';
 import { RLS_TABLES } from '../db/migrate.ts';
 import { founders, geEvent, geFile } from '../db/schema.ts';
-import { gateHarvest, type HarvestGateReport } from '../rules/harvest-gate.ts';
+import { gateHarvest, type HarvestGateReport, type HeldFile } from '../rules/harvest-gate.ts';
 import type { Artifact, Track } from '../rules/index.ts';
 import { getBlob } from './blobs.ts';
 import { unwrapDataKey, type DataKey } from './crypto.ts';
@@ -197,6 +215,14 @@ export interface TurnContext {
 
 export interface TurnOutcome<T> {
   value: T;
+  /**
+   * The harvest as it was actually committed, which is the plan minus anything the
+   * rules gate held.
+   *
+   * Narrowed rather than reported whole, so that a caller counting `changes` is
+   * counting files the founder now has. A caller that wants the held ones has
+   * `gate.held`, where they are named with the reason.
+   */
   plan: HarvestPlan;
   versionBefore: number;
   versionAfter: number;
@@ -205,11 +231,16 @@ export interface TurnOutcome<T> {
   trackBefore: string | null;
   trackAfter: string | null;
   /**
-   * What the rules gate read, what it did not read, and anything it wants said.
+   * What the rules gate read, what it did not read, what it held back, and
+   * anything it wants said.
    *
-   * Carried out of a turn that COMMITTED, so it holds warnings and never a
-   * refusal: a blocking violation throws and this object is never built. The
-   * warnings are here because the founder is meant to see them beside the work,
+   * Carried out of a turn that COMMITTED, so it never holds a turn level refusal:
+   * that throws and this object is never built. It CAN hold `held`, which is the
+   * new part. A turn can commit four files and hold the fifth, and when it does,
+   * `gate.notes` opens with the sentence the founder needs to read about the one
+   * that is missing.
+   *
+   * The notes are here because the founder is meant to see them beside the work,
    * and a surface that has to ask a second time for them will not ask.
    */
   gate: HarvestGateReport;
@@ -330,6 +361,36 @@ async function previousText(
 /** The two values the fork is allowed to take. Anything else is no answer at all. */
 function asTrack(value: string | null): Track | null {
   return value === 'b2b' || value === 'b2c' ? value : null;
+}
+
+/**
+ * The plan with everything the rules gate held taken out of it.
+ *
+ * WHY IT IS A NEW PLAN AND NOT A FLAG ON THE OLD ONE. applyHarvest walks
+ * `plan.changes` and writes every entry. A skip condition inside it would be one
+ * more thing to get right in a loop that already writes three tables, and the next
+ * person to add a caller would not know it existed. Narrowing the object means
+ * there is nothing to remember: a held path is not in the plan, so it cannot be
+ * written by anything that takes a plan.
+ *
+ * The counts are left describing the FOLDER, not the commit. `fileCount` and
+ * `totalBytes` are what the walk found on disk and they are used for the limits, so
+ * changing them here would quietly raise the limit for a founder whose file was
+ * held. `unchangedCount` and `mtimeResets` are about files that did not change,
+ * which a hold does not touch.
+ *
+ * Returns the same object when nothing was held, which is almost every turn.
+ */
+function withoutHeldFiles(plan: HarvestPlan, held: readonly HeldFile[]): HarvestPlan {
+  if (held.length === 0) return plan;
+  const paths = new Set(held.map((h) => h.path));
+  const bytesByPath = new Map(plan.bytesByPath);
+  for (const path of paths) bytesByPath.delete(path);
+  return {
+    ...plan,
+    changes: plan.changes.filter((c) => !paths.has(c.path)),
+    bytesByPath,
+  };
 }
 
 /**
@@ -566,15 +627,26 @@ async function openTurn(db: Db, founderId: string): Promise<OpenTurn> {
  *   4  the version check             refuses a turn another writer has overtaken
  *   5  plan the harvest              hash everything, refuse an unexplained absence
  *   6  the rules gate                rules 1 to 5 over what the model wrote
- *   7  apply the harvest             the first line in this list that touches ge_file
- *   8  bump version, refresh track   only when something actually changed
- *   9  ge_event
- *  10  COMMIT
+ *   7  drop what the gate held       the held paths come out of the plan
+ *   8  apply the harvest             the first line in this list that touches ge_file
+ *   9  bump version, refresh track   only when something actually changed
+ *  10  ge_event
+ *  11  COMMIT
  *
  * STEP 6 SITS WHERE IT DOES ON PURPOSE. Before it, nothing has been written to
  * ge_file; after it, everything has. Move it one line down and an artifact with a
  * banned word in it is already stored when the gate speaks, and the gate becomes a
  * report on a thing that already happened.
+ *
+ * STEP 7 IS WHY A HELD FILE IS REALLY HELD. gateHarvest returning normally means
+ * the TURN may commit. It does not mean every file may be saved. Everything below
+ * step 7 reads the narrowed plan and nothing reads the wide one, which is what
+ * makes the next two paragraphs true without a single extra condition:
+ *
+ *   applyHarvest never sees the held path, so ge_file never gets a row for it.
+ *   brainTouched is computed from the narrowed plan, so a held founder-brain.md
+ *   cannot move founder.track or founder.route. The column is a cache of the file,
+ *   and pointing it at a Brain that was not saved would break rule 1 at its anchor.
  *
  * STEP 4 IS NEW AND IT IS WHAT PAYS FOR THE SPLIT. The plan below is computed
  * against a folder materialise built from `versionBefore`. If the founder's version
@@ -643,15 +715,21 @@ async function commitTurn<T>(
         readPrevious: (path) => previousText(tx, founderId, dataKey, path),
       });
 
-      // NOTHING ABOVE THIS LINE HAS TOUCHED ge_file. Nothing below it can be reached
-      // by an artifact that failed a rule, because gateHarvest throws.
-      await applyHarvest(tx, dataKey, plan, verb);
+      // NOTHING ABOVE THIS LINE HAS TOUCHED ge_file, and nothing below it can be
+      // reached by an artifact that failed a rule. Two mechanisms, not one, because
+      // the gate now answers per file: a violation that costs the run throws out of
+      // gateHarvest, and a violation that costs one file comes back in gate.held and
+      // is taken out of the plan here. Everything below reads `committed`.
+      const committedPlan = withoutHeldFiles(plan, gate.held);
+      await applyHarvest(tx, dataKey, committedPlan, verb);
 
-      const changed = plan.changes.length > 0;
+      const changed = committedPlan.changes.length > 0;
       let trackAfter = row.track;
 
       if (changed) {
-        const brainTouched = plan.changes.some((c) => c.path === 'founder-brain.md');
+        // Read from the narrowed plan on purpose. A held founder-brain.md was not
+        // saved, so the track cache must not move to what it said.
+        const brainTouched = committedPlan.changes.some((c) => c.path === 'founder-brain.md');
         const patch: Record<string, unknown> = { version: versionAfter };
         if (brainTouched && brain) {
           trackAfter = brain.track;
@@ -687,7 +765,7 @@ async function commitTurn<T>(
 
       const outcome: TurnOutcome<T> = {
         value,
-        plan,
+        plan: committedPlan,
         versionBefore,
         versionAfter: changed ? versionAfter : versionBefore,
         rebuilt: materialised.rebuilt,
@@ -767,7 +845,21 @@ export async function runTurn<T>(
     // turn and nothing else, so it is logged by the caller rather than rolled back:
     // the founder's work is already durable and taking it away would be the bug.
     await restoreUnchangedMtimes(founderId, committed.mtimeResets);
-    await writeEpoch(founderId, committed.outcome.versionAfter);
+
+    // THE EPOCH IS THE CLAIM THAT THE FOLDER MATCHES THE RECORD, so a turn that
+    // held a file must not make it. The held file is still sitting on disk holding
+    // the bytes that failed the rule, and the record does not have them. Writing
+    // the epoch here would tell the next turn the folder is warm and correct, and
+    // two things would follow: the model would read a file the founder was told was
+    // not saved, and the harvest would offer it to the gate again every turn.
+    //
+    // Leaving the epoch unwritten is the existing answer to exactly this, from the
+    // header of materialise.ts: no epoch means the next turn rebuilds the folder
+    // from Postgres, which removes the folder first, so the held bytes are gone and
+    // the founder's saved files come back untouched. It costs one rebuild.
+    if (committed.outcome.gate.held.length === 0) {
+      await writeEpoch(founderId, committed.outcome.versionAfter);
+    }
     return committed.outcome;
   });
 }

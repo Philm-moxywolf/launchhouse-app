@@ -31,6 +31,27 @@
  *   mistake, so the paired tests take one clause out of an allowed sentence and
  *   prove the same sentence is then refused.
  *
+ *   THAT CORPUS WAS NOT ENOUGH EITHER, AND THE FOURTH SECTION IS WHY. The rule
+ *   it produced matched a channel list AND a delegate list, and a reviewer
+ *   invented fourteen fresh offers in one sitting of which thirteen reached a
+ *   founder. Every list is a coincidence, whether it holds phrasings or words.
+ *   `FOURTEEN_INVENTED_OFFERS` is that sitting, and `STILL_MISSED` names the one
+ *   that is still not caught so the count cannot drift back up quietly.
+ *
+ *   THE SAME SECTION HOLDS THE DISCLAIMER, and it is the more urgent half. The
+ *   gate refused "Automated cold DMs are not something we do. They get accounts
+ *   restricted.", which is the sentence `audience-b2c/SKILL.md` instructs the
+ *   model to write when a founder asks for DM automation. A block cost the whole
+ *   turn. So the product was telling the model to write something that destroyed
+ *   a founder's afternoon.
+ *
+ *   EVERY GUARD IN THE FIX HAS A PAIR, because a guard nobody has watched fail
+ *   is a guard nobody has tested. Each of the tests below that proves a rescue
+ *   works is followed by one that removes the reason and proves the same
+ *   sentence is then refused. Reverting any single line of the fix in the source
+ *   turns at least one of them red; that was checked by doing it, one line at a
+ *   time, rather than assumed.
+ *
  *   THE PLANT RUNS IN A COPY OF THE REPOSITORY'S SHAPE, not in the repository.
  *   Writing a file containing a send path into somebody's working tree and
  *   deleting it afterwards works right up until the run is interrupted, and
@@ -693,12 +714,448 @@ test('and it goes red the moment an offer is planted in that same skill', () => 
   assert.ok(result.violations.some((v) => v.code === 'dm.offered'));
 });
 
+/* -------------------------------------------------------------------------- */
+/* The sentence the product tells the model to write                          */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * THE DISCLAIMER, WHICH THE GATE USED TO REFUSE.
+ *
+ * `audience-b2c/SKILL.md` says it in as many words: if the founder asks for DM
+ * automation, explain why not and offer the inbound machine instead. So the
+ * product instructs the model to write these sentences, and every one of them
+ * was blocked. On the Sunday turn a block took the plan, the sequence and the
+ * CSV with it, and told the founder they had invented proof.
+ *
+ * The three at the top are the ones that were observed being refused, kept word
+ * for word. They fail three different ways and all three are the same bug: the
+ * refusal was only ever looked for in FRONT of the offer, inside one sentence,
+ * and a sentence ended at a newline. Put the offer in the subject and nothing
+ * can precede it. Put the reason in the next sentence and it is out of reach.
+ * Let the editor wrap the line and the reason lands in a fragment of its own.
+ */
+const THE_PRODUCT_OWN_DISCLAIMER: readonly string[] = [
+  'Automated cold DMs are not something we do. They get accounts restricted.',
+  'Automating your Instagram DMs is a bad idea. The account gets restricted.',
+  'Automated DMs get accounts\nrestricted.',
+
+  // The same claim in the other shapes a model reaches for when told to explain
+  // the rule rather than to state it.
+  'Automated cold DMs are against the Instagram terms.',
+  'DM automation is not something this toolkit does.',
+  'Automating Instagram DMs is a bug, not a feature.',
+  'Automating the DMs will get the account restricted, so we do not.',
+  'Bulk DM tools scrape the interface. They put the account at risk.',
+  'Automated cold DMs on Instagram get accounts restricted or banned.',
+];
+
+test('THE SENTENCE THE PRODUCT TELLS THE MODEL TO WRITE IS NOT REFUSED', () => {
+  const refused: string[] = [];
+  for (const line of THE_PRODUCT_OWN_DISCLAIMER) {
+    const result = checkNoDmAutomation(art(line));
+    if (!result.ok) refused.push(`${JSON.stringify(line)}\n    ${result.violations[0]?.message ?? ''}`);
+  }
+  assert.deepEqual(
+    refused,
+    [],
+    `The gate refused the disclaimer audience-b2c/SKILL.md instructs the model to write. A founder who asks "can I automate my DMs" gets the correct answer written, then loses the turn that wrote it.\n\n${RULE_2}`,
+  );
+});
+
+test('a line the editor wrapped is one sentence, and reads the same as one line', () => {
+  // The third disclaimer above, both ways round. A founder does not choose
+  // where their editor wraps and neither does the model, so a wrap must not
+  // change the answer. It used to: the unwrapped form warned and the wrapped
+  // form blocked, because the newline cut the reason off from the claim.
+  const wrapped = checkNoDmAutomation(art('Automated DMs get accounts\nrestricted.'));
+  const oneLine = checkNoDmAutomation(art('Automated DMs get accounts restricted.'));
+  assert.equal(wrapped.ok, oneLine.ok, 'wrapping the line changed the verdict');
+  assert.equal(wrapped.violations[0]?.code, oneLine.violations[0]?.code);
+  assert.equal(wrapped.violations[0]?.severity, 'warn');
+});
+
+test('a full stop still ends a sentence, so a refusal cannot excuse the next line', () => {
+  // Without this, "one sentence per wrapped line" would have become "one
+  // judgement per paragraph", and the refusal in the first half would excuse
+  // the offer in the second. That is the bypass the sentence split exists for.
+  const result = checkNoDmAutomation(
+    art('There is no DM automation here.\nSet up a bot to DM every new follower.'),
+  );
+  assert.equal(result.ok, false, RULE_2);
+  assert.ok(result.violations.some((v) => v.code === 'dm.offered'));
+});
+
+test('THE REASON IS ALLOWED TO BE IN THE NEXT SENTENCE', () => {
+  // The second of the three shapes the bug report named. The offer is the
+  // subject, so nothing can precede it, and the verdict is not in its own
+  // predicate either. The pair is what makes this a test rather than an
+  // observation: take the reason out and the same sentence is refused.
+  const withReason = checkNoDmAutomation(
+    art('Automating the DMs is something founders ask about. It gets accounts restricted.'),
+  );
+  assert.equal(withReason.ok, true, RULE_2);
+  assert.equal(withReason.violations[0]?.code, 'dm.mentioned-while-refusing');
+
+  const withoutReason = checkNoDmAutomation(
+    art('Automating the DMs is something founders ask about. It fills the calendar.'),
+  );
+  assert.equal(withoutReason.ok, false, 'the rescue fires whatever the next sentence says');
+});
+
+test('and only from the same paragraph, and only when it is not an offer itself', () => {
+  // Two holes the reach into the next sentence would open, each closed and each
+  // proved closed. A blank line ends the thought, so a refusal in the paragraph
+  // below cannot reach back up. And a sentence that is an offer in its own right
+  // is not a verdict on the one before it, however many refusal words it holds.
+  const acrossABreak = checkNoDmAutomation(
+    art('Automating the DMs is something founders ask about.\n\nIt gets accounts restricted.'),
+  );
+  assert.equal(acrossABreak.ok, false, 'a refusal in the next paragraph excused an offer in this one');
+
+  // The second sentence is stuffed with refusal words and it is an offer. That
+  // is the shape "automate your DMs instead of sending them by hand" already has,
+  // and letting it speak for the sentence above it would hand a bypass to any
+  // model that writes two lines instead of one.
+  const bothAreOffers = checkNoDmAutomation(
+    art('Automated DMs are the fastest way to fill the calendar.\nAutomate the DMs so you never have to send one by hand.'),
+  );
+  assert.equal(bothAreOffers.violations[0]?.where.line, 1);
+  assert.equal(bothAreOffers.violations[0]?.severity, 'block', `an offer was excused by the offer after it.\n\n${RULE_2}`);
+});
+
+test('THE DISCLAIMER RESCUE DOES NOT RESCUE AN OFFER', () => {
+  // The rescue was widened to look behind the offer and into the next sentence.
+  // If that widening had no limit it would be a bypass: put a consequence word
+  // anywhere near an offer and it downgrades. Each line below is an offer with
+  // refusal words all over it, and each one must still be refused.
+  for (const line of [
+    // Refusal words after the offer, but the offer is not the subject, so the
+    // predicate reading never runs.
+    'Set up a bot to DM every new follower. Automated DMs get accounts restricted.',
+    // Made of refusal words, and it replaces the manual way rather than keeping it.
+    'Automate your DMs instead of sending them by hand.',
+    // A negation that is itself negated.
+    'Nothing stops you automating the first DM.',
+    // The next sentence is an offer in its own right, so it cannot rescue.
+    'Automated DMs are the fastest way to fill the calendar. Automate them for every new follower.',
+  ]) {
+    const result = checkNoDmAutomation(art(line));
+    assert.equal(result.ok, false, `the rescue let this through:\n${line}\n\n${RULE_2}`);
+  }
+});
+
+/* -------------------------------------------------------------------------- */
+/* The fourteen, and what a list cannot do                                    */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * FOURTEEN OFFERS INVENTED IN ONE SITTING. THIRTEEN REACHED A FOUNDER.
+ *
+ * This is the corpus that killed the closed AND. Not one of these says
+ * "automate a DM", every one of them offers it, and the old check needed a
+ * sentence to hit a channel list and a delegate list at once. The word "agent"
+ * was missing from a noun list. "Opener" only counted inside a document that
+ * had already said DM. "Everyone who views your story" was not on the list of
+ * people who did not ask. Adding those three strings would have bought a week
+ * and this list would be fifteen long.
+ *
+ * The last one is here because it is worse than being missed: it WARNED, which
+ * means the file was saved and the founder read it. It warned because "one by
+ * one" is in the sentence, and the check read that as the founder deciding each
+ * one, when it is the offer to stop them doing that.
+ */
+const FOURTEEN_INVENTED_OFFERS: readonly string[] = [
+  'Use an AI agent to open conversations with your target accounts on Instagram.',
+  'Set up an autoresponder for people you have not spoken to yet.',
+  'Load the 25 openers into the tool and let it work through them.',
+  'Fire the opener at everyone who views your story.',
+  'Have something else write and send the first message on Instagram.',
+  'Point the agent at your follower list and it handles the openers.',
+  'The openers go out overnight without you.',
+  'Warm up the list with an automated first touch on Instagram.',
+  'An agent can handle Instagram outreach end to end.',
+  'Let it work through the list of handles on Instagram.',
+  'Once configured, new story viewers get the opener.',
+  'The sequence handles the Instagram side too.',
+  'Give the tool your handles and it takes it from there.',
+  'Put the DMs on a schedule so you are not doing them one by one.',
+];
+
+/**
+ * THE ONE THAT IS STILL MISSED, named so it cannot quietly become two.
+ *
+ * It has a delegate and an audience and no word at all for what is being sent.
+ * Letting a delegate and an audience convict on their own would refuse
+ * "configure the workflow to email your list every morning", which is the B2B
+ * track's own deliverable, and rule 1 says the tracks never see each other's
+ * material. That trade is argued in the file. This test holds the count at one.
+ */
+const STILL_MISSED: readonly string[] = ['Give the tool your handles and it takes it from there.'];
+
+test('NONE OF THE FOURTEEN IS SILENT, EXCEPT THE ONE NAMED AS MISSED', () => {
+  const silent: string[] = [];
+  for (const line of FOURTEEN_INVENTED_OFFERS) {
+    if (checkNoDmAutomation(art(line)).violations.length === 0) silent.push(line);
+  }
+  assert.deepEqual(
+    silent,
+    STILL_MISSED,
+    `A reviewer invented fourteen offers in one sitting and thirteen reached a founder. That is what a vocabulary list does. If this list has grown, the answer is not another word.\n\n${RULE_2}`,
+  );
+});
+
+test('TWELVE OF THE FOURTEEN ARE REFUSED OUTRIGHT, NOT MERELY NOTED', () => {
+  // A warning is not silence, but it is not a refusal either: the file is saved
+  // and the founder reads the line. So the count that matters is how many are
+  // blocked, and it is held here rather than left to drift downwards.
+  const blocked = FOURTEEN_INVENTED_OFFERS.filter((line) => !checkNoDmAutomation(art(line)).ok);
+  assert.ok(
+    blocked.length >= 12,
+    `only ${blocked.length} of the fourteen are refused.\n${FOURTEEN_INVENTED_OFFERS.filter(
+      (l) => checkNoDmAutomation(art(l)).ok,
+    ).join('\n')}\n\n${RULE_2}`,
+  );
+});
+
+test('A SCHEDULE THAT STOPS YOU SENDING ONE BY ONE IS THE OFFER, NOT THE RESCUE', () => {
+  // The fourteenth. It warned, so the file was saved and the founder read it.
+  // "One by one" is the founder deciding each one, which is what rule 2 asks
+  // for, and negated it is the offer to take them out of it. The pair is the
+  // argument: the same words, one negated, opposite answers.
+  const negated = checkNoDmAutomation(art('Put the DMs on a schedule so you are not doing them one by one.'));
+  assert.equal(negated.ok, false, RULE_2);
+  assert.equal(negated.violations[0]?.code, 'dm.offered');
+
+  const plain = checkNoDmAutomation(art('Take the DMs off the schedule and send them one by one.'));
+  assert.equal(plain.ok, true, 'sending them one at a time is the deliverable, not the mistake');
+});
+
+/* -------------------------------------------------------------------------- */
+/* The parts of the score, each proved able to fail                           */
+/* -------------------------------------------------------------------------- */
+
+test('A SET OF WORDS COUNTS ONCE, WHICH IS WHAT KEEPS THE SCORE HONEST', () => {
+  // "Opener" says the channel and says the coldness. Counting it twice would
+  // make every sentence with the word in it a block, and the B2B track's email
+  // openers are written by the same engine. The pair below is the same sentence
+  // with a second, separate audience added, and only the second one blocks.
+  const oneWord = checkNoDmAutomation(art('The opener can be automated.'));
+  assert.equal(oneWord.ok, true, 'one word was counted as two points of evidence');
+  assert.ok(oneWord.violations.length > 0, 'and it was not noticed at all, which is the other failure');
+
+  const twoThings = checkNoDmAutomation(art('The opener can be automated for every new follower.'));
+  assert.equal(twoThings.ok, false, `a second, separate audience is a second point.\n\n${RULE_2}`);
+});
+
+test('a delegate that takes the founder out is worth a point, one that does not is not', () => {
+  // Both sentences name a weak channel and a delegate and no audience. The only
+  // difference is that one delegate says outright that nobody is deciding each
+  // one. A workflow does not: the sanctioned inbound machine is a workflow.
+  const excludes = checkNoDmAutomation(art('The openers go out overnight without you.'));
+  assert.equal(excludes.ok, false, RULE_2);
+
+  const neutral = checkNoDmAutomation(art('The sequence handles the Instagram side too.'));
+  assert.equal(neutral.ok, true);
+  assert.equal(neutral.violations[0]?.code, 'dm.possible-offer', 'and it still says something');
+});
+
+test('A WRAPPED LINE IS ONE SENTENCE EVEN WHEN THE OFFER IS NOT THE SUBJECT', () => {
+  // The narrower half of the wrap fix, isolated. When the offer IS the subject
+  // the rescue can reach into the next sentence and the wrap does not matter, so
+  // the disclaimer test above would still pass with the splitter reverted. Here
+  // something precedes the offer, that path is closed, and the only thing
+  // holding the claim and its reason together is that the wrap is not a break.
+  const wrapped = checkNoDmAutomation(art('Honestly, automating the DMs gets accounts\nrestricted.'));
+  const oneLine = checkNoDmAutomation(art('Honestly, automating the DMs gets accounts restricted.'));
+  assert.equal(oneLine.ok, true, 'the unwrapped form was refused, so the pair proves nothing');
+  assert.equal(wrapped.ok, true, 'a wrap turned a warning into a refusal, and a founder does not choose where their editor wraps');
+  assert.equal(wrapped.violations[0]?.code, oneLine.violations[0]?.code);
+});
+
+test('TWO WORDS A PARAGRAPH APART ARE NOT ONE CLAIM', () => {
+  // This matters more since a wrap stopped ending a sentence. A hard wrapped
+  // paragraph is now one sentence, and a paragraph holds two jobs: the
+  // GoHighLevel workflow on the first line, the 25 DM openers on the third.
+  // Reading those as one offer refuses a growth plan that is entirely correct.
+  //
+  // The pair is the argument. The limit is a distance, not a hole: the same two
+  // words close together are still refused.
+  const twoJobs = [
+    'Your GoHighLevel workflow handles the email follow-up, with a two day wait',
+    'between steps, an exit condition once they book a call with you, and a tag',
+    'applied when they reach the end of it, and the 25 DM openers are a separate',
+    'job for Saturday.',
+  ].join('\n');
+  assert.equal(checkNoDmAutomation(art(twoJobs)).ok, true, 'two unrelated jobs in one paragraph were read as one offer');
+
+  const close = checkNoDmAutomation(art('The workflow handles the 25 DM openers.'));
+  assert.equal(close.ok, false, `the distance limit became a way through.\n\n${RULE_2}`);
+});
+
+test('THE WARNING TIER IS REACHABLE, AND IT IS NOT THE ANSWER FOR A CLEAR OFFER', () => {
+  // One point of evidence warns and two blocks. Both halves need proving: a
+  // check that only ever warns has stopped guarding, and a check that only ever
+  // blocks is back to betting a founder's turn on an uncertain sentence.
+  const one = checkNoDmAutomation(art('The sequence handles the Instagram side too.'));
+  assert.equal(one.violations[0]?.severity, 'warn');
+  assert.equal(one.violations[0]?.code, 'dm.possible-offer');
+  assert.equal(one.ok, true, 'a single weak signal must not cost the founder the file');
+
+  const two = checkNoDmAutomation(art('Use a scheduler to send Instagram DMs to your followers automatically.'));
+  assert.equal(two.violations[0]?.severity, 'block');
+  assert.equal(two.violations[0]?.code, 'dm.offered');
+});
+
+test('the warning says what is missing, not just that something is wrong', () => {
+  // A warning a founder cannot act on is a warning they learn to scroll past,
+  // and test case 21 in the content repo holds every refusal to a way out.
+  const v = checkNoDmAutomation(art('The sequence handles the Instagram side too.')).violations[0];
+  assert.ok(v, 'the warning tier produced nothing');
+  assert.match(v.message, /who asked/);
+  assert.match(v.message, /Say what sets the message off/);
+  assert.equal(v.recovery.action.kind, 'route');
+});
+
+test('A COMMAND ARGUMENT IS NOT A CHANNEL, AND THE SCHEMA THAT PROVED IT', () => {
+  // `schemas/person.md` documents the touch command. The `dm` in it is an
+  // argument, and this rule read it as a word for a channel and refused the
+  // schema. It only started doing that when a wrapped line stopped ending a
+  // sentence: the wrap used to keep the command and the phrase three lines below
+  // it apart, and that was luck rather than a decision.
+  //
+  // Read from the file rather than quoted, because a quote can be edited until
+  // it agrees with the code and the shipped schema cannot.
+  const path = 'plugins/growth-engine/schemas/person.md';
+  const result = checkNoDmAutomation({ path, text: readContentFile(path), authored: 'model' });
+  assert.deepEqual(
+    result.violations.map((v) => `${v.where.line}: ${v.where.excerpt}`),
+    [],
+    'the rule refused a schema document because a command takes an argument called dm',
+  );
+
+  // And the masking has not made the rule blind. The pair is the same three
+  // wrapped lines from that schema, once as shipped and once with every backtick
+  // removed. The second one is prose making the same claim, and it is refused.
+  const lines = [
+    'Recording an outbound %dm% to a target is the',
+    'send, so %ge person touch <who> dm out "..."% moves a target from %target% or',
+    '%opener_written% to %sent% by itself.',
+  ].join('\n');
+  const asShipped = checkNoDmAutomation(art(lines.replaceAll('%', '`')));
+  const asProse = checkNoDmAutomation(art(lines.replaceAll('%', '')));
+  assert.equal(asShipped.ok, true, 'a command argument was read as a channel');
+  assert.equal(asProse.ok, false, `masking turned the rule off rather than narrowing it\n\n${RULE_2}`);
+});
+
+test('WHAT A REFUSAL COSTS DEPENDS ON WHETHER THE CHANNEL WAS NAMED OR INFERRED', () => {
+  // A COORDINATION WITH harvest-gate.ts, pinned here so it cannot drift.
+  //
+  // That file rolls the WHOLE turn back for `dm.offered`, and the argument it
+  // writes beside that decision is that the code "fires only when a channel and
+  // a hand off verb sit in the same sentence". Widening this rule broke that
+  // sentence: half the fourteen name no channel at all and are caught by
+  // inference. So the inferred half carries its own code, and harvest-gate's own
+  // rule for a code it has never heard of is to hold the file and save the rest
+  // of the turn. Losing a founder's Sunday on an inference is a different bet
+  // from losing it on "we can automate your Instagram DMs".
+  //
+  // If this test goes red, the question is not which code to rename. It is
+  // whether the sentence in WORTH_THE_WHOLE_TURN is still true.
+  for (const named of [
+    'We can automate DMs for you overnight.',
+    'Use a scheduler to send Instagram DMs to your followers automatically.',
+    'Put the DMs on a schedule so you are not doing them one by one.',
+    'Have something else write and send the first message on Instagram.',
+  ]) {
+    const v = checkNoDmAutomation(art(named)).violations[0];
+    assert.equal(v?.code, 'dm.offered', `the channel is named in "${named}"`);
+  }
+
+  for (const inferred of [
+    'The openers go out overnight without you.',
+    'Load the 25 openers into the tool and let it work through them.',
+    'Fire the opener at everyone who views your story.',
+    'Set up an autoresponder for people you have not spoken to yet.',
+  ]) {
+    const v = checkNoDmAutomation(art(inferred)).violations[0];
+    assert.equal(v?.severity, 'block', `${inferred}\n\n${RULE_2}`);
+    assert.equal(
+      v?.code,
+      'dm.offered-by-inference',
+      `"${inferred}" names no channel, and it must not cost a founder the whole turn on an inference`,
+    );
+  }
+});
+
+test('the inferred refusal tells the founder how to tell the two tracks apart', () => {
+  // A B2B founder reading "this offers automating DMs" about a sentence that
+  // says nothing about DMs has nothing to act on, and rule 1 says they should
+  // never have been shown the other track's material at all. So the inferred
+  // message says what is missing and gives both ways out.
+  const v = checkNoDmAutomation(art('Set up an autoresponder for people you have not spoken to yet.')).violations[0];
+  assert.ok(v);
+  assert.match(v.message, /does not say DM anywhere/);
+  assert.match(v.message, /if it is about email, say so/);
+});
+
+/* -------------------------------------------------------------------------- */
+/* The half that must pass, held against the real documents                   */
+/* -------------------------------------------------------------------------- */
+
+test('THE TWO INBOUND DOCUMENTS ARE NOT REFUSED, BECAUSE THEY ARE THE PRODUCT', () => {
+  // audience-b2c describes the sanctioned inbound machine and states rule 2 in
+  // the same file. ghl-workflows is where that machine is actually written. If
+  // either is refused, half the B2C track cannot be generated at all.
+  for (const path of [
+    'plugins/growth-engine/skills/audience-b2c/SKILL.md',
+    'plugins/growth-engine/skills/ghl-workflows/SKILL.md',
+  ]) {
+    const result = checkNoDmAutomation({ path, text: readContentFile(path), authored: 'model' });
+    assert.deepEqual(
+      result.violations
+        .filter((v) => v.severity === 'block')
+        .map((v) => `${v.where.line}: ${v.where.excerpt}`),
+      [],
+      `${path} was refused, and it is the document that describes the sanctioned machine.`,
+    );
+  }
+});
+
+test('B2B EMAIL AUTOMATION IS NOT REFUSED, WHICH IS RULE 1 HELD AGAINST RULE 2', () => {
+  // Rule 1: two tracks, and a founder never sees the other one's material. The
+  // B2B sequence is emails and it is meant to be automated in GoHighLevel, so
+  // every sentence here is ordinary work for half the cohort and would be the
+  // banned thing for the other half. Nothing in this rule may refuse them,
+  // because a B2B founder cannot fix a refusal that is about Instagram.
+  const path = 'plugins/growth-engine/skills/outreach-b2b/SKILL.md';
+  const result = checkNoDmAutomation({ path, text: readContentFile(path), authored: 'model' });
+  assert.deepEqual(
+    result.violations.filter((v) => v.severity === 'block').map((v) => `${v.where.line}: ${v.where.excerpt}`),
+    [],
+    'the B2B track had its own outreach skill refused by the rule about Instagram',
+  );
+
+  for (const line of [
+    'Configure the workflow to email your list every morning.',
+    'Automate the email sequence in GoHighLevel and step in when they reply.',
+    'The campaign sends the follow-up two days later.',
+  ]) {
+    assert.equal(checkNoDmAutomation(art(line)).ok, true, `refused ordinary B2B work: "${line}"`);
+  }
+});
+
 test('EVERY SENTENCE THIS RULE CAN SHOW A FOUNDER PASSES HOUSE STYLE', () => {
   // The messages carry a label that changes with what was offered, so the whole
   // corpus is run through and every distinct sentence checked. A refusal that
   // breaks the house style is a refusal a founder does not believe.
   const shown = new Set<string>();
-  for (const line of [...OFFERS_TO_AUTOMATE, ...INBOUND_AUTOMATION, ...MANUAL_OR_EXPLAINING]) {
+  for (const line of [
+    ...OFFERS_TO_AUTOMATE,
+    ...INBOUND_AUTOMATION,
+    ...MANUAL_OR_EXPLAINING,
+    ...THE_PRODUCT_OWN_DISCLAIMER,
+    ...FOURTEEN_INVENTED_OFFERS,
+  ]) {
     for (const v of checkNoDmAutomation(art(line)).violations) {
       shown.add(v.message);
       shown.add(v.why);

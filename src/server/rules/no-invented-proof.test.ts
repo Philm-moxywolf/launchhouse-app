@@ -188,6 +188,137 @@ test('an outcome verb needs somebody it happened to', () => {
 });
 
 /* -------------------------------------------------------------------------- */
+/* MUST BE CAUGHT: what THIS cohort invents, which is not what a textbook does  */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * A Founder Brain for a local service business, holding real numbers, none of
+ * which are the ones claimed below.
+ *
+ * WHY NOT ONE OF THE WORKED EXAMPLES. Priya's Brain says 340 customers, 180
+ * TikTok followers and "women 28 to 45". Check "You have groomed 340 dogs"
+ * against it and the number is grounded, so the line passes for a reason that
+ * has nothing to do with the shape being tested, and the test proves nothing.
+ * Fictional, like the two worked examples, and for the same reason.
+ */
+const A_GROOMER: FounderContext = {
+  track: 'b2c',
+  brain: [
+    '# Founder Brain',
+    '- **Track:** b2c',
+    '## Proof',
+    '- Two regulars who have been coming for 6 years.',
+    '- Roughly 3k GBP a month.',
+  ].join('\n'),
+};
+
+/**
+ * The nouns a room of 130 local founders actually writes.
+ *
+ * Every textbook probe was already refused: 340 customers, 82 per cent, a
+ * testimonial, a revenue figure. Then the same lie about dogs and boilers went
+ * through, six of them as a note that saved the file and two in silence, because
+ * the rule was reading a list of nouns and the nouns belonged to somebody else's
+ * business. Not one of these words is in a list, and not one of them will be.
+ */
+const THE_COHORT_INVENTS = [
+  'You have groomed 340 dogs.',
+  'We have photographed 180 weddings.',
+  'We have taught 900 learners.',
+  'We have fitted 45 kitchens.',
+  'We have serviced 1,200 boilers.',
+  'We have treated 5,000 animals.',
+  'You have served 2,400 meals this year.',
+  'You have run 400 sessions with clients.',
+  // The same claim in the other shapes it gets written in.
+  'We groomed 340 dogs last year.',
+  'She has walked 900 dogs since 2019.',
+  'You have delivered 400 cakes to couples in Atlanta.',
+  'I have cleaned 1,200 gutters across the city.',
+];
+
+test('THE NOUNS THIS COHORT COUNTS ARE CAUGHT, AND NONE OF THEM IS IN A LIST', () => {
+  const missed: string[] = [];
+  for (const line of THE_COHORT_INVENTS) {
+    const violations = checkNoInventedProof(post(line), A_GROOMER).violations;
+    if (!violations.some((v) => v.severity === 'block')) {
+      missed.push(`${line}  read as ${JSON.stringify(readingsFor(line))}`);
+    }
+  }
+  assert.deepEqual(missed, []);
+});
+
+test('a completed count is refused for the frame, not for the noun', () => {
+  // The `because` is pinned. If one of these ever passes through "a count of
+  // proof" instead, somebody has put a noun in the proof list, and the next
+  // groomer's content plan is going to be refused for saying "dog".
+  for (const line of THE_COHORT_INVENTS) {
+    const [only] = readingsFor(line);
+    assert.ok(only !== undefined, line);
+    assert.equal(only.kind, 'result', line);
+    assert.equal(only.because, 'a count of something already done', line);
+  }
+});
+
+test('THE COHORT LIST ABOVE CAN FAIL, so its passing means something', () => {
+  // The negative control, in both directions. The same harness must still say
+  // nothing about the same noun in a sentence that has not happened yet.
+  assert.ok(THE_COHORT_INVENTS.length >= 10);
+  const homework = checkNoInventedProof(post('Groom 4 dogs a day, then write one post.'), A_GROOMER);
+  assert.deepEqual(homework.violations, [], 'a cadence about the same noun must stay silent');
+});
+
+test('THE SAME NOUN IN NEXT WEEK\'S WORK IS STILL SILENT', () => {
+  // This is the half that has to hold. Adding "dogs" to the proof noun list
+  // would catch the claims above and refuse every one of these, on the first
+  // content plan a groomer generates.
+  const homework = [
+    'Post 3 dog photos a week.',
+    'Book 4 dog walks a week.',
+    'Groom 4 dogs a day and write one post about it.',
+    'Serve 40 meals a week and the rest follows.',
+    'Fit 2 kitchens a month and film both.',
+    'You have 12 pieces to approve.',
+    'You have already spent 45 minutes on this.',
+    'Once you have groomed 4 dogs, write the post.',
+    'After you have sent 25 messages, stop and read what came back.',
+  ].join('\n');
+  const result = checkNoInventedProof(post(homework), A_GROOMER);
+  assert.deepEqual(
+    result.violations.filter((v) => v.severity === 'block').map((v) => v.where.excerpt),
+    [],
+  );
+});
+
+test('a stretch of time is not a count of things done', () => {
+  // "You have already spent 40 minutes on this" is a completed action counting a
+  // duration, which is a report of how long something took, not a claim about a
+  // business. The unit is what separates them.
+  assert.equal(readingOf('You have already spent 40 minutes on this.').kind, 'work');
+  assert.equal(readingOf('We have been at this for 15 years.').kind, 'work');
+});
+
+test('nobody did it, so it is not a completed action', () => {
+  // "There have been 3 posts this week" is the app reading a founder's own
+  // folder back to them. It carries a perfect and it counts nothing anybody did,
+  // so refusing it would take their work for showing them their progress.
+  assert.equal(readingOf('There have been 3 posts this week.').kind, 'work');
+  // The pair. Once the thing counted is pipeline, it is a claim again, by the
+  // route that was already there.
+  assert.equal(readingOf('There have been 12 enquiries this month.').kind, 'result');
+});
+
+test('a trailing period is not the thing being counted', () => {
+  // "2,400 meals this year" counts meals. The year is when. Two words of slack
+  // walked past "meals", past "this", landed on "year", and filed the whole
+  // sentence as a cadence, which is how it reached a founder in silence.
+  assert.equal(readingOf('Send 3 times a week.').kind, 'work');
+  assert.equal(readingOf('Block 45 minutes on Tuesday.').kind, 'work');
+  assert.equal(readingOf('Write 12 pieces this month.').kind, 'work');
+  assert.notEqual(readingOf('2,400 meals this year.').kind, 'work');
+});
+
+/* -------------------------------------------------------------------------- */
 /* MUST PASS: the two worked example founders                                  */
 /* -------------------------------------------------------------------------- */
 

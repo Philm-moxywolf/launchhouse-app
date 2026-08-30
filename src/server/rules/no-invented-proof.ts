@@ -31,7 +31,7 @@
  * WHAT A CLAIMED RESULT ACTUALLY IS. READ THIS BEFORE CHANGING A LIST BELOW.
  *
  *   A claimed result is a number that says something IS TRUE about the founder's
- *   business, that a stranger could ask them to back up. Four shapes:
+ *   business, that a stranger could ask them to back up. Five shapes:
  *
  *     1. A count of people, businesses or transactions. "340 customers",
  *        "63 firms", "12,000 people already reading this". Somebody either
@@ -42,6 +42,13 @@
  *        most checkable claim there is.
  *     4. A change. "from 71 days to 38", "cut it by 6 hours a week". An outcome
  *        verb saying a quantity moved.
+ *     5. A count of something already done. "You have groomed 340 dogs."
+ *        "We have fitted 45 kitchens." Shape 1 reads the noun, and the nouns in
+ *        this cohort's Brains are dogs, weddings, kitchens and boilers, not
+ *        customers and firms. This one reads the frame instead: somebody did it,
+ *        it is finished, and it counts things rather than time. The argument for
+ *        why that is the only version of shape 1 that can work is at the head of
+ *        the completed action section below.
  *
  *   A quantity of work is NOT any of those, and this is the distinction the
  *   first version did not draw. A quantity of work tells the founder what to do
@@ -56,13 +63,14 @@
  *     - a position: which one. "Piece 4." "Touch 5." "Week 2."
  *
  *   The load-bearing test between the two is the NOUN the number attaches to,
- *   and the MOOD of the sentence it sits in. A result attaches to a person, a
- *   pound or a rate, and is written in the past or present about the business.
- *   A quantity of work attaches to a unit of time or a unit of effort, and is
- *   written as an instruction to the founder. A regex cannot read tense, so what
- *   it reads instead is the noun after the number, the word before it, and
- *   whether the sentence opens with an imperative verb the founder is meant to
- *   act on.
+ *   the MOOD of the sentence it sits in, and whether the thing being counted has
+ *   already happened. A result attaches to a person, a pound or a rate, or to
+ *   something somebody has finished doing. A quantity of work attaches to a unit
+ *   of time or a unit of effort, and is written as an instruction to the founder.
+ *   A regex cannot read tense directly, so what it reads instead is the noun
+ *   after the number, the words before it, whether an auxiliary and a past
+ *   participle sit in front of it, and whether the sentence opens with an
+ *   imperative verb the founder is meant to act on.
  *
  *   Two corollaries worth writing down, because both were bugs:
  *
@@ -95,17 +103,16 @@
  *   exact: a banned word either is in the text or is not, and rule 2 either
  *   automated a DM or did not. Rule 5 is a judgement about a sentence, so the
  *   only honest lever is which shapes are confident enough to spend a founder's
- *   whole turn on. The answer is: the four claim shapes above, and nothing else.
+ *   whole turn on. The answer is: the five claim shapes above, and nothing else.
  *
- *   ONE THING THIS FILE CANNOT FIX, so that the next person is not surprised by
- *   it. When a block does fire, `harvest-gate.ts` throws and `storage/turn.ts`
- *   rolls the whole turn back, so a founder loses every file the turn wrote, not
- *   the one sentence that failed. For a turn that wrote one file that is the
- *   same thing. For the Sunday turn that writes a plan, a sequence and a CSV
- *   together, it is not. Narrowing it would mean the gate holding back one file
- *   and saving the rest, which is a change to the transaction and belongs in
- *   `harvest-gate.ts`. Whoever makes it should read the argument in that file's
- *   header first: a half written folder is its own kind of hard to explain.
+ *   WHAT A BLOCK COSTS THE FOUNDER IS NOT DECIDED HERE, and the next person
+ *   should not go looking for it in this file. This file decides which shapes
+ *   are sure enough to refuse. `harvest-gate.ts` and `storage/turn.ts` decide
+ *   what a refusal takes with it: the one file that failed, or every file the
+ *   turn wrote. Read that file's header before changing either, because the two
+ *   decisions multiply. A shape that is only mostly right is survivable when it
+ *   holds one file back. It is not survivable when it takes a plan, a sequence
+ *   and a CSV with it, on the Sunday, in a staffed room.
  *
  * THE OTHER NUMBERS THAT ARE NEVER CLAIMS are taken out before the scan runs:
  *   dates, times of day, positions in a list, `b2b` and `b2c`, the toolkit's own
@@ -335,6 +342,24 @@ function maskNeverAClaim(text: string, isCsv: boolean): string {
  * this toolkit the founder is the reader, so "the founder" appears in almost
  * every line of every skill. It made "Work in batches of 5 to 10 so the founder
  * can check quality" a refusal.
+ *
+ * THIS LIST IS NOT WHERE THE COHORT'S NOUNS GO. READ THIS BEFORE ADDING ONE.
+ * These 130 founders count dogs, weddings, kitchens, boilers, meals, learners
+ * and animals. Not one of those words is here and not one of them is going to
+ * be, for two reasons.
+ *
+ *   The list cannot be finished. The next room counts lawns, MOTs, wigs and
+ *   piano lessons. A vocabulary that has to hold every noun a small business
+ *   sells is a vocabulary that is wrong for whoever is not in the room.
+ *
+ *   Adding one does damage on the way past. A word in THIS list is a claim
+ *   wherever it sits, and nothing demotes it, not even an instruction. Put
+ *   `dogs?` here and "Post 3 dog photos a week" is a refusal, and so is "Book 4
+ *   dog walks", on the first content plan a groomer generates.
+ *
+ * What catches those sentences instead is the completed action frame below. It
+ * reads the shape of the claim rather than the noun in it, which is the only
+ * thing that works for a noun nobody has thought of yet.
  */
 const PROOF_NOUNS =
   'customers?|clients?|users?|subscribers?|followers?|fans?|members?|readers?|viewers?|listeners?|people|persons?|women|men|woman|man|mums?|dads?|parents?|families|households|professionals?|freelancers?|creators?|shops?|salons?|studios?|practices|clinics?|agencies|contractors?|builders?|firms?|companies|company|businesses|business|brands?|owners?|testimonials?|reviews?|ratings?|stars?|referrals?|signups?|sign-ups?|subscriptions?|downloads?|attendees?|students?|patients?|sales?|orders?|purchases?|deals?|contracts?|retainers?|staff|employees?|hires?';
@@ -386,9 +411,147 @@ function nounAfter(list: string): RegExp {
   );
 }
 
+/**
+ * Determiners that turn a unit of time into an adverbial: WHEN something
+ * happened, rather than HOW MUCH of it there was.
+ *
+ * "2,400 meals this year" counts meals. The year is the period they were served
+ * in. Without this the two words of slack above walk past "meals", past "this",
+ * and land on "year", and the sentence is filed as a cadence and says nothing at
+ * all. That is how "You have served 2,400 meals this year" reached a founder in
+ * silence.
+ *
+ * It only applies to a word BETWEEN the number and the unit. "45 minutes" and
+ * "3 times a week" are untouched, because nothing sits in between.
+ */
+const TIME_ADVERBIAL_DETERMINER =
+  '(?:this|that|these|those|last|next|past|previous|coming|following|recent)';
+
+/** A unit of time being measured, rather than a period being named. */
+const TIME_AFTER = new RegExp(
+  `^[\\s,:;'"()\\[\\]-]*(?:(?!${CLAUSE_BREAK_WORDS}\\b)(?!${TIME_ADVERBIAL_DETERMINER}\\b)[\\w'-]+\\s+){0,2}(?:${TIME_UNITS})\\b`,
+  'i',
+);
+
 const PROOF_AFTER = nounAfter(PROOF_NOUNS);
 const PIPELINE_AFTER = nounAfter(PIPELINE_NOUNS);
-const UNIT_AFTER = nounAfter(`${TIME_UNITS}|${WORK_UNITS}`);
+const WORK_AFTER = nounAfter(WORK_UNITS);
+
+/** A cadence, a duration, a deadline, a horizon or a count of the work itself. */
+function unitAfter(tail: string): boolean {
+  return WORK_AFTER.test(tail) || TIME_AFTER.test(tail);
+}
+
+/**
+ * A unit of time sitting where the counted noun would be: "40 minutes",
+ * "15 long years". At most one describing word, because two is what let a
+ * trailing "this year" be read as the thing being counted.
+ */
+const TIME_IS_THE_NOUN = new RegExp(
+  `^[\\s,:;'"()\\[\\]-]*(?:[\\w'-]+\\s+){0,1}(?:${TIME_UNITS})\\b`,
+  'i',
+);
+
+/* -------------------------------------------------------------------------- */
+/* A COMPLETED ACTION, which is a claim whatever noun it counts                */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * THE FAILURE THIS SECTION WAS ADDED TO PREVENT
+ *
+ *   You have served 2,400 meals this year.     said nothing at all
+ *   You have run 400 sessions with clients.    said nothing at all
+ *   You have groomed 340 dogs.                 a note, so it was saved
+ *   We have fitted 45 kitchens.                a note, so it was saved
+ *   We have serviced 1,200 boilers.            a note, so it was saved
+ *
+ * Every textbook fabrication was refused. 340 customers, 82 per cent, a
+ * testimonial, a revenue figure: all four shapes held. Then a room of local
+ * service founders wrote the same lie about dogs and boilers and it walked
+ * through, because the four shapes were reading NOUNS and the nouns belonged to
+ * somebody else's business.
+ *
+ * WHAT MAKES ONE OF THOSE A CLAIM. Not the noun. Three things, none of which
+ * care what is being counted:
+ *
+ *   somebody did it       "we", "you", "they", a named business
+ *   it is finished        "have served", "groomed", "has fitted"
+ *   it is a real count    a number, and a thing rather than a stretch of time
+ *
+ * That is a sentence a stranger can ask the founder to back up, which is the
+ * definition this file already uses. "Serve 40 meals a week" is homework and
+ * stays homework: no subject, no completed verb, nothing has happened yet.
+ *
+ * WHY THIS ONE CAN BE A LIST WHEN THE NOUNS CANNOT. The auxiliary is `have`,
+ * `has` or `had`, and there is no fourth one. The past tense of an English verb
+ * is regular, or it is one of a couple of hundred irregulars that have not
+ * changed in a lifetime. A closed class can be written out. The things a small
+ * business sells cannot.
+ */
+
+/** An adverb that can sit between the auxiliary and the verb. */
+const PERFECT_ADVERB = '(?:already|just|recently|now|since|only|ever|so far|to date|all)';
+
+/**
+ * A past participle. Regular first, then the irregulars common enough to turn
+ * up in a sentence about a business.
+ *
+ * `got`, `gotten` and `had` are deliberately absent. "We have got 5 pieces
+ * ready" is possession wearing a perfect's clothes, and reading it as a
+ * completed action would refuse a line about the founder's own drafts.
+ */
+const PARTICIPLE =
+  "(?:[\\w'-]+(?:ed|en)|been|run|sold|made|built|sent|taught|met|won|grown|held|kept|brought|spent|lost|found|paid|begun|dealt|left|felt|said|told|put|read|cut|set|let|hit|split|shut|come|gone|done)";
+
+/**
+ * The unambiguous simple pasts. Forms that are also the present or the
+ * imperative are left out on purpose: "run", "put", "cut" and "read" all start
+ * instructions, and "You run 4 sessions a week" is a plan line, not a boast.
+ */
+const SIMPLE_PAST =
+  "(?:[\\w'-]+ed|ran|sold|made|built|sent|taught|met|won|grew|held|kept|brought|spent|lost|found|paid|began|gave|took|wrote|spoke|saw|did|drove|flew|ate|sat|stood|chose|drew|knew|threw|understood|dealt|felt|left|told|said)";
+
+/**
+ * "we have already served", "it has run", "Northfield has fitted".
+ *
+ * `there have been` is excluded, and it is the one exclusion this needs.
+ * "There have been 3 posts this week" is an existential: nothing is being
+ * counted as somebody's doing, so it is a status line about the folder rather
+ * than a claim about a business, and refusing one would cost a founder their
+ * work for reading their own progress back to them.
+ */
+const PERFECT_BEFORE = new RegExp(
+  `(?<!\\bthere\\s)\\b(?:have|has|had)\\s+(?!not\\b|never\\b)(?:${PERFECT_ADVERB}\\s+)?${PARTICIPLE}\\s+(?:[\\w'-]+\\s+){0,2}$`,
+  'i',
+);
+
+/** "we groomed", "you served last year", "they ran". */
+const PAST_BEFORE = new RegExp(
+  `\\b(?:we|i|you|they|he|she|it)\\s+(?:${PERFECT_ADVERB}\\s+)?${SIMPLE_PAST}\\s+(?:[\\w'-]+\\s+){0,2}$`,
+  'i',
+);
+
+/**
+ * The clause is about something that has not happened yet, so the count is a
+ * condition rather than a claim.
+ *
+ * "Once you have sent 25 messages, stop." is an instruction with a perfect in
+ * it. Without this it reads as a boast about 25 messages already sent, and it
+ * is the shape the outreach skill writes most.
+ */
+const SUBORDINATED =
+  /\b(?:once|after|when|whenever|if|until|unless|before|while|whether|as soon as|should)\b/i;
+
+/**
+ * Somebody finished doing something, this many times.
+ *
+ * `head` is the text of the sentence before the number, with any range it
+ * closes already skipped back over.
+ */
+function completedAction(head: string): boolean {
+  if (SUBORDINATED.test(head)) return false;
+  return PERFECT_BEFORE.test(head) || PAST_BEFORE.test(head);
+}
 
 /**
  * "90 day plan", "90-day plan", "six week change", "30 day content plan".
@@ -625,6 +788,20 @@ export function readClaim(sentence: string, token: NumberToken): Reading {
   // 3. A quantity that moved: "from 71 days to 38".
   if (insideChangeFrame(sentence, at, end)) return { kind: 'result', because: 'a change' };
 
+  // 3a. Somebody finished doing something, this many times. "You have groomed
+  //     340 dogs." The noun is not in any list here and never will be, so what
+  //     is read is the frame: a subject, a completed verb, and a count of things
+  //     rather than a stretch of time. It sits above the instruction test
+  //     because a completed action is not an instruction, and above the unit
+  //     test because "You have run 400 sessions" is a claim that happens to
+  //     count a word from the work list.
+  if (completedAction(head) && !TIME_IS_THE_NOUN.test(tail)) {
+    if (hypothetical) {
+      return { kind: 'unclear', because: 'a completed count inside a projection' };
+    }
+    return { kind: 'result', because: 'a count of something already done' };
+  }
+
   // 3b. A time compound: "90 day plan", "30 day content plan". The singular unit
   //     is what marks it, and it only reads that way above one, because "1 day"
   //     is singular for the ordinary reason.
@@ -645,7 +822,7 @@ export function readClaim(sentence: string, token: NumberToken): Reading {
     // moved. "Cut your admin by 6 hours a week" is a promise wearing an
     // instruction's clothes. "Build to 35, then cut to 25" is a list being
     // trimmed, and the same verb means nothing without a unit behind it.
-    if (outcome && (UNIT_AFTER.test(tail) || UNIT_BEFORE.test(head))) {
+    if (outcome && (unitAfter(tail) || UNIT_BEFORE.test(head))) {
       return { kind: 'unclear', because: 'an outcome word inside an instruction' };
     }
     return { kind: 'work', because: 'an instruction to the founder' };
@@ -680,7 +857,7 @@ export function readClaim(sentence: string, token: NumberToken): Reading {
   if (outcome) return { kind: 'unclear', because: 'an outcome word with nobody it happened to' };
 
   // 9. A cadence, a duration, a deadline, a horizon or a position.
-  if (UNIT_AFTER.test(tail)) return { kind: 'work', because: 'a quantity of time or work' };
+  if (unitAfter(tail)) return { kind: 'work', because: 'a quantity of time or work' };
   if (UNIT_BEFORE.test(head)) return { kind: 'work', because: 'a position in a run' };
   if (BACK_REFERENCE.test(head) && tail.trim().length === 0) {
     return { kind: 'work', because: 'a back reference to a quantity already stated' };

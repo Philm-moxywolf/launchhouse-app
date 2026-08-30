@@ -18,7 +18,9 @@
  *   - a range written with a dash, for example "11-13" where the house style
  *     asks for "11 to 13". `validate.sh` has no check for this one, so there is
  *     nothing to drift from and the rule is written here
- *   - rule 3, that nothing promises a reply
+ *   - rule 3, that nothing promises a reply. The phrase is lifted; deciding
+ *     whether a line is making that promise or refusing to make it is done
+ *     here, and the argument for how is at the head of that section
  *
  * WHAT IT DOES NOT CHECK, and why: sentence length, jargon and "name the doubt
  *   first" are real house style rules and none of them can be measured without
@@ -185,36 +187,199 @@ function checkRanges(artifact: Artifact, out: Violation[]): void {
   }
 }
 
+/* -------------------------------------------------------------------------- */
+/* Rule 3: nothing promises a reply                                            */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * THE FAILURE THIS SECTION WAS REWRITTEN TO PREVENT. Every one of these was
+ * refused, and each of them is a sentence written to HONOUR rule 3:
+ *
+ *   Nothing here promises a reply.
+ *   Nothing in this plan guarantees a reply.
+ *   It would be wrong to promise a reply.
+ *   No part of this guarantees a response.
+ *
+ * The old check lifted `validate.sh`'s negation filter, six words long, and ran
+ * it over the whole line: `never|not |cannot|no one|nobody|none of`. It holds
+ * "nobody" and not "nothing", so the plainest disclaimer in English was refused,
+ * and the founder was told their output promised something it explicitly did
+ * not. What that costs them, one file or the whole turn, is `harvest-gate.ts`'s
+ * to decide. Either way it is work they did not get, taken for a sentence that
+ * was right.
+ *
+ * THE FIX IS NOT "ADD NOTHING TO THE LIST". Six words chosen for a shell one
+ * liner will always be missing the seventh. What makes this fixable, and what
+ * makes it different from the vocabularies in the other rules, is that NEGATION
+ * IN ENGLISH IS A CLOSED CLASS. There are a few dozen ways to cancel a verb and
+ * no thirteenth one gets invented next Tuesday. So the class below is written
+ * out properly, once, and then it is asked a question about position rather
+ * than about presence.
+ *
+ * POSITION IS THE OTHER HALF. The old filter matched anywhere on the line, so a
+ * negation about something else excused a real promise four clauses later:
+ * "We do not automate anything and we guarantee a reply" passed. Negation in
+ * English works leftwards over its own clause. So a canceller in the head of the
+ * clause the promise sits in cancels it; one anywhere else in the sentence means
+ * somebody was disclaiming something, but not provably this, and that is a
+ * different answer.
+ *
+ * THREE ANSWERS, AND WHAT EACH COSTS THE FOUNDER
+ *
+ *   disclaimed  silence. The line is honouring rule 3 and there is nothing to
+ *               say about it.
+ *   promised    block. The phrase is asserted with nothing anywhere near it
+ *               taking it back. This is the shape rule 3 forbids.
+ *   unclear     warn. The artifact reaches the founder with a note against the
+ *               line. This is where the rule admits it is guessing, and a guess
+ *               must not cost a founder work they cannot get back.
+ *
+ * THE DETECTOR STAYS NARROW ON PURPOSE. What counts as a promise is still the
+ * two verbs `validate.sh` holds, lifted rather than retyped so the two cannot
+ * drift. That is a vocabulary list and it does have the usual hole: "you will
+ * hear back from five of them" is a promise and is not caught. Widening it here
+ * would put the runtime ahead of the pre commit check and would refuse founder
+ * work on shapes nobody has tested. It is narrow BECAUSE it blocks: a rule that
+ * costs a founder their turn should only fire on something exact.
+ */
+
+/** A sentence ends the reach of a canceller. A clause ends its grip. */
+const SENTENCE_END = /[.!?;:](?=\s|$)|\|/g;
+const CLAUSE_END = /[;:]|,\s*(?:and|but|or|so|yet|then)\b|\b(?:and|but|or|so|yet|then|because|although|though|while|whereas)\b/gi;
+
+/** The span of `line` that `at` sits in, given the marks that end a span. */
+function spanAround(line: string, at: number, ends: RegExp): { text: string; start: number } {
+  let start = 0;
+  let end = line.length;
+  for (const match of line.matchAll(new RegExp(ends.source, ends.flags))) {
+    if (match.index === undefined) continue;
+    if (match.index + match[0].length <= at) start = match.index + match[0].length;
+    else if (match.index >= at) {
+      end = match.index;
+      break;
+    }
+  }
+  return { text: line.slice(start, end), start };
+}
+
+/**
+ * Everything English uses to cancel a verb, and nothing else.
+ *
+ * Three groups, and the grouping is the argument for believing the list is
+ * complete. Grammatical negation is closed and finite. The contrast frames are
+ * the handful of ways to say "this instead of that". The third group is verbs
+ * and adjectives that carry the refusal inside their own meaning, which is the
+ * only open end here, and an open end that only ever makes the rule quieter.
+ *
+ * A word from this list does NOT mean the line is fine. It means the line is
+ * doing something to the promise, and where it sits decides what.
+ */
+const CANCELLER = new RegExp(
+  [
+    // grammatical negation
+    "\\bno\\b", "\\bnot\\b", "n['’]t\\b", "\\bnever\\b", "\\bnone\\b", "\\bnobody\\b",
+    "\\bno one\\b", "\\bnothing\\b", "\\bneither\\b", "\\bnor\\b", "\\bnowhere\\b",
+    "\\bcannot\\b", "\\bwithout\\b", "\\bhardly\\b", "\\bscarcely\\b", "\\bbarely\\b",
+    // a contrast, which replaces the promise with something else
+    "\\brather than\\b", "\\binstead of\\b", "\\bshort of\\b", "\\bother than\\b",
+    "\\bfar from\\b",
+    // words that carry the refusal in their own meaning
+    "\\bavoid\\w*", "\\brefus\\w+", "\\bresist\\w*", "\\bdeclin\\w+", "\\bprevent\\w*",
+    "\\bforbid\\w*", "\\bforbidden\\b", "\\bban(?:s|ned|ning)?\\b", "\\bprohibit\\w*",
+    "\\bstop\\w*", "\\bskip\\w*", "\\bomit\\w*", "\\bden(?:y|ies|ied)\\b",
+    "\\bwrong\\b", "\\bdishonest\\b", "\\bunfair\\b", "\\bmisleading\\b", "\\bfalse\\b",
+    "\\buntrue\\b", "\\boverclaim\\w*", "\\boverpromis\\w*",
+  ].join('|'),
+  'i',
+);
+
+/**
+ * The line is describing the kind of sentence that would break rule 3, rather
+ * than writing one: "a sequence that promises a reply is a sequence to rewrite".
+ *
+ * An indefinite noun with a relative pronoun on it is talking about a class of
+ * sentence. It is a note rather than silence, because "this is a sequence that
+ * guarantees a reply" wears the same clothes and is a promise.
+ */
+const MENTION_FRAME = /\b(?:a|an|any|anything|anyone|every|each|some|whatever|whichever)\b[^,;:.]{0,40}\b(?:that|which|who)\s+$/i;
+
+type PromiseReading = 'disclaimed' | 'promised' | 'unclear';
+
+/**
+ * What one occurrence of the promise phrase is doing in its sentence.
+ *
+ * Exported for the tests, which run it over every disclaimer shape anybody could
+ * think of. An answer of pass or fail would say a line was refused without
+ * saying which shape decided it, and the shape is the whole argument here.
+ */
+export function readReplyPromise(line: string, at: number): PromiseReading {
+  const sentence = spanAround(line, at, SENTENCE_END);
+  const inSentence = at - sentence.start;
+  const clause = spanAround(sentence.text, inSentence, CLAUSE_END);
+  const head = clause.text.slice(0, inSentence - clause.start);
+
+  // A canceller in the head of this clause governs this promise. That is where
+  // "nothing here", "never", "rather than" and "it would be wrong to" all sit.
+  if (CANCELLER.test(head)) return 'disclaimed';
+
+  // Everything below is the rule saying it cannot tell.
+  if (MENTION_FRAME.test(head)) return 'unclear';
+  // A canceller after the verb usually belongs to something else, which is why
+  // it is not silence: "we guarantee a reply without fail" is a promise with the
+  // word "without" in it. It is still worth saying the rule saw one.
+  if (CANCELLER.test(clause.text)) return 'unclear';
+  // Anywhere else in the sentence. Somebody was disclaiming something and the
+  // clause split may have put the wrong half of it on the wrong side.
+  if (CANCELLER.test(sentence.text)) return 'unclear';
+  // The filter `validate.sh` runs, kept as a floor so the pre commit check can
+  // never be the more forgiving of the two. If the shell script grows a word
+  // this class does not have, a line that passes on the way into the repo still
+  // does not cost a founder their turn on the way out of the model.
+  if (houseStyleSource().promiseNegation.regex.test(sentence.text)) return 'unclear';
+
+  return 'promised';
+}
+
 /**
  * Rule 3, half of it. Replies depend on list quality, offer and timing, and
  * nothing in this product can promise one.
  *
- * Line by line, with the same negation filter `validate.sh` uses, so a sentence
- * saying replies are never promised is not itself reported as promising one.
+ * NOT MASKED FIRST, unlike the range check. A code fence is where a draft email
+ * lives, and a draft email is the one place in the folder where a promise of a
+ * reply would actually be sent to somebody.
  */
 function checkReplyPromises(artifact: Artifact, out: Violation[]): void {
-  const { promise, promiseNegation } = houseStyleSource();
+  const { promise } = houseStyleSource();
   const lines = artifact.text.split('\n');
   let offset = 0;
   for (const line of lines) {
     const re = new RegExp(promise.regex.source, 'gi');
-    const match = re.exec(line);
-    if (match && !promiseNegation.regex.test(line)) {
-      out.push({
-        rule: RULE,
-        code: 'prose.promise-reply',
-        severity: 'block',
-        where: locate(artifact.path, artifact.text, offset + match.index),
-        found: match[0],
-        // NOT "this line promises a reply". That sentence contains the exact phrase
-        // this rule looks for, so the gate's own refusal tripped the gate. The self
-        // test in this folder is what found it, and the fix is the wording rather
-        // than an exception, because a rule with an exception for its own copy is a
-        // rule somebody will quote at you.
-        message: 'This line tells the reader a reply is coming. Nothing here can say that.',
-        why: 'Whether anyone replies depends on your list, your offer and your timing, and none of the three is ours to promise. Twenty five good messages is the work. A reply rate is not something anybody can hand you.',
-        recovery: ASK_AGAIN,
-      });
+    let match: RegExpExecArray | null;
+    while ((match = re.exec(line)) !== null) {
+      const reading = readReplyPromise(line, match.index);
+      if (reading !== 'disclaimed') {
+        const asserted = reading === 'promised';
+        out.push({
+          rule: RULE,
+          code: asserted ? 'prose.promise-reply' : 'prose.promise-reply-unclear',
+          severity: asserted ? 'block' : 'warn',
+          where: locate(artifact.path, artifact.text, offset + match.index),
+          found: match[0],
+          // NOT "this line promises a reply". That sentence contains the exact phrase
+          // this rule looks for, so the gate's own refusal tripped the gate. The self
+          // test in this folder is what found it, and the fix is the wording rather
+          // than an exception, because a rule with an exception for its own copy is a
+          // rule somebody will quote at you.
+          message: asserted
+            ? 'This line tells the reader a reply is coming. Nothing here can say that.'
+            : 'This line puts a reply and a guarantee in one sentence, and it does not read clearly as a refusal to make one. It was kept, so read it and decide.',
+          why: 'Whether anyone replies depends on your list, your offer and your timing, and none of the three is ours to promise. Twenty five good messages is the work. A reply rate is not something anybody can hand you.',
+          recovery: ASK_AGAIN,
+        });
+      }
+      // An empty match would loop forever, and a zero width promise is not a
+      // thing, so this only ever steps past a real one.
+      if (match.index === re.lastIndex) re.lastIndex += 1;
     }
     offset += line.length + 1;
   }
