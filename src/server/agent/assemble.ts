@@ -222,6 +222,19 @@ export const WHO_IS_READING = [
   'wrong explanation that sounds confident sends a founder chasing something that was',
   'never the problem.',
   '',
+  '# Where their work lives, and the one place it does not',
+  '',
+  'Everything the founder owns goes in `growth-engine/`, written with the file tools.',
+  'That folder is saved after every turn and it is what they see in Files.',
+  '',
+  'NOTHING OUTSIDE THAT FOLDER SURVIVES. Not your own memory directory, not anywhere',
+  'under the config directory, not /tmp. Those are wiped and are never shown to the',
+  'founder. A file you write there is gone and nobody is told, including you.',
+  '',
+  'This has already happened: three memory files were written into the config',
+  "directory in one turn, and all three were lost. If you want something remembered",
+  'across sessions, use `ge remember`. It writes into their folder, where it is saved.',
+  '',
 ].join('\n');
 
 /**
@@ -231,6 +244,40 @@ export const WHO_IS_READING = [
  * Built from the same index the Files screen renders, so the screen and the
  * model cannot disagree about what a founder has.
  */
+/**
+ * What is in the folder RIGHT NOW, restated in front of every turn.
+ *
+ * The run header carries this too, and goes in once per session. This goes in every
+ * time, because a session outlives a turn and the folder can change underneath it in
+ * ways the model cannot see: a rules refusal rolls files back, and the model's own
+ * history still shows it writing them.
+ *
+ * `undone` is the sentence that makes a refusal recoverable. Without it the model
+ * reads Absent, trusts its own tool calls over a list, and tells the founder the
+ * files are there. With it there is nothing left to reconcile: it was told, in
+ * words, that the writes did not survive.
+ */
+export function buildTurnPrefix(facts: RunFacts, undone: string | null): string {
+  const present = facts.files.length > 0 ? facts.files.map(describeFile).join(', ') : 'nothing yet';
+  const absent = facts.absent.length > 0 ? facts.absent.join(', ') : 'nothing';
+  const lines = ['# Where the folder stands now', ''];
+  if (undone !== null) {
+    lines.push(
+      'YOUR LAST TURN WAS REFUSED AND EVERY FILE IT WROTE WAS UNDONE. Your own history',
+      'shows those writes succeeding. They did not survive. Nothing you wrote in that',
+      'turn is on disk. Do not tell the founder those files exist, and do not skip',
+      'writing something because you believe you already wrote it.',
+      '',
+      `Why it was refused: ${undone}`,
+      '',
+      'Write the work again, and change whatever caused the refusal.',
+      '',
+    );
+  }
+  lines.push(`Present: ${present}`, `Absent: ${absent}`, '');
+  return lines.join('\n');
+}
+
 export function buildRunHeader(
   ctx: FounderContext,
   route: RouteRow,

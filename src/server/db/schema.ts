@@ -405,6 +405,16 @@ export const threads = pgTable(
      * and "you are on step 3 of 5" is exactly what a summary loses.
      */
     reanchor: boolean('reanchor').notNull().default(false),
+    /**
+     * Why the last turn on this thread was refused, or null when it committed.
+     *
+     * IT IS READ ONCE AND CLEARED. The next turn puts it in front of the model,
+     * because a session outlives a turn and a rolled back write still looks like a
+     * successful write in the model's own history. Without this, a founder was told
+     * three files were in their Files when the turn that wrote them had been undone,
+     * and the turn that told them committed with zero files and reported ok.
+     */
+    lastRefusal: text('last_refusal'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     lastTurnAt: timestamp('last_turn_at', { withTimezone: true }),
     closedAt: timestamp('closed_at', { withTimezone: true }),

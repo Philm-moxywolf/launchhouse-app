@@ -172,6 +172,24 @@ export interface StartOptions {
    * own files, so it survives anything the container does.
    */
   readonly seed?: string;
+  /**
+   * A line put in front of THIS turn's message, on every turn, not just the first.
+   *
+   * WHY IT EXISTS. `runHeader` goes in once, in the constructor, and is then set to
+   * null. A session survives between turns, so on turn two the model gets only what
+   * the founder typed. Its picture of the folder is whatever it remembers, and what
+   * it remembers includes its own tool calls.
+   *
+   * That was not a theory. A rules refusal rolled back three files, the session stayed
+   * alive, and on the next turn the model told the founder the files were in their
+   * Files because its own history said it had written them. The turn committed with
+   * zero files and reported ok. Nothing on either side knew.
+   *
+   * So the state of the folder is restated every turn, and after a refusal it says
+   * plainly that the previous writes were undone. Cheap, and it removes a whole class
+   * of drift between what is on disk and what the model believes.
+   */
+  readonly turnPrefix?: string;
 }
 
 export class AgentRun {
@@ -231,6 +249,11 @@ export class AgentRun {
   ): Promise<TurnOutcome> {
     if (this.closed) throw new Error('run is closed');
     if (this.current) throw new Error('one turn at a time per run');
+
+    // EVERY TURN, and it overwrites rather than appends. A prefix left over from a
+    // turn that never sent would describe a folder that has since changed, which is
+    // the failure this exists to stop rather than a smaller version of it.
+    if (opts?.turnPrefix !== undefined) this.pendingPrefix = opts.turnPrefix;
 
     const active: ActiveTurn = {
       turnId,

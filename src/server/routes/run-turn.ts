@@ -56,7 +56,7 @@
 import { and, eq } from 'drizzle-orm';
 
 import { routeFor } from '../../../app/content/routes.ts';
-import { resumeSeed } from '../agent/assemble.ts';
+import { buildTurnPrefix, resumeSeed } from '../agent/assemble.ts';
 import type { SessionPool } from '../agent/session-pool.ts';
 import type {
   BusinessModel,
@@ -84,6 +84,22 @@ import type { RunTurn } from './turn-executor.ts';
 import type { SkillBodies } from '../agent/ports.ts';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
+
+/**
+ * Why the last turn on this thread was refused, or null.
+ *
+ * Read before the run so it can go in front of the model, and cleared only once THIS
+ * turn commits. A founder who is refused and then closes the tab must still be told
+ * on their next visit, whenever that is.
+ */
+async function readLastRefusal(db: Db, job: TurnJob): Promise<string | null> {
+  const rows = await db
+    .select({ lastRefusal: threads.lastRefusal })
+    .from(threads)
+    .where(and(eq(threads.id, job.threadId), eq(threads.founderId, job.founderId)))
+    .limit(1);
+  return rows[0]?.lastRefusal ?? null;
+}
 
 /** How many of the founder's own messages the cold resume digest carries. */
 const DIGEST_MESSAGES = 3;
@@ -259,7 +275,14 @@ export function createRunTurn(deps: RunTurnDeps): RunTurn {
               : {}),
           });
 
-          const outcome = await acquired.run.send(job.turnId, job.text, emit, acquired.startOptions);
+          // The folder as it stands, in front of every turn, plus the refusal that
+          // undid the last one when there was one. Read before the run, cleared
+          // after it commits, so a founder who never comes back does not lose it.
+          const undone = await readLastRefusal(db, job);
+          const outcome = await acquired.run.send(job.turnId, job.text, emit, {
+            ...acquired.startOptions,
+            turnPrefix: buildTurnPrefix(await deps.facts.factsFor(ctx, route.id), undone),
+          });
           return { outcome, track, routeLabel: route.label };
         },
       );
@@ -298,7 +321,41 @@ export function createRunTurn(deps: RunTurnDeps): RunTurn {
       // real sentence goes out first, as a status frame rather than a second
       // error, and then the throw carries on.
       const explained = explain(err);
-      if (explained !== null) emit({ kind: 'status', text: explained });
+      if (explained !== null) {
+        // ON SCREEN NOW, so the founder is not left watching a spinner stop.
+        emit({ kind: 'status', text: explained });
+        // AND IN THE THREAD, WHICH IS THE PART THAT WAS MISSING. A status frame is
+        // the same channel as "reading your files": transient, overwritten by the
+        // next one, and gone when the turn fails and the screen redraws. A founder
+        // hit a rules refusal, saw nothing that stayed, and reasonably concluded the
+        // engine had worked. The next turn then told them the files were written,
+        // because the model had not been told either.
+        //
+        // ITS OWN TRANSACTION, ON PURPOSE. The turn's transaction is rolling back,
+        // which is correct for the files. The explanation of why is not part of what
+        // is being undone, and losing it is the thing that made this invisible.
+        await settle('the refusal message', deps.log, job, async () => {
+          await db.transaction(async (tx) => {
+            await setFounderScope(tx, job.founderId);
+            await tx.insert(messages).values({
+              id: deps.ids.message(),
+              threadId: job.threadId,
+              founderId: job.founderId,
+              role: 'assistant',
+              text: explained,
+              clientMsgId: null,
+            });
+            // AND REMEMBERED FOR THE NEXT TURN. The session survives this, and its
+            // own history shows the rolled back writes succeeding. The next turn
+            // puts this sentence in front of the model so there is nothing left to
+            // reconcile between what it remembers and what is on disk.
+            await tx
+              .update(threads)
+              .set({ lastRefusal: explained })
+              .where(and(eq(threads.id, job.threadId), eq(threads.founderId, job.founderId)));
+          });
+        });
+      }
       await frames;
       throw err;
     }
@@ -367,6 +424,11 @@ async function recordAfterTurn(
         ...(summary.outcome.sdkSessionId === null ? {} : { sdkSessionId: summary.outcome.sdkSessionId }),
         digest: JSON.stringify(digest),
         lastTurnAt: new Date(),
+        // CLEARED HERE AND NOWHERE ELSE, because this line only runs after a turn
+        // has committed. Clearing it when the next turn STARTS would lose it for a
+        // founder who was refused, closed the tab and came back on Tuesday: the
+        // model would be told nothing and would carry on believing its own history.
+        lastRefusal: null,
       })
       .where(and(eq(threads.id, job.threadId), eq(threads.founderId, job.founderId)));
   });

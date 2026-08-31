@@ -22,6 +22,13 @@
       "when": 1788180000000,
       "tag": "0002_connection_accounts",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1788210000000,
+      "tag": "0003_thread_last_refusal",
+      "breakpoints": true
     }
   ]
 }
