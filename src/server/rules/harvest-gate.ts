@@ -46,13 +46,22 @@
  *   one file, on purpose, and the founder knows which one.
  *
  *   It assumes the rule is right. These rules are vocabulary lists. `track.ts`
- *   blocks on the word "ICP" and on "cold email". `prose.ts` blocks on a list of
- *   words lifted from a shell script. `no-invented-proof.ts` blocks on a number it
+ *   speaks on the word "ICP" and on "cold email". `prose.ts` speaks on a list of
+ *   words lifted from a shell script. `no-invented-proof.ts` speaks on a number it
  *   could not tie to the Brain. Every one of those can be wrong about an ordinary
  *   sentence, and one reviewer found fourteen ways past the DM list in a sitting.
  *   So the trade is not "confusing folder against clean refusal". It is "confusing
  *   folder against a founder losing an hour on the Monday of a three day event
  *   because a list did not have a word in it".
+ *
+ *   THAT ARGUMENT WAS TAKEN FURTHER SINCE, AND `confidence.ts` IS WHERE IT WENT.
+ *   Holding a file instead of a turn made a wrong rule survivable. It did not make
+ *   it quiet. Measured against twenty sentences an ordinary founder would type,
+ *   fourteen still lost the founder a file. So every finding this folder can make
+ *   was asked, one at a time, whether it is confident and whether the harm is real,
+ *   and only the ones that answer yes to both can hold anything now. The count is
+ *   one of twenty. Read that file before deciding a rule here is too quiet: the
+ *   volume decision lives there, and this file only decides what a hold costs.
  *
  * SO A BLOCKING VIOLATION NOW HAS TWO SHAPES, and `outcomeFor` below is the whole
  * decision:
@@ -78,11 +87,12 @@
  *      catches the phrasings it happens to have words for. Refusing the turn is
  *      refusing to trust the rest of a run that has already been caught once.
  *
- * An em dash fails test 2. A dash in one file says nothing at all about the other
- * files, so it costs that file and no more. A number the rule could not classify
- * fails test 1. The other track's vocabulary fails both: it is a word list, and it
- * is a property of one file, and holding that file is the whole of rule 1's job
- * here, because a file that is never stored is a file the founder is never shown.
+ * An em dash fails test 2, and it now fails an earlier one as well: it does not
+ * hold a file at all, because a punctuation preference the founder never agreed to
+ * is not harm. A number the rule could not classify fails test 1. The other
+ * track's vocabulary fails test 2 and passes test 1, so it holds its file, which is
+ * the whole of rule 1's job here: a file that is never stored is a file the founder
+ * is never shown.
  *
  * TEST 1 IS WRITTEN THE WAY IT IS BECAUSE IT ALREADY CAUGHT SOMETHING. Rule 5's
  * strong reading, an ungrounded number stated as a fact about the business, was on
@@ -90,6 +100,12 @@
  * sentences, five of them observations of the kind CLAUDE.md tells a founder to
  * write when proof is thin. The note under the table has the numbers. An argument
  * for precision is not precision.
+ *
+ * THAT SAME MEASUREMENT HAS SINCE BEEN RUN OVER TWENTY SENTENCES AND OVER EVERY
+ * RULE, not just rule 5, and it is kept runnable in `confidence.test.ts`. Rule 5
+ * was split in two by it: the shapes that fired on ordinary writing became notes,
+ * and the three that did not stayed able to hold a file. The entry below is
+ * unaffected, because rule 2 was already measured and already passed.
  *
  * MONEY, SENDING AND CREDENTIALS ARE STILL FAIL CLOSED, and holding is what makes
  * them so rather than what threatens them. Nothing downstream reads the folder: a
@@ -144,8 +160,10 @@
 
 import {
   explainRefusal,
+  isOverridable,
   runRules,
   type Artifact,
+  type Confirmed,
   type FounderContext,
   type GateAnswer,
   type GateOptions,
@@ -154,6 +172,7 @@ import {
   type Track,
   type Violation,
 } from './index.ts';
+import { assertRulesSourcesReady } from './sources-ready.ts';
 
 /* -------------------------------------------------------------------------- */
 /* Who wrote it                                                               */
@@ -243,6 +262,12 @@ export const WORTH_THE_WHOLE_TURN: ReadonlyArray<{ code: string; why: string }> 
 /*
  * WHY `proof.invented-result` IS NOT ON THAT LIST, and the next person will try to
  * put it back, so here is the measurement that says not to.
+ *
+ * READ THE NUMBERS BELOW AS HISTORY. They were taken when one code covered every
+ * reading rule 5 could make. That code has since been split: the wide shapes are
+ * `proof.unbacked-figure` and they are notes, and `proof.invented-result` is now
+ * only the three shapes that did not fire on ordinary writing. The conclusion is
+ * unchanged and the reasoning is why, so it is kept rather than rewritten.
  *
  * It is the obvious candidate. It reads as the strong half of rule 5: the number is
  * in nothing the founder ever said, AND the sentence states it as a fact about
@@ -389,7 +414,19 @@ function keptSentence(savedPaths: readonly string[]): string {
  * accusation. The rule's own `message` and `why` are quoted rather than rewritten,
  * because the rules own the specifics and a second copy of them here would drift.
  * When the rule is guessing, its own sentence is already the careful one: it says a
- * number is not in the Brain, not that the founder made it up.
+ * figure is not on record, not that the founder made it up.
+ *
+ * IT DOES NOT SAY "HELD BACK" ANY MORE, and that is not a euphemism. "One file was
+ * held back and not saved" is the app describing its own machinery, in the passive,
+ * to somebody who asked for a content plan. What they need is the state of their
+ * folder, which is: this one is not there yet, and here is the line. The word for
+ * what happened is only worth spending if the founder can do something with it.
+ *
+ * WHEN THE FOUNDER CAN OVERRULE IT, the paragraph says so. `isOverridable` is the
+ * authority, and it is false for exactly the things the founder is not the judge of:
+ * rule 2, where Instagram decides, and the structural checks, where the file simply
+ * would not work. Everywhere else the founder knows their own business, and a gate
+ * with no way past it is a gate somebody works around by writing in a text editor.
  *
  * The founder's own line is quoted back verbatim, dashes and all. That quote is
  * evidence, not house style, and the alternative is telling somebody a line is a
@@ -409,19 +446,27 @@ export function explainHold(
   const parts: string[] = [
     keptSentence(savedPaths),
     alsoHeld
-      ? `${heldPaths.length} files were held back and not saved. This one is ${path}.`
-      : `One file was held back and not saved: ${path}.`,
+      ? `${heldPaths.length} files are not there yet, and this is one of them: ${path}.`
+      : `One file is not there yet: ${path}.`,
   ];
 
   // `found` is empty when the rule is speaking about the file as a whole rather
   // than about a line in it, and the excerpt is then the path itself. Quoting a
   // file name back as though it were a sentence reads like a bug.
   if (cause.found.trim() !== '' && cause.where.excerpt !== path) {
-    parts.push(`The line that held it is line ${cause.where.line}: "${cause.where.excerpt}"`);
+    parts.push(`It stopped on line ${cause.where.line}: "${cause.where.excerpt}"`);
   }
 
   parts.push(`${cause.message} ${cause.why}`);
   parts.push(wayOut(cause.recovery, path));
+
+  // THE WAY PAST IT, LAST, and only where the founder is the one who knows.
+  // A founder who really does have that figure needs a sentence that tells them
+  // so, in the same paragraph, or they will go and ask a mentor whether they are
+  // allowed to be right.
+  if (isOverridable(cause.code)) {
+    parts.push('If that line is right as it stands, say so and it will be kept, here and from now on.');
+  }
   return parts.join(' ');
 }
 
@@ -510,6 +555,14 @@ export interface HarvestGateInput {
    */
   grounding?: Artifact[] | undefined;
   /**
+   * Figures and lines the founder has already looked at and said are right.
+   *
+   * The gate never raises one of these again. See `Confirmed` in types.ts for
+   * where the app keeps them, which is the founder's own Brain rather than a
+   * hidden flag, so a founder can see and change every answer they have given.
+   */
+  confirmed?: readonly Confirmed[] | undefined;
+  /**
    * The stored text of a file that is changing, for rule 4.
    *
    * A callback rather than a map, because reading it costs a decrypt per file and
@@ -577,6 +630,22 @@ export interface HarvestGateReport {
  * something a caller can forget to read. A throw cannot be forgotten.
  */
 export async function gateHarvest(input: HarvestGateInput): Promise<HarvestGateReport> {
+  // BEFORE ANYTHING ELSE, AND BEFORE THE EMPTY TURN SHORTCUT BELOW. Every rule
+  // in this folder reads its list off disk, and a list that will not load is a
+  // rule that cannot answer. Asking it anyway gets a pass it did not earn.
+  //
+  // It sits here rather than at the top of `runRules` because this is the seat:
+  // this function is what `storage/turn.ts` calls, and a throw from here is a
+  // refused turn with the folder removed. The founder loses the turn and can ask
+  // again. That is the right cost for a deployment that cannot check anything,
+  // and it is a great deal cheaper than the alternative, which is 130 founders
+  // carrying files nothing looked at.
+  //
+  // It runs on an empty turn too. A deployment whose rules cannot load has no
+  // business running founder turns at all, and finding out on the first read
+  // only turn rather than the first write turn is one restart earlier.
+  assertRulesSourcesReady();
+
   const notGated: Array<{ path: string; why: string }> = [];
   const toCheck: Array<{ artifact: Artifact; kind: HarvestedFile['kind'] }> = [];
   // Kept apart from `notGated`, because a deleted path is not a file the founder
@@ -626,6 +695,7 @@ export async function gateHarvest(input: HarvestGateInput): Promise<HarvestGateR
     track: input.track,
     brain: input.brain,
     grounding: input.grounding ?? [],
+    confirmed: input.confirmed ?? [],
   };
 
   // One call per artifact rather than runRulesOverAll, because rule 4 needs the

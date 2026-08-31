@@ -112,7 +112,16 @@ export const PORT_REWRITES: readonly RewriteRule[] = [
       // setup/SKILL.md:45. Status is one skill, not two.
       "Hand off to the status skill rather than duplicating it here.",
       // setup/SKILL.md:79. Rule 2, said to the founder who thinks it is a bug.
-      '**"It will not let me automate Instagram DMs."** Correct behaviour, not a bug. Automated cold DMs get accounts restricted. Explain the inbound machine instead.',
+      //
+      // THE WORDING MOVED ON PURPOSE, and the old wording is why. "Automated
+      // cold DMs get accounts restricted" is a delegate word and a channel word
+      // in one short sentence, so `no-dm-automation.ts` scored it as an offer
+      // and rescued it back down to a warning on the refusal. The founder still
+      // read a note against the one line the product told the model to write,
+      // on the screen where they had already been told no. The rule is the
+      // same; it is now stated as what the platform allows rather than as what
+      // a tool could do, which carries no delegate word for the net to find.
+      '**"It will not let me automate Instagram DMs."** Correct behaviour, not a bug. Instagram only opens a reply window once somebody has written to you first, and the accounts that get round that are the ones that get restricted. Say that plainly, then take them to the inbound side and build it with them.',
       // setup/SKILL.md:81. The line that stops a founder losing an hour.
       '**"I cannot get any of this working."** Do not keep troubleshooting past two failed attempts. Tell them to post in the Slack channel and that someone will sort it individually. A founder stuck alone for an hour is worse than a founder who asked for help after ten minutes.',
       // setup/SKILL.md:87. The boundary.

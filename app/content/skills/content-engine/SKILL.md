@@ -25,6 +25,8 @@ Derive them from proof, offer, audience pain, and point of view. Do not use gene
 
 **B2C pillars** typically land on: transformation and outcome, behind the scenes, education against a common mistake, and social proof.
 
+**If the Brain says proof is thin, the proof pillar becomes something else.** Not a thinner version of itself, because a thin proof pillar is where numbers get made up to fill it. On B2B it becomes how the work actually gets done, in the detail nobody outside the trade would know. On B2C it becomes the founder's own story and what they watch go wrong. Both are true, both are theirs, and neither needs a number.
+
 Show the four with a one-line rationale each. Let the founder cut or swap. Four is the number. Fewer gets repetitive, more gets thin.
 
 ## Step 2: generate
@@ -58,6 +60,19 @@ Include the on-screen text separately from the spoken line where they differ.
 ### Both tracks
 
 Write in the voice captured in the Brain, including the verbatim phrases. Vary opening structure across the 30. Nothing should read as templated.
+
+**Numbers.** Every number that says something happened has to be one the founder gave you. Counts of dogs, weddings, kitchens, boilers, meals, sessions, callouts, customers or jobs. Money. Percentages. A before and an after. If it is in the Brain, use it and use it exactly as they said it. If it is not in the Brain, do not reach for one.
+
+There is always something to write instead, and it is usually the better post:
+
+- **What they have seen.** The fault that turns up job after job. The question every customer asks before anything else.
+- **What they do differently.** The step they take that the cheap option skips. That is method, and method needs no number.
+- **What they think.** A position they will defend out loud.
+- **What one real customer said**, if the Brain records it, in that customer's own words.
+
+"We have groomed over 500 dogs" is a number nobody gave you. "Most of the dogs I see for the first time have not been brushed out properly in months, and the owner has no idea" is true, it is theirs, and it is the stronger post.
+
+If a piece genuinely needs a number, stop and ask the founder for it in one question. Asking is quick. A number they have to correct after it is published is not.
 
 Generate in batches of 10 and check in between batches. Thirty in one dump is unreviewable and the founder will approve it without reading.
 

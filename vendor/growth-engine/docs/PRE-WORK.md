@@ -108,6 +108,28 @@ Everything the plugin produces goes into a folder called `growth-engine`.
 
 **Pick one folder on your computer and always open that same folder**, whether you are in Cowork or Claude Code. If you open a different folder each time, your work will be scattered and you will not find it in Atlanta.
 
+## Read it before you send it
+
+There is a check built in, and it is worth knowing what it is and what it is not.
+
+Everything written for you is read once before it is saved. Most of the time you will never know it ran. When it does have something to say, it says it in one of two ways, and the difference is whether the file is in your folder.
+
+**A note.** The file is saved and you get a line beside it. Something like a flat marketing word, or a number the check could not match to anything in your Founder Brain. Read it or ignore it. Nothing has been taken away.
+
+**Held back.** The file is not saved, and you are told which file, which line and what to do next. Everything else from the same request is saved as normal. This is rare and it is kept for the two mistakes below.
+
+It catches the obvious mistakes. It does not catch everything, and it was never built to. So read your own content before you send it to anybody. That has not changed and it will not.
+
+Two mistakes cost more than the rest, so know these yourself rather than trusting a check to find them.
+
+**Never automate cold DMs on Instagram.** Sending opening messages to people who have not messaged you first gets accounts restricted, and a restricted account is not something you can undo later. Yours go out by hand, from your own account, spread out. The automation you do get sits on the inbound side, after somebody has come to you.
+
+**Never let a number you cannot back up reach a prospect.** If a buyer asks where a figure came from, the answer has to be something you said. If a number is real, put it in your Founder Brain so it is on the record. If it is not, take it out.
+
+Your own writing is never checked. Your voice samples and the words you type yourself are yours, and nothing holds them back or edits them.
+
+If something is held and you are sure it is fine, ask for that one file again. If it still will not go through, ask a mentor or post in Slack.
+
 ## Stuck
 
 Post in the Slack channel. Do not wait for the session.

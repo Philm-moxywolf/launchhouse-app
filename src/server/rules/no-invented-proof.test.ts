@@ -40,6 +40,7 @@ import {
   readNumbers,
   type NumberKind,
 } from './no-invented-proof.ts';
+import { founderSees } from './confidence.ts';
 import { checkProseText } from './prose.ts';
 import { exampleBrain } from './test-fixtures.ts';
 import type { Artifact, FounderContext, Track, Violation } from './types.ts';
@@ -237,15 +238,50 @@ const THE_COHORT_INVENTS = [
   'I have cleaned 1,200 gutters across the city.',
 ];
 
+/**
+ * THE COUNTER MEASUREMENT, and why these are a note now rather than a refusal.
+ *
+ * Every line in THE_COHORT_INVENTS is read by the completed action frame, which
+ * is the right shape for them. The trouble is what else that frame reads. Run
+ * against twenty sentences an ordinary founder would type, it fires on:
+ *
+ *     Last week I spoke to 6 operations leads.
+ *     I have written 30 posts this quarter.
+ *
+ * The first of those is an observation, and CLAUDE.md rule 5 tells a founder in
+ * so many words to write from observation when their proof is thin. A rule that
+ * takes away the work when somebody follows the instruction is not a safety net,
+ * it is a trap. The second counts the toolkit's own homework back at it.
+ *
+ * There is no reading that separates "we have fitted 45 kitchens" from "I have
+ * written 30 posts this quarter". Same person, same tense, same shape. Widening
+ * a noun list would not help and narrowing one would break the other half.
+ *
+ * So the frame keeps catching all of them and the founder gets a note naming the
+ * figure, with one click to say it is right. The claim these lines make still
+ * never goes out silently. It just does not cost somebody their afternoon on the
+ * evidence of a verb tense.
+ */
 test('THE NOUNS THIS COHORT COUNTS ARE CAUGHT, AND NONE OF THEM IS IN A LIST', () => {
   const missed: string[] = [];
   for (const line of THE_COHORT_INVENTS) {
     const violations = checkNoInventedProof(post(line), A_GROOMER).violations;
-    if (!violations.some((v) => v.severity === 'block')) {
+    // Caught means reported. The severity is the next test's business.
+    if (violations.length === 0) {
       missed.push(`${line}  read as ${JSON.stringify(readingsFor(line))}`);
     }
   }
   assert.deepEqual(missed, []);
+});
+
+test('the cohort nouns are a note, and the note names the figure', () => {
+  for (const line of THE_COHORT_INVENTS) {
+    const [first] = checkNoInventedProof(post(line), A_GROOMER).violations;
+    assert.ok(first !== undefined, line);
+    assert.equal(first.code, 'proof.unbacked-figure', line);
+    assert.equal(founderSees(first.code), 'note', line);
+    assert.ok(first.message.includes(first.found), `${line} did not name ${first.found}`);
+  }
 });
 
 test('a completed count is refused for the frame, not for the noun', () => {
@@ -415,7 +451,15 @@ test('the corpus test above can fail, so its passing means something', () => {
   // stopped returning anything, the test above would pass on an empty list and
   // nobody would know. This proves the same harness still refuses a claim.
   assert.ok(skillLines().length > 100);
+  // Two blocks. "We have 63 clients" is a count of paying relationships stated
+  // as a present holding, and "68% of them stay" is a rate about the business.
+  // Both halves of that sentence are the shapes rule 5 is for.
   assert.equal(blocks('We have 63 clients and 68% of them stay.', 'b2b').length, 2);
+  assert.equal(codes('We have 63 clients and 68% of them stay.', 'b2b').length, 2);
+  // And the reach half of the same shape is still only a note, which is what
+  // keeps this rule off the twenty ordinary sentences.
+  assert.equal(blocks('There are 25 people on my list.', 'b2b').length, 0);
+  assert.equal(blocks('I have 1,200 followers.', 'b2c').length, 0);
 });
 
 /* -------------------------------------------------------------------------- */
@@ -455,17 +499,60 @@ const MUST_BE_CAUGHT: ReadonlyArray<readonly [Track, string]> = [
   ['b2c', 'The serum is rated 4.9 out of 5 by our customers.'],
 ];
 
-test('EVERY INVENTED CLAIM IS STILL REFUSED', () => {
+test('EVERY INVENTED CLAIM IS STILL CAUGHT', () => {
+  // CAUGHT, NOT REFUSED, and the difference is the point of this round.
+  // Every one of these still reaches the founder as something naming the exact
+  // figure. Seven of the eighteen hold the file as well, and the test below
+  // pins which seven, so a change to the split fails here rather than in a
+  // staffed room.
   const missed: string[] = [];
   for (const [track, line] of MUST_BE_CAUGHT) {
-    if (blocks(line, track).length === 0) {
+    if (codes(line, track).length === 0) {
       missed.push(`${line}  read as ${JSON.stringify(readingsFor(line))}`);
     }
   }
   assert.deepEqual(missed, []);
 });
 
-test('a refusal names the number and calls it a fact about the business', () => {
+/**
+ * WHICH OF THE EIGHTEEN HOLD THE FILE, pinned, because the split is a judgement
+ * that somebody will want to revisit and it should cost them a failing test.
+ *
+ * The shapes that hold are a change, an outcome verb with somebody it happened
+ * to, a rate that says whose rate it is, and a count of PAYING RELATIONSHIPS
+ * the founder says they have. Those fired on one of twenty ordinary founder
+ * sentences. Everything else here is a reach count or a price, and those fired
+ * on five of the twenty, which is why they are notes.
+ *
+ * THE FOURTH SHAPE WAS MISSING AND WAS PUT BACK. When the wide count was
+ * demoted, "I have 7 customers so far." went with it, and so did "We have 214
+ * customers on the platform today." CLAUDE.md rule 5 names customers by name,
+ * `harvest-gate.ts` still described the customer count as one of the two
+ * sentences the rule exists for, and `storage/turn.rules.test.ts` still asserted
+ * it never reaches ge_file. The measurement that justified the demotion was
+ * taken on reach counts, "there are 25 people on my list" and "I have 1,200
+ * followers", and it still holds for those: they are notes, and the twenty are
+ * still one held sentence out of twenty.
+ */
+const HELD_OF_THE_EIGHTEEN: readonly string[] = [
+  'We have helped 63 firms cut their admin by 60%.',
+  'I have 7 customers so far.',
+  'Our reorder rate is 62 per cent.',
+  'Roughly 68% of them will say yes.',
+  'One customer told me she saved 9 hours a week on her routine.',
+  'Our average client saves 11 hours a week.',
+  'Northfield has cut invoice-to-payment from 90 days to 21 for every client.',
+  'The serum is rated 4.9 out of 5 by our customers.',
+];
+
+test('the confident half of the invented claims still holds the file', () => {
+  const held = MUST_BE_CAUGHT.filter(([track, line]) => blocks(line, track).length > 0).map(
+    ([, line]) => line,
+  );
+  assert.deepEqual(held, HELD_OF_THE_EIGHTEEN);
+});
+
+test('a held claim names the figure and says it is a result', () => {
   const result = checkNoInventedProof(
     post('We have helped 63 firms cut their admin by 60%.'),
     ctxFor('b2b'),
@@ -474,31 +561,52 @@ test('a refusal names the number and calls it a fact about the business', () => 
   const found = result.violations.map((v) => v.found);
   assert.ok(found.some((f) => f.startsWith('63')), `expected 63, got ${found.join(', ')}`);
   assert.ok(found.some((f) => f.includes('60')));
-  assert.ok(result.violations.every((v) => v.code === 'proof.invented-result'));
+  const held = result.violations.filter((v) => v.severity === 'block');
+  assert.equal(held.length, 1);
+  assert.equal(held[0]?.code, 'proof.invented-result');
+  assert.ok(held[0]?.message.includes('result'), held[0]?.message);
 });
 
-test('an invented follower count is refused', () => {
+test('an invented follower count is caught, and named, as a note', () => {
   const result = checkNoInventedProof(
     post('Join the 12,000 people already reading this.'),
     ctxFor('b2c'),
   );
-  assert.equal(result.ok, false);
+  // A count of people is a shape that fires on ordinary founder writing about
+  // as often as it fires on a fabrication, so it reaches the founder beside the
+  // work rather than instead of it. The figure is still named.
+  assert.equal(result.ok, true);
   assert.equal(result.violations[0]?.found, '12,000');
+  assert.equal(result.violations[0]?.code, 'proof.unbacked-figure');
+  assert.ok(result.violations[0]?.message.includes('12,000'));
 });
 
 test('a review score does not ground the digits inside it', () => {
   // The B2C Brain says the reviews average 4.7. An earlier draft added every
   // bare digit run to the grounded set, so that 4.7 quietly made a claim of
-  // "7 customers" look like something Priya had said.
+  // "7 customers" look like something Priya had said. Still caught, and the
+  // grounding hole is what this test is really about.
   const result = checkNoInventedProof(post('I have 7 customers so far.'), ctxFor('b2c'));
-  assert.equal(result.ok, false);
   assert.equal(result.violations[0]?.found, '7');
 });
 
-test('a percentage is always treated as a result', () => {
+test('a percentage about the founder\'s own business holds the file', () => {
   const result = checkNoInventedProof(post('Roughly 68% of them will say yes.'), ctxFor('b2b'));
   assert.equal(result.violations[0]?.code, 'proof.invented-result');
   assert.equal(result.ok, false);
+});
+
+test('a percentage about the market is a note, not a held file', () => {
+  // The separator is whether the sentence says whose rate it is. "82 per cent of
+  // our clients" is a claim somebody can be asked to back up. A figure about
+  // what other people report is an observation, and observation is what the
+  // product tells a founder to write when their own proof is thin.
+  const result = checkNoInventedProof(
+    post('The average reply rate people quote is 37 percent.'),
+    ctxFor('b2b'),
+  );
+  assert.equal(result.ok, true);
+  assert.equal(result.violations[0]?.code, 'proof.unbacked-figure');
 });
 
 test('a promise to a reader is a note, even when it wears an instruction', () => {
@@ -519,11 +627,13 @@ test('a promise to a reader is a note, even when it wears an instruction', () =>
   }
 });
 
-test('the same sentence with a subject is a refusal', () => {
+test('the same sentence with a subject is still read as a claim', () => {
   // The pair for the test above. Once somebody it happened to is named, the
-  // number is a claim about a business rather than a line of homework.
-  assert.equal(blocks('We charge 2,500 GBP a month.', 'b2b').length, 1);
-  assert.equal(blocks('We booked 44 calls last month.', 'b2b').length, 1);
+  // number is a claim about a business rather than a line of homework. A price
+  // and a booking count are both shapes that fire on ordinary founder writing,
+  // so the founder reads them beside the work rather than instead of it.
+  assert.deepEqual(codes('We charge 2,500 GBP a month.', 'b2b'), ['proof.unbacked-figure:2,500']);
+  assert.deepEqual(codes('We booked 44 calls last month.', 'b2b'), ['proof.unbacked-figure:44']);
 });
 
 test('a rate inside a projection is a note rather than a refusal', () => {
@@ -660,8 +770,19 @@ test('the Brain can be checked when the founder\'s own answers are handed over',
     { path: 'founder-brain.md', text: brain, authored: 'model' },
     { track: 'b2c', brain: null, grounding: [theirAnswers] },
   );
-  assert.equal(result.ok, false, '55 per cent was never said');
+  // Caught, and it names the figure. It is a note rather than a held file
+  // because the line is a bullet with no subject in it, and a rate only holds a
+  // file when the sentence says whose rate it is. The pair below is the version
+  // that does say.
+  assert.ok(result.violations.length > 0, '55 per cent was never said');
   assert.ok(result.violations.every((v) => v.found.includes('55')));
+
+  const withSubject = checkNoInventedProof(
+    { path: 'founder-brain.md', text: '# Founder Brain\n\n## Proof\n- 55% of our customers reordered.\n', authored: 'model' },
+    { track: 'b2c', brain: null, grounding: [theirAnswers] },
+  );
+  assert.equal(withSubject.ok, false);
+  assert.equal(withSubject.violations[0]?.code, 'proof.invented-result');
 });
 
 test('generating anything before the Brain exists is refused', () => {

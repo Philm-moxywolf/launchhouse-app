@@ -697,9 +697,11 @@ test('THE SKILL THAT DESCRIBES THE INBOUND MACHINE IS NOT REFUSED', () => {
     [],
     'The gate refuses the skill that describes the sanctioned inbound machine.',
   );
-  // And it is awake on that file rather than blind to it: the lines that state
-  // rule 2 are noticed, and noticed as refusals.
-  assert.ok(result.violations.length > 0, 'the rule found nothing at all in a document about DM automation');
+  // Anything it does notice in there has to be the refusal reading, never an
+  // offer. Not asserted to be non empty: the skill's own wording is owned by the
+  // content repo and it changes, and a liveness check that depends on somebody
+  // else's paragraph fails the day they improve it. The test directly below
+  // plants an offer in this same file, which is the liveness proof that holds.
   for (const v of result.violations) {
     assert.equal(v.code, 'dm.mentioned-while-refusing', `${v.where.line}: ${v.where.excerpt}`);
   }
@@ -1011,8 +1013,12 @@ test('the warning says what is missing, not just that something is wrong', () =>
   // and test case 21 in the content repo holds every refusal to a way out.
   const v = checkNoDmAutomation(art('The sequence handles the Instagram side too.')).violations[0];
   assert.ok(v, 'the warning tier produced nothing');
-  assert.match(v.message, /who asked/);
-  assert.match(v.message, /Say what sets the message off/);
+  // It names the doubt first and answers it, and it leaves the founder somewhere
+  // to stand: if this is their inbox replying to somebody who wrote in, nothing
+  // is wrong and the line says so.
+  assert.match(v.message, /might be/);
+  assert.match(v.message, /wrote to you first/);
+  assert.match(v.message, /fine as it is/);
   assert.equal(v.recovery.action.kind, 'route');
 });
 
@@ -1094,8 +1100,10 @@ test('the inferred refusal tells the founder how to tell the two tracks apart', 
   // message says what is missing and gives both ways out.
   const v = checkNoDmAutomation(art('Set up an autoresponder for people you have not spoken to yet.')).violations[0];
   assert.ok(v);
-  assert.match(v.message, /does not say DM anywhere/);
-  assert.match(v.message, /if it is about email, say so/);
+  assert.match(v.message, /never says Instagram/);
+  assert.match(v.message, /may be about email/);
+  // And it says what it would cost THEM, which is the only part they can act on.
+  assert.match(v.message, /accounts restricted/);
 });
 
 /* -------------------------------------------------------------------------- */

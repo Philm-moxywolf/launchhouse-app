@@ -64,6 +64,10 @@ Also specify: the trigger, the wait intervals between steps, the exit condition,
 
 Keep waits realistic. Chasing someone four times in two days annoys them.
 
+**On the two DM snapshots, check the trigger before you write a word.** Both start with something the other person did: a comment on a post, or a message they sent in. Write the copy as the answer to that. If you find yourself writing to somebody who has done neither, the trigger is wrong, and no amount of rewriting the copy fixes it.
+
+**No message claims a result the Brain does not record.** A review request that says join our 200 happy customers is an invented number, sent to a real customer who can count. If the Brain has no number, ask for the review on the work the founder actually did for that person, and name the work.
+
 ## Step 4: n8n escape hatch
 
 Only if the data lives outside GoHighLevel. Stripe to a spreadsheet, Shopify to Airtable, a legacy system, multi-API orchestration.

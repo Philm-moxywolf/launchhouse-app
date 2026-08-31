@@ -76,7 +76,7 @@ If a founder reports behaviour that does not match what they were told in a sess
 
 **"My files disappeared."** Almost never true. Run check 3.
 
-**"It will not let me automate Instagram DMs."** Correct behaviour, not a bug. Automated cold DMs get accounts restricted. Explain the inbound machine instead.
+**"It will not let me automate Instagram DMs."** Correct behaviour, not a bug. Instagram only opens a reply window once somebody has written to you first, and the accounts that get round that are the ones that get restricted. Say that plainly, then take them to the inbound side and build it with them.
 
 **"I cannot get any of this working."** Do not keep troubleshooting past two failed attempts. Tell them to post in the Slack channel and that someone will sort it individually. A founder stuck alone for an hour is worse than a founder who asked for help after ten minutes.
 

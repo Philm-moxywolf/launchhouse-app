@@ -80,7 +80,24 @@ function schemaDeclaredPaths(): string[] {
   return [...found];
 }
 
+/**
+ * The paths the schemas declare, for sources-ready.ts.
+ *
+ * Exported so the one place that forces every disk-backed list to load can
+ * force this one too. It is the rule 4 equivalent of the banned word list: an
+ * empty answer here means every file the model writes looks unlisted, and the
+ * rule stops being able to tell a real file from an invisible one.
+ */
+export function listedPaths(): readonly string[] {
+  return schemaDeclaredPaths();
+}
+
 let stateFilesCache: readonly string[] | null = null;
+
+/** Only for tests that load a different content tree. */
+export function resetOwnershipCacheForTests(): void {
+  stateFilesCache = null;
+}
 
 function stateFiles(): readonly string[] {
   if (stateFilesCache === null) {
@@ -146,8 +163,8 @@ function checkContainment(artifact: Artifact, out: Violation[]): boolean {
       severity: 'block',
       where,
       found: path,
-      message: `This file was going to be written to a path that ${what}, so it would not be in your folder.`,
-      why: 'Everything made for you sits in one folder, which is the folder you can see and download. A file written anywhere else exists on a machine you have no access to, which makes it nobody\'s.',
+      message: `This was heading for a place that ${what}, which is outside your folder.`,
+      why: 'Everything made for you lands in the one folder you can open and download. A file written anywhere else sits on a machine you cannot reach, so it may as well not exist.',
       recovery: { label: 'See your files', action: { kind: 'route', skill: 'status' } },
     });
   }
@@ -171,8 +188,8 @@ function checkVisibility(artifact: Artifact, out: Violation[]): void {
       severity: 'block',
       where: { path, line: 1, column: 1, excerpt: path },
       found: name,
-      message: `A person file named "${name}" would not appear in your people list.`,
-      why: 'Every person file is named from their address or their handle, by one rule, so anything holding the address can find the file. A name that does not follow it is a person you cannot look up and cannot delete.',
+      message: `A person saved as "${name}" would not show up in your people list.`,
+      why: 'Every person is filed under their address or their handle, always the same way, so you can find them by typing it. Filed any other way, they are somebody you cannot look up and cannot delete.',
       recovery: { label: 'Add them again', action: { kind: 'reply' } },
     });
     return;
@@ -186,9 +203,9 @@ function checkVisibility(artifact: Artifact, out: Violation[]): void {
     where: { path, line: 1, column: 1, excerpt: path },
     found: path,
     message: inKnownFolder
-      ? `"${path}" is in your folder but nothing lists it by name yet, so it may be easy to miss.`
-      : `"${path}" is not a file your files view knows how to show, so writing it would put something in your folder that you cannot see.`,
-    why: 'Your files view and your download are built from a list. A file that is not on that list is on a disk somewhere and not in your hands, and being told it exists makes that worse rather than better.',
+      ? `"${path}" is in your folder, and nothing lists it by name yet, so it is easy to miss.`
+      : `"${path}" is not something your files view knows how to show, so it would sit there without ever appearing.`,
+    why: 'Your files view and your download are both built from a list. A file that is not on that list is somewhere you cannot open it, and knowing it exists only makes that more annoying.',
     recovery: { label: 'See your files', action: { kind: 'route', skill: 'status' } },
   });
 }
@@ -240,8 +257,8 @@ function checkFounderWriting(
       severity: 'block',
       where: locate(artifact.path, artifact.text, at < 0 ? 0 : at),
       found: '## Yours',
-      message: 'Something under "Yours" in this file changed, and nothing but you writes there.',
-      why: 'That section is yours. Notes get tidied, a trailing space gets taken out, a heading gets moved, and none of it was asked for. Your own words come back exactly as you left them or the promise is not worth making.',
+      message: 'Your own notes under "Yours" came back changed, and nothing but you writes in there.',
+      why: 'That section is yours. A space tidied, a heading nudged, none of it asked for. Your words come back exactly as you left them or the promise is not worth making.',
       recovery: { label: 'Open the file and check that section', action: { kind: 'edit', path: artifact.path } },
     });
   }
@@ -256,8 +273,8 @@ function checkFounderWriting(
       severity: 'warn',
       where: { path: artifact.path, line: 1, column: 1, excerpt: artifact.path },
       found: artifact.path,
-      message: 'Text outside the parts this toolkit maintains changed in this file. Worth a look before it is saved.',
-      why: 'The marked blocks are the toolkit\'s to rewrite. Everything around them is yours, and it is copied through untouched.',
+      message: 'Something outside the parts this toolkit looks after has changed in this file. Worth a glance.',
+      why: 'The marked blocks get rewritten each time. Everything around them is yours and is meant to be copied through untouched.',
       recovery: { label: 'Open the file and compare', action: { kind: 'edit', path: artifact.path } },
     });
   }

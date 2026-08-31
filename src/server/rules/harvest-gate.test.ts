@@ -84,7 +84,7 @@ describe('what a blocking violation costs', () => {
       input([
         file('90-day-plan.md', '## Week one\n\nWrite the plan and book the calls.\n'),
         file('outreach-sequence.md', '## Step one\n\nOne short note about their onboarding.\n'),
-        file('content-30.md', '## Post 1\n\nThis will supercharge your pipeline.\n'),
+        file('content-30.md', '## Post 1\n\nWe saved a client 11 hours a week.\n'),
       ]),
     );
 
@@ -98,7 +98,10 @@ describe('what a blocking violation costs', () => {
     // Four rules, four vocabulary lists, four things that are not worth a founder's
     // afternoon. Each one is written beside a clean file so the hold is visible.
     const cases: Array<{ what: string; bad: HarvestedFile }> = [
-      { what: 'an em dash', bad: file('90-day-plan.md', `Week one ${EM} write the plan.`) },
+      // NOT an em dash any more. A dash is a note: see the row for prose.dash in
+      // confidence.ts. What is left on this list is the other track's method,
+      // which is jargon that does not turn up by accident.
+      { what: 'the other track\'s method', bad: file('90-day-plan.md', 'Week one: build your hook bank.') },
       { what: 'the other track\'s file', bad: file('hook-bank.md', '# Hooks\n\nTen openers for your feed.\n') },
       { what: 'a path nobody listed', bad: file('some-file-nobody-listed.md', 'Anything at all.\n') },
     ];
@@ -135,19 +138,55 @@ describe('what a blocking violation costs', () => {
     );
   });
 
-  it('HOLDS A CUSTOMER COUNT NOBODY GAVE IT, so the number is never stored', async () => {
-    // Rule 5 at its strongest reading, and it still costs the file rather than the
+  it('HOLDS A RESULT NOBODY GAVE IT, so the figure is never stored', async () => {
+    // Rule 5 at its confident reading, and it still costs the file rather than the
     // run. The note under WORTH_THE_WHOLE_TURN has the measurement that decided
     // that, and the test below keeps the measurement runnable.
     const report = await gateHarvest(
       input([
         file('90-day-plan.md', '## Week one\n\nWrite the plan.\n'),
-        file('content-30.md', '## Post 1\n\nWe have 214 customers on the platform today.\n'),
+        file('content-30.md', '## Post 1\n\nWe took one client from 71 days to 38 days.\n'),
       ]),
     );
     assert.deepEqual(report.held.map((h) => h.path), ['content-30.md']);
     assert.ok(report.held[0]?.violations.some((v) => v.code === 'proof.invented-result'));
     assert.deepEqual(report.saved, ['90-day-plan.md'], 'the plan beside it survives');
+  });
+
+  it('A COUNT OF CUSTOMERS IS HELD, and never reaches the founder', async () => {
+    // THE SHAPE RULE 5 IS NAMED FOR. CLAUDE.md says it in four words: no fake
+    // numbers, customers, results or testimonials. A customer count is the one a
+    // buyer asks about, and in a small industry somebody always asks.
+    //
+    // This test and the one below are a pair, and they have to be read together.
+    // For one round the wide count was demoted and this shape went with it,
+    // because the measurement that demoted it was taken on reach counts. The
+    // pair is here so the next person who moves the line sees both halves.
+    const report = await gateHarvest(
+      input([file('content-30.md', '## Post 1\n\nWe have 214 customers on the platform today.\n')]),
+    );
+    assert.deepEqual(report.held.map((h) => h.path), ['content-30.md']);
+    assert.deepEqual(report.saved, []);
+    assert.ok(report.held[0]?.violations.some((v) => v.code === 'proof.invented-result'));
+    assert.ok(report.held[0]?.message.includes('214'), report.held[0]?.message);
+  });
+
+  it('A COUNT OF FOLLOWERS IS A NOTE, and the file is saved with it', async () => {
+    // THE OTHER HALF, and the reason the split exists. Measured, the reach count
+    // fires on five of twenty ordinary founder sentences: "there are 25 people on
+    // my list", "I have 1,200 followers". A founder telling the truth about their
+    // own audience was losing work for it.
+    //
+    // The claim is still not silent. The founder gets the figure named, beside
+    // the file, with one click to say it is right.
+    const report = await gateHarvest(
+      input([file('content-30.md', '## Post 1\n\nI have 1,200 followers and most of them are local.\n')]),
+    );
+    assert.deepEqual(report.held, []);
+    assert.deepEqual(report.saved, ['content-30.md']);
+    const note = report.notes.find((n) => n.code === 'proof.unbacked-figure');
+    assert.ok(note !== undefined, 'the figure still reaches the founder');
+    assert.ok(note.message.includes('1,200'), note.message);
   });
 
   it('ORDINARY FOUNDER SENTENCES NEVER COST A TURN', async () => {
@@ -211,12 +250,18 @@ describe('where the line sits, as a function', () => {
   });
 
   it('holds every rule 5 reading, strong and weak', () => {
+    // Two of these three cannot reach `outcomeFor` on a real turn any more,
+    // because `confidence.ts` files them below a hold. Asserted anyway: this
+    // function is the last word on what a block costs, and it has to answer
+    // safely for a code that arrives by a route nobody predicted.
     assert.equal(outcomeFor(violation({ code: 'proof.invented-result' })), 'hold-the-file');
     assert.equal(outcomeFor(violation({ code: 'proof.ungrounded-number' })), 'hold-the-file');
     assert.equal(outcomeFor(violation({ code: 'proof.nothing-to-check-against' })), 'hold-the-file');
   });
 
   it('splits rule 2 on the evidence, which is the one place a turn is worth it', () => {
+    // Same again for the two quiet rule 2 codes. Only `dm.offered` can cost a
+    // turn, and only it ever could.
     assert.equal(outcomeFor(violation({ code: 'dm.possible-offer' })), 'hold-the-file');
     assert.equal(outcomeFor(violation({ code: 'dm.mentioned-while-refusing' })), 'hold-the-file');
     assert.equal(outcomeFor(violation({ code: 'dm.offered' })), 'refuse-the-turn');
@@ -229,21 +274,25 @@ describe('what the founder reads about a file they did not get', () => {
       input([
         file('90-day-plan.md', '## Week one\n\nWrite the plan and book the calls.\n'),
         file('outreach-sequence.md', '## Step one\n\nOne short note about their onboarding.\n'),
-        file('content-30.md', '## Post 1\n\nThis will supercharge your pipeline.\n'),
+        file('content-30.md', '## Post 1\n\nWe saved a client 11 hours a week.\n'),
       ]),
     );
 
     const message = report.held[0]?.message ?? '';
     assert.match(message, /90-day-plan\.md/, 'what they got');
     assert.match(message, /outreach-sequence\.md/, 'what they got');
-    assert.match(message, /held back and not saved: content-30\.md/, 'what was held');
+    assert.match(message, /One file is not there yet: content-30\.md/, 'what was held');
     assert.match(message, /line 3/, 'which line');
-    assert.match(message, /This will supercharge your pipeline\./, 'the sentence itself');
-    assert.match(message, /Ask for content-30\.md again\./, 'what to do now');
+    assert.match(message, /We saved a client 11 hours a week\./, 'the sentence itself');
+    assert.match(message, /Then ask for content-30\.md again\./, 'what to do now');
+    assert.match(message, /restricted|back up|stand behind/, 'why it matters to them');
+    assert.match(message, /If that line is right as it stands/, 'the way past it');
 
     // Never a rule code, never a rule number, never a pattern.
     assert.doesNotMatch(message, /prose\.|proof\.|track\.|ownership\.|dm\./);
     assert.doesNotMatch(message, /rule \d/i);
+    // And never the app talking about its own machinery.
+    assert.doesNotMatch(message, /violation|severity|gate|pattern|block(ed|ing)?\b/i);
   });
 
   it('does not accuse a founder of inventing anything when the rule is guessing', () => {
@@ -277,7 +326,7 @@ describe('what the founder reads about a file they did not get', () => {
   });
 
   it('says so plainly when the held file was the only thing that request wrote', async () => {
-    const report = await gateHarvest(input([file('content-30.md', '## Post 1\n\nAn effortless win.\n')]));
+    const report = await gateHarvest(input([file('content-30.md', '## Post 1\n\nWe saved a client 11 hours a week.\n')]));
     assert.equal(report.saved.length, 0);
     assert.match(report.held[0]?.message ?? '', /Nothing else from that request is waiting for you\./);
   });
@@ -292,7 +341,7 @@ describe('what the founder reads about a file they did not get', () => {
         file('.state/index.md', '| file | gate |\n'),
         file('snapshots/content-30.md', 'a byte copy'),
         file('ledger.md', '| id | status |\n'),
-        file('content-30.md', '## Post 1\n\nThis will supercharge your pipeline.\n'),
+        file('content-30.md', '## Post 1\n\nWe saved a client 11 hours a week.\n'),
       ]),
     );
     const message = report.held[0]?.message ?? '';
@@ -306,14 +355,14 @@ describe('what the founder reads about a file they did not get', () => {
     const report = await gateHarvest(
       input([
         file('90-day-plan.md', '# The plan\n\nWeek one: write it.\n'),
-        file('content-30.md', '## Post 1\n\nAn effortless win.\n'),
-        file('ops-workflow.md', '# Ops\n\nA seamless handover.\n'),
+        file('content-30.md', '## Post 1\n\nWe saved a client 11 hours a week.\n'),
+        file('ops-workflow.md', '# Ops\n\nStep one: write your hook bank.\n'),
       ]),
     );
     assert.equal(report.held.length, 2);
     for (const entry of report.held) {
-      assert.match(entry.message, /2 files were held back and not saved\./);
-      assert.match(entry.message, new RegExp(`This one is ${entry.path.replace('.', '\\.')}\\.`));
+      assert.match(entry.message, /2 files are not there yet/);
+      assert.match(entry.message, new RegExp(`this is one of them: ${entry.path.replace('.', '\\.')}\\.`));
       assert.match(entry.message, /Everything else from that request is saved: 90-day-plan\.md\./);
     }
   });
@@ -321,12 +370,14 @@ describe('what the founder reads about a file they did not get', () => {
   it('PUTS THE HELD FILE FIRST IN THE NOTES, because the surface shows only the first few', async () => {
     const report = await gateHarvest(
       input([
-        file('ops-workflow.md', 'There is no DM automation here. Cold DMs are manual.\n'),
-        file('content-30.md', '## Post 1\n\nThis will supercharge your pipeline.\n'),
+        // A banned word is a note now rather than a hold, which makes it the
+        // right thing to stand beside a held file in this test.
+        file('ops-workflow.md', '# Ops\n\nA seamless handover.\n'),
+        file('content-30.md', '## Post 1\n\nWe saved a client 11 hours a week.\n'),
       ]),
     );
     assert.ok(report.notes.length > 1, 'this case needs a warning as well as a hold');
-    assert.equal(report.notes[0]?.code, 'held.prose.banned-word');
+    assert.equal(report.notes[0]?.code, 'held.proof.invented-result');
     assert.equal(report.notes[0]?.severity, 'warn', 'a note is a note; the block is recorded in held');
     assert.equal(report.notes[0]?.message, report.held[0]?.message);
     assert.ok(
@@ -362,21 +413,45 @@ describe('what the gate lets through', () => {
   });
 
   it('reads the founder\'s own message as grounding, so a number they gave is not invented', async () => {
-    const withNumber = file('content-30.md', '## Post 1\n\nWe ran 47 onboarding calls last quarter.\n');
+    const withNumber = file('content-30.md', '## Post 1\n\nWe cut their onboarding to 47 days.\n');
     const withoutIt = await gateHarvest(input([withNumber]));
     assert.deepEqual(withoutIt.held.map((h) => h.path), ['content-30.md'], 'ungrounded, so held');
 
     const report = await gateHarvest({
       ...input([withNumber]),
-      grounding: [{ path: 'the message you sent', text: 'we ran 47 onboarding calls last quarter', authored: 'founder' }],
+      grounding: [{ path: 'the message you sent', text: 'we cut their onboarding to 47 days', authored: 'founder' }],
     });
     assert.equal(report.answer?.ok, true);
     assert.deepEqual(report.held, []);
   });
 
+  it('SAYING A FIGURE IS RIGHT SETTLES IT, so the founder is not asked twice', async () => {
+    // The override, end to end. A founder whose real result is 47 days says so
+    // once. Nothing about that figure is raised again, in this file or the next.
+    const withNumber = file('content-30.md', '## Post 1\n\nWe cut their onboarding to 47 days.\n');
+    const report = await gateHarvest({
+      ...input([withNumber]),
+      confirmed: [{ rule: 'no-invented-proof', found: '47' }],
+    });
+    assert.deepEqual(report.held, []);
+    assert.deepEqual(report.saved, ['content-30.md']);
+    assert.deepEqual(report.notes, [], 'settled means settled, not settled with a note');
+  });
+
+  it('a confirmation is scoped to the rule that raised it', async () => {
+    // Saying a figure is right must not also switch off the house style. If this
+    // ever passes with an empty notes list, one click has quietly turned the
+    // whole gate off for that founder.
+    const report = await gateHarvest({
+      ...input([file('content-30.md', '## Post 1\n\nA seamless handover in 47 days.\n')]),
+      confirmed: [{ rule: 'no-invented-proof', found: 'seamless' }],
+    });
+    assert.ok(report.notes.some((n) => n.code === 'prose.banned-word'));
+  });
+
   it('carries warnings out instead of blocking on them', async () => {
     const report = await gateHarvest(
-      input([file('ops-workflow.md', 'There is no DM automation here. Cold DMs are manual.')]),
+      input([file('ops-workflow.md', '# Ops\n\nA seamless handover.\n')]),
     );
     assert.equal(report.answer?.ok, true);
     assert.deepEqual(report.held, []);

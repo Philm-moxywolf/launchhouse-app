@@ -49,6 +49,7 @@
  *   file stays the thing a rule module can import without a cycle.
  */
 
+import { quieten } from './confidence.ts';
 import { gatesSource, type GateFileRow } from './gates-source.ts';
 import { checkNoDmAutomation } from './no-dm-automation.ts';
 import { checkNoInventedProof, type ProofOptions } from './no-invented-proof.ts';
@@ -90,19 +91,38 @@ export interface GateAnswer {
  * other complaint beside the point. Then rule 2, then rule 5, then the house
  * style, then rule 4. The house style comes late because a dash is the smallest
  * of these problems and should not be the first thing anybody reads.
+ *
+ * EVERY ANSWER GOES THROUGH `quieten` BEFORE IT LEAVES, and that is the one
+ * place a rule's own opinion is turned into what a founder actually
+ * experiences. The rules are detectors. They report what they found and how
+ * sure they are of it. `confidence.ts` holds one table saying, for every single
+ * thing this folder can report, whether it is confident enough and harmful
+ * enough to take work away from somebody who is not technical and is in a hurry.
+ *
+ * IT ONLY EVER QUIETENS. A rule that chose `warn` for a local reason keeps it,
+ * and the table can lower a `block` but never raise a `warn`. So the failure
+ * mode of a wrong row is a missing note, not a lost file, and the rules keep
+ * their own judgement about the cases they know best.
+ *
+ * IT RUNS HERE AND NOT IN EACH RULE so that no caller can reach a rule's raw
+ * severity by accident. The raw functions stay exported for the tests, which
+ * have to see everything the folder can find in order to check it reads well.
  */
 export function runRules(
   artifact: Artifact,
   ctx: FounderContext,
   options: GateOptions = {},
 ): GateAnswer {
+  const confirmed = ctx.confirmed ?? [];
   const results: RuleResult[] = [
     checkTrack(artifact, ctx, options.track),
     checkNoDmAutomation(artifact),
     checkNoInventedProof(artifact, ctx, options.proof),
     checkProse(artifact, options.prose),
     checkOwnership(artifact, options.ownership),
-  ].map(assertChecked);
+  ]
+    .map(assertChecked)
+    .map((r) => quieten(r, confirmed));
 
   const blocked = blocking(results);
   const notes = results.flatMap((r) => r.violations).filter((v) => v.severity === 'warn');
@@ -235,6 +255,16 @@ export function fileFilterFor(track: Track | null): (path: string) => boolean {
 }
 
 export * from './types.ts';
+export {
+  confirmationFor,
+  founderSees,
+  isOverridable,
+  judgementFor,
+  quieten,
+  JUDGEMENTS,
+  type FounderSees,
+  type Judgement,
+} from './confidence.ts';
 export { checkProse, checkProseText } from './prose.ts';
 export { checkTrack, TRACK_TERMS } from './track.ts';
 export {

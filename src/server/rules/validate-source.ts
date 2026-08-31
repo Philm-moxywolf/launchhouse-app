@@ -12,12 +12,18 @@
  *   thing 130 founders actually see. That is the wrong way round. So the shell
  *   script stays the one list and this file reads it.
  *
- *   It fails closed in two directions. If a pattern cannot be found, the
+ *   It fails closed in three directions. If a pattern cannot be found, the
  *   extractor throws and names the assignment it was looking for, so renaming a
  *   variable in `validate.sh` breaks the build rather than silently switching a
  *   rule off. If a pattern contains regular expression syntax this translator
  *   has not been taught, it throws rather than compiling something that looks
- *   close enough.
+ *   close enough. And if a pattern is present but EMPTY, or matches the empty
+ *   string, it throws too.
+ *
+ *   THE THIRD ONE WAS ADDED AFTER IT BIT. `BANNED=''` is what a bad merge
+ *   leaves behind, and it read as a found assignment. The banned word rule then
+ *   scanned every founder file against a list of nothing. See the note in
+ *   `ereToRegExp` for what that actually did, which was worse than passing.
  *
  * CALLED BY: prose.ts, no-dm-automation.ts, and their tests.
  * READS:     `scripts/validate.sh` from the content repo, through
@@ -106,6 +112,27 @@ const UNSUPPORTED: ReadonlyArray<readonly [RegExp, string]> = [
  * enforced and is not.
  */
 export function ereToRegExp(ere: string, flags: string, sourceName: string): RegExp {
+  // AN EMPTY PATTERN IS THE SILENT FAILURE THIS WHOLE FILE EXISTS TO PREVENT,
+  // and it was the one shape that got through. `liftAssignment` throws when an
+  // assignment is MISSING. It said nothing when the assignment was present and
+  // empty, which is what a bad merge or a careless edit to validate.sh actually
+  // leaves behind: `BANNED=''`.
+  //
+  // What that did was not even a quiet pass. Measured, on a copy of the content
+  // with BANNED emptied, the banned word scan matched a zero length string at
+  // every position, collected violations until the heap ran out, and killed the
+  // process on the first founder turn. So the failure was a restart loop on the
+  // Monday of the event, arrived at through a rule that had stopped checking.
+  //
+  // Both halves are refused here rather than in each lift, because this is the
+  // one function every pattern in this file passes through, including the ones
+  // somebody adds next year.
+  if (ere.trim() === '') {
+    throw new Error(
+      `${VALIDATE_SH_PATH} holds an empty pattern for ${sourceName}.\nA rule with an empty list checks nothing, so the rules gate refuses to run rather than report a pass it did not earn.\nFix: restore the pattern in the content repo, then run its own test suite.`,
+    );
+  }
+
   let body = ere;
 
   // Shell double quoting leaves `\$` meaning a literal dollar sign.
@@ -131,14 +158,29 @@ export function ereToRegExp(ere: string, flags: string, sourceName: string): Reg
     );
   }
 
+  let compiled: RegExp;
   try {
-    return new RegExp(body, flags);
+    compiled = new RegExp(body, flags);
   } catch (cause) {
     throw new Error(
       `The pattern lifted from ${sourceName} in ${VALIDATE_SH_PATH} does not compile as a JavaScript regular expression.\nPattern: ${ere}\nFix: check the shell script, then teach ereToRegExp about the difference.`,
       { cause },
     );
   }
+
+  // A PATTERN THAT MATCHES NOTHING AT ALL IS THE SAME BUG WEARING A HAT.
+  // `(a|)` and `x*` are not empty strings, so the check above lets them past,
+  // and both match at every position of every document. Tested on the compiled
+  // form rather than on the text, because that is where the alternation is
+  // resolved. A fresh non global copy, so this never disturbs `lastIndex` on the
+  // regex the caller is about to scan with.
+  if (new RegExp(body, flags.replace('g', '')).test('')) {
+    throw new Error(
+      `The pattern lifted from ${sourceName} in ${VALIDATE_SH_PATH} matches the empty string, so it matches everywhere and says nothing.\nPattern: ${ere}\nThe rules gate refuses to run rather than scan a founder's file with a rule that cannot fail.\nFix: check the shell script for an empty alternative such as (a|) or a bare *.`,
+    );
+  }
+
+  return compiled;
 }
 
 /** Line number of an index in a string, 1 based. */

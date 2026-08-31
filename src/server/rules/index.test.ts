@@ -57,11 +57,15 @@ test('every rule reports what it checked, so no rule can pass on nothing', () =>
 });
 
 test('a refusal from any one rule stops the artifact', () => {
+  // FOUR RULES, NOT FIVE, and the missing one is the house style. A dash and a
+  // banned word are notes now: see confidence.ts for the reasoning, which is
+  // that the founder never agreed to the house style and losing a content plan
+  // over a punctuation mark is the gate serving itself. The test below is the
+  // pair for this one and pins that they still reach the founder.
   const cases: Array<[string, Artifact, FounderContext]> = [
     ['track', post('Enrol them in the email sequence.'), ctxFor('b2c')],
     ['no-dm-automation', post('We can automate DMs for you.'), ctxFor('b2c')],
-    ['no-invented-proof', post('We have 63 clients now.'), ctxFor('b2b')],
-    ['prose', post(`A seamless start ${EM} and quick.`), ctxFor('b2b')],
+    ['no-invented-proof', post('We saved a client 11 hours a week.'), ctxFor('b2b')],
     ['ownership', post('Fine text.', '../elsewhere.md'), ctxFor('b2b')],
   ];
   for (const [rule, artifact, ctx] of cases) {
@@ -69,6 +73,19 @@ test('a refusal from any one rule stops the artifact', () => {
     assert.equal(answer.ok, false, `${rule} did not stop it`);
     assert.ok(answer.blocked.some((v) => v.rule === rule), `${rule} was not the one that stopped it`);
   }
+});
+
+test('THE HOUSE STYLE REACHES THE FOUNDER WITHOUT TAKING THE WORK', () => {
+  // The other half of the test above. Quiet is not the same as absent, and a
+  // row in confidence.ts set to `nothing` by mistake would pass the test above
+  // and fail this one.
+  const answer = runRules(post(`A seamless start ${EM} and quick.`), ctxFor('b2b'));
+  assert.equal(answer.ok, true, 'the house style must not cost a founder their file');
+  assert.deepEqual(
+    answer.notes.map((v) => v.code).sort(),
+    ['prose.banned-word', 'prose.dash'],
+    'and it must still be said',
+  );
 });
 
 test('one bad file refuses the whole turn, so a folder is never left half written', () => {
@@ -89,10 +106,28 @@ test('the founder is told the track problem before the punctuation problem', () 
 });
 
 test('the explanation names the problem and the reason, and says how many more', () => {
-  const answer = runRules(post('A seamless and effortless start.'), ctxFor('b2b'));
+  // Two blocking rules on one file: the other track's file name, and a result
+  // nobody gave. The founder reads the first and is told there is another.
+  const answer = runRules(post('We saved a client 11 hours a week.', 'hook-bank.md'), ctxFor('b2b'));
   const text = explainRefusal(answer);
-  assert.match(text, /seamless/);
+  assert.equal(answer.blocked.length, 2, 'this case needs two different rules to speak');
+  assert.match(text, /hook-bank\.md/);
   assert.match(text, /one more like it/);
+});
+
+test('REPEATS OF ONE PROBLEM ARE ONE REPORT, because nobody reads the fortieth', () => {
+  // A thirty post plan carries forty figures, and a founder was going to be
+  // shown forty notes saying the same sentence. One note, with the count on it.
+  const answer = runRules(
+    post('I have 1,200 followers.\nWe have 88 firms.\nThere are 25 people on my list.'),
+    ctxFor('b2b'),
+  );
+  const figures = answer.notes.filter((v) => v.code === 'proof.unbacked-figure');
+  assert.equal(figures.length, 1, 'three of the same thing is one report');
+  assert.match(figures[0]?.message ?? '', /There are 2 more like it in this file\./);
+  // Nothing is lost. The other two are in the audit trail.
+  const rule5 = answer.results.find((r) => r.rule === 'no-invented-proof');
+  assert.equal(rule5?.notes.filter((n) => n.includes('proof.unbacked-figure')).length, 2);
 });
 
 /* ---------------------------------------------------------------------- */
@@ -126,9 +161,14 @@ function everyViolation(): Violation[] {
 
   push(checkNoDmAutomation(post('We can automate DMs for you, in bulk, on a schedule.')).violations);
   push(checkNoDmAutomation(post('There is no DM automation here.')).violations);
+  // The two quiet tiers. Their copy reaches a founder as a note, so it is held
+  // to the same house style as everything that stops a file.
+  push(checkNoDmAutomation(post('The sequence handles the Instagram side too.')).violations);
+  push(checkNoDmAutomation(post('Set up an autoresponder for people you have not spoken to yet.')).violations);
 
   push(checkNoInventedProof(post('We have 63 clients and 68% stay.'), b2b).violations);
   push(checkNoInventedProof(post('Try 63 openers.'), b2c).violations);
+  push(checkNoInventedProof(post('I have 3 children and a van.'), b2b).violations);
   push(checkNoInventedProof(post('Anything.'), { track: 'b2b', brain: null }).violations);
 
   push(checkOwnership(post('x', '../out.md')).violations);
@@ -172,7 +212,7 @@ function everyViolation(): Violation[] {
 
 test('the gate produces enough different messages for the self test to mean something', () => {
   const codes = new Set(everyViolation().map((v) => v.code));
-  assert.ok(codes.size >= 15, `only ${codes.size} distinct violation codes were reached`);
+  assert.ok(codes.size >= 20, `only ${codes.size} distinct violation codes were reached`);
 });
 
 /**

@@ -125,6 +125,53 @@ export interface Artifact {
   authored: 'model' | 'founder';
 }
 
+/**
+ * A finding the founder has looked at and said is right.
+ *
+ * WHY IT EXISTS. The gate is a backstop and it is sometimes wrong, and the
+ * person who knows it is wrong is the founder. Someone who really does have
+ * 1,200 followers needs a way to say so and be believed, without a terminal,
+ * without a mentor, and without being asked again on the next post.
+ *
+ * MATCHED ON THE RULE AND THE FOUND TEXT, not on a file and a line. The founder
+ * is answering a question about their business, not about a file. Confirm a
+ * figure once and it is settled for every post after it.
+ *
+ * WHERE IT IS KEPT, and this is a decision rather than a missing table. A
+ * confirmed figure is a true thing about the founder's business, and the file
+ * that holds true things about the founder's business already exists: the
+ * `## Proof` section of their own `founder-brain.md`. Confirming appends the
+ * figure there, in a line they can read, edit and download, and the next turn
+ * grounds on it the ordinary way, because rule 5 already reads the whole Brain.
+ * Nothing has to be remembered anywhere the founder cannot see, and a founder
+ * who later changes their mind deletes a line rather than hunting for a switch.
+ *
+ * THE LIST ON THE CONTEXT IS THAT SAME ANSWER, HELD FOR THIS TURN. The Brain is
+ * read once at the top of a turn, so a founder who confirms a figure and asks
+ * for the post again straight away would otherwise be asked twice inside a
+ * minute. The caller carries the confirmations until the Brain is next read.
+ */
+export interface Confirmed {
+  /** Which rule raised it. Confirming a figure must not silence a dash. */
+  rule: RuleId;
+  /** The exact text the founder was shown: a number, a word, a phrase. */
+  found: string;
+}
+
+/**
+ * The line a confirmation adds to the founder's Brain, under `## Proof`.
+ *
+ * Written the way a person writes a note to themselves, because it goes into
+ * their file under their name. A line in their own Brain that reads like a
+ * machine wrote it is a line they will delete, and then they get asked again.
+ *
+ * `today` is passed in rather than read from the clock, so the caller owns the
+ * timezone and a test can pin the output.
+ */
+export function confirmationLine(confirmed: Confirmed, today: string): string {
+  return `- ${confirmed.found}, checked by me on ${today}`;
+}
+
 /** What a rule needs to know about the founder it is checking for. */
 export interface FounderContext {
   /** Null before the Brain is written. Nothing forks until it is set. */
@@ -136,6 +183,13 @@ export interface FounderContext {
    * `memory.md` and the founder's own messages this turn belong here.
    */
   grounding?: Artifact[];
+  /**
+   * Findings the founder has already said are right. Never raised again.
+   *
+   * Optional, and an absent list means nothing has been confirmed rather than
+   * everything. A rule reading this must never read empty as permission.
+   */
+  confirmed?: readonly Confirmed[];
 }
 
 /** Empty result for a rule that ran and found nothing. */

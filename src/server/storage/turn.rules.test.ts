@@ -29,6 +29,20 @@
  * file is held and the turn commits, and the tests below hold both halves of it:
  * the held file is not in the write list, and the other two are.
  *
+ * THERE ARE THREE VOLUMES NOW, NOT TWO, and this file tests all three, because a
+ * turn is the only place the difference between them is visible to a founder.
+ *
+ *   refuse the turn   rule 2 only. Nothing is saved and the folder is removed.
+ *   hold the file     the file does not reach ge_file, its neighbours do, and the
+ *                     folder is left unstamped so the held bytes cannot be read.
+ *   note the file     the file IS saved, with a line beside it. Nothing is taken.
+ *
+ * `rules/confidence.ts` decides which volume each finding gets, and it can only
+ * ever quieten. That is why a banned word, which used to hold a file, now has a
+ * test here proving the file arrives. A finding moving between these three is a
+ * policy change, and it should break a test in this file rather than surprise
+ * somebody in a staffed room.
+ *
  * WHAT STILL COSTS THE WHOLE TURN, and is tested here as carefully as the hold: an
  * offer to automate cold DMs, and nothing else. That rule was measured against
  * twelve sentences about DMs and fired only on the three that were real offers. The
@@ -54,7 +68,12 @@ import assert from 'node:assert/strict';
 
 import type { Db, Queryable } from '../db/client.ts';
 import { founders, geBlob, geEvent, geFile } from '../db/schema.ts';
+import { resetContentRootCacheForTests } from '../rules/content-root.ts';
+import { resetGatesCacheForTests } from '../rules/gates-source.ts';
 import { RulesRefused } from '../rules/harvest-gate.ts';
+import { resetOwnershipCacheForTests } from '../rules/ownership.ts';
+import { assertRulesSourcesReady, resetRulesSourcesReadyForTests } from '../rules/sources-ready.ts';
+import { resetHouseStyleCacheForTests } from '../rules/validate-source.ts';
 import { createFounderKey } from './crypto.ts';
 import { readEpoch } from './materialise.ts';
 import { founderRoot, geHome } from './paths.ts';
@@ -226,8 +245,18 @@ function recordingDb(): { db: Db; written: string[] } {
 describe('a file that fails a rule is held, and its neighbours are saved', () => {
   it('THE OTHER TWO FILES REACH ge_file AND THE HELD ONE DOES NOT', async () => {
     // The Sunday turn, in miniature: a plan, a sequence and thirty posts. One
-    // sentence in the posts trips a word list. The old behaviour deleted all three
-    // and removed the folder.
+    // sentence in the posts states a customer count nobody gave it. The old
+    // behaviour deleted all three and removed the folder.
+    //
+    // THE SENTENCE USED TO BE A BANNED MARKETING WORD, and it is worth saying why
+    // it is not any more, because the change reads like the test going soft.
+    // `rules/confidence.ts` asks two questions of every finding: am I sure, and is
+    // the harm real. For a banned word the second answer is no. It is flat copy,
+    // not a false claim, and the founder can change a word. Holding a thirty post
+    // plan over "supercharge" is the gate serving itself. A customer count nobody
+    // gave is the other answer: a buyer asks where it came from, and in a small
+    // industry somebody always does. So the property is proved on a sentence the
+    // app really does hold, and the banned word gets its own test below.
     const { db, written } = recordingDb();
     const outcome = await runTurn(
       { founderId: FOUNDER, actor: 'model', verb: 'agent-run', db },
@@ -245,7 +274,7 @@ describe('a file that fails a rule is held, and its neighbours are saved', () =>
         );
         await writeFile(
           join(ctx.home, 'content-30.md'),
-          '## Post 1\n\nThis will supercharge your pipeline.\n',
+          '## Post 1\n\nWe have 214 customers on the platform today.\n',
           'utf8',
         );
         return 'the model finished';
@@ -276,7 +305,7 @@ describe('a file that fails a rule is held, and its neighbours are saved', () =>
         await writeFile(join(ctx.home, '90-day-plan.md'), '# The plan\n\nWeek one: write it.\n', 'utf8');
         await writeFile(
           join(ctx.home, 'content-30.md'),
-          '## Post 1\n\nThis will supercharge your pipeline.\n',
+          '## Post 1\n\nWe have 214 customers on the platform today.\n',
           'utf8',
         );
         return null;
@@ -285,14 +314,22 @@ describe('a file that fails a rule is held, and its neighbours are saved', () =>
 
     // The founder reads this off gate.notes, which is what routes/run-turn.ts
     // already puts on the screen beside the work.
+    //
+    // THE WORDING MOVED AND THIS TEST MOVED WITH IT. It used to look for "held
+    // back and not saved", and `explainHold` deliberately stopped saying that:
+    // it is the app describing its own machinery, in the passive, to somebody who
+    // asked for a content plan. What a founder needs is the state of their folder.
+    // So the four things are still checked, by what they mean rather than by a
+    // phrase, and the phrase is free to improve.
     const first = outcome.gate.notes[0];
     assert.ok(first, 'a held file has to say something, or the founder asks a mentor');
     assert.match(first.message, /90-day-plan\.md/, 'what they got');
-    assert.match(first.message, /held back and not saved: content-30\.md/, 'what was held');
+    assert.match(first.message, /not there yet: content-30\.md/, 'what was held');
     assert.match(first.message, /line 3/, 'which line');
-    assert.match(first.message, /This will supercharge your pipeline\./, 'the sentence itself');
-    assert.match(first.message, /Ask for content-30\.md again\./, 'what to do now');
+    assert.match(first.message, /We have 214 customers on the platform today\./, 'the sentence itself');
+    assert.match(first.message, /ask for content-30\.md again\./, 'what to do now');
     assert.doesNotMatch(first.message, /prose\.|proof\.|track\.|ownership\.|dm\./, 'never a rule code');
+    assert.doesNotMatch(first.message, /[\u2014\u2013]/, 'the founder-facing line follows the house style');
   });
 
   it('LEAVES THE FOLDER UNSTAMPED, so the held bytes cannot be read by the next turn', async () => {
@@ -302,7 +339,11 @@ describe('a file that fails a rule is held, and its neighbours are saved', () =>
     const { db } = recordingDb();
     await runTurn({ founderId: FOUNDER, actor: 'model', verb: 'agent-run', db }, async (ctx) => {
       await writeFile(join(ctx.home, 'founder-brain.md'), CLEAN_BRAIN, 'utf8');
-      await writeFile(join(ctx.home, 'content-30.md'), '## Post 1\n\nAn effortless win.\n', 'utf8');
+      await writeFile(
+        join(ctx.home, 'content-30.md'),
+        '## Post 1\n\nWe have 214 customers on the platform today.\n',
+        'utf8',
+      );
       return null;
     });
     assert.equal(await readEpoch(FOUNDER), null, 'a turn that held a file must not stamp the folder');
@@ -316,6 +357,41 @@ describe('a file that fails a rule is held, and its neighbours are saved', () =>
       return null;
     });
     assert.equal(await readEpoch(FOUNDER), 2);
+  });
+
+  it('A BANNED WORD IS A NOTE: the file is saved, and the folder is stamped', async () => {
+    // THE OTHER HALF OF THE LINE, and the reason the three tests above no longer
+    // use a banned word. `rules/confidence.ts` files `prose.banned-word` under
+    // `note`: the gate is sure it found it and the harm to the founder is nothing,
+    // because it is flat copy rather than a false claim.
+    //
+    // This is pinned here, at the turn, rather than only in the rules folder,
+    // because the thing that would go wrong is not a severity. It is a file
+    // quietly not reaching ge_file. A founder who asked for thirty posts and got
+    // twenty nine has no way to tell a hold from a bug, so the saved list is the
+    // assertion.
+    const { db, written } = recordingDb();
+    const outcome = await runTurn(
+      { founderId: FOUNDER, actor: 'model', verb: 'agent-run', db },
+      async (ctx) => {
+        await writeFile(join(ctx.home, 'founder-brain.md'), CLEAN_BRAIN, 'utf8');
+        await writeFile(
+          join(ctx.home, 'content-30.md'),
+          '## Post 1\n\nThis will supercharge your pipeline.\n',
+          'utf8',
+        );
+        return null;
+      },
+    );
+
+    assert.deepEqual(outcome.gate.held, [], 'a banned word must not take the file away');
+    assert.deepEqual([...written].sort(), ['content-30.md', 'founder-brain.md']);
+    assert.equal(await readEpoch(FOUNDER), 2, 'nothing was held, so the folder is stamped');
+    // Not silent either. The founder is told, beside the work rather than
+    // instead of it, and the word is named so they can change it.
+    const said = outcome.gate.notes.find((n) => n.code === 'prose.banned-word');
+    assert.ok(said !== undefined, 'a note the founder never reads is the same as no rule');
+    assert.match(said.message, /supercharge/);
   });
 
   it('DOES NOT MOVE THE TRACK CACHE FROM A BRAIN IT HELD', async () => {
@@ -429,6 +505,50 @@ describe('what still costs the whole turn', () => {
     // doing rather than the fake's.
     assert.deepEqual(written, [], 'a refused turn writes nothing, not even the clean files');
     assert.equal(await exists(founderRoot(FOUNDER)), false, 'the refused turn left its folder behind');
+  });
+
+  it('RULES THAT CANNOT LOAD REFUSE THE TURN, and nothing reaches ge_file', async () => {
+    // THE THIRD VOLUME, AND THE ONE THAT IS NOT A RULE. Every rule in this
+    // folder reads its list off disk. A list that will not load is a rule that
+    // cannot answer, and asking it anyway gets a pass nobody earned.
+    //
+    // The unit tests for this are in rules/sources-ready.test.ts, on doctored
+    // copies of the content. This is the end of that argument rather than a
+    // repeat of it: a real turn, a handle that would have accepted every write,
+    // and the two things a founder can actually check afterwards. Nothing was
+    // written, and the folder is gone rather than left half built.
+    const { db, written } = recordingDb();
+    process.env.GE_CONTENT_ROOT = join(workspace, 'content-that-is-not-there');
+    resetContentRootCacheForTests();
+    resetHouseStyleCacheForTests();
+    resetGatesCacheForTests();
+    resetOwnershipCacheForTests();
+    resetRulesSourcesReadyForTests();
+
+    try {
+      await assert.rejects(
+        () =>
+          runTurn({ founderId: FOUNDER, actor: 'model', verb: 'agent-run', db }, async (ctx) => {
+            await writeFile(join(ctx.home, 'founder-brain.md'), CLEAN_BRAIN, 'utf8');
+            await writeFile(join(ctx.home, '90-day-plan.md'), '# The plan\n\nWeek one: write it.\n', 'utf8');
+            return null;
+          }),
+        /GE_CONTENT_ROOT is set/,
+      );
+      assert.deepEqual(written, [], 'a turn whose rules could not load still wrote to ge_file');
+      assert.equal(await exists(founderRoot(FOUNDER)), false, 'the refused turn left its folder behind');
+    } finally {
+      // Back on the real content before the next test, and proved rather than
+      // assumed: a stale override here would fail every case after this one for
+      // a reason that has nothing to do with what it checks.
+      delete process.env.GE_CONTENT_ROOT;
+      resetContentRootCacheForTests();
+      resetHouseStyleCacheForTests();
+      resetGatesCacheForTests();
+      resetOwnershipCacheForTests();
+      resetRulesSourcesReadyForTests();
+      assertRulesSourcesReady();
+    }
   });
 
   it('tells the founder nothing was saved, and gives them something to act on', async () => {

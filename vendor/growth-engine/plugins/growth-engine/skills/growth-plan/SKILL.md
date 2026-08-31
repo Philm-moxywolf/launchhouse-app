@@ -25,7 +25,7 @@ If the Brain exists but engine files are missing, build the plan from what exist
 
 **Days 1 to 30.** Get all three engines running consistently. Weekly actions, specific and small enough to actually happen.
 
-**Days 31 to 60.** Volume and iteration. What gets tested, what gets measured.
+**Days 31 to 60.** Volume and iteration. What gets tested, what gets measured. On the B2C track, volume never means more first messages a day. It means more posts, more hooks, and more of the inbound side switched on.
 
 **Days 61 to 90.** Double down or cut, based on the data.
 
@@ -34,6 +34,8 @@ If the Brain exists but engine files are missing, build the plan from what exist
 **Kill criteria.** What result at day 30 means stop. Founders never write these and it is why they persist with things that are not working. Push for a real number.
 
 **Realistic numbers.** Base projections on their actual list size, audience size and conversion assumptions. Do not use the marketing numbers from the landing page. If the maths says a modest outcome, say so.
+
+Every number in this plan is either one the founder gave you, or an assumption. Label the assumptions in the text, with the word assume, and show the arithmetic in one line so they can change an input and see what moves. A projection that does not say it is a projection becomes a fact the moment it gets pasted somewhere else.
 
 ## Output
 

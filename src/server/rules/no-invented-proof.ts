@@ -84,35 +84,47 @@
  *     the data." The word "cut" is about the next sentence. A window measured in
  *     characters walks across the full stop and refuses the plan's own headings.
  *
- * WHAT IS DONE WITH EACH ANSWER, AND WHY THE BLAST RADIUS IS GRADED
+ * WHAT IS DONE WITH EACH ANSWER, AND THE MEASUREMENT THAT SET IT
  *
- *   result   block. A refusal is the whole turn, and for this shape that is
- *            right: an invented customer count that is saved with a warning
- *            beside it is an invented customer count that gets sent to somebody.
- *   unclear  warn. The artifact reaches the founder with a note against the
- *            line. This is where the rule admits it is guessing, and a guess
- *            must not cost a founder their work.
- *   work     nothing at all. Not a warning either. 74 of the 89 numbers in the
- *            toolkit's own skill prose are quantities of work, and a founder who
- *            reads 74 notes saying "the number 25 is not in your Founder Brain"
- *            about instructions they were just given stops reading notes. The
- *            count is kept in `notes` for the audit trail instead.
+ *   THE FIVE SHAPES ABOVE ARE STILL WHAT THIS FILE LOOKS FOR. What changed is
+ *   how loud each one is allowed to be, and it changed because it was measured
+ *   rather than argued. Twenty sentences an ordinary founder would type, run
+ *   against a Brain that grounds none of them. Fourteen of the twenty were held
+ *   back from the founder. Fourteen. Sentences like "I charge 2,500 GBP for a
+ *   full survey", "the workshop holds 8 people" and "I have 1,200 followers".
  *
- *   That grading IS the blast radius decision, and it was made here rather than
- *   in the gate on purpose. Refusing the whole turn is right for a rule that is
- *   exact: a banned word either is in the text or is not, and rule 2 either
- *   automated a DM or did not. Rule 5 is a judgement about a sentence, so the
- *   only honest lever is which shapes are confident enough to spend a founder's
- *   whole turn on. The answer is: the five claim shapes above, and nothing else.
+ *   That is not a rule protecting anybody. It is a rule teaching 130 people to
+ *   ignore it, and then it is not there on the one file that mattered.
  *
- *   WHAT A BLOCK COSTS THE FOUNDER IS NOT DECIDED HERE, and the next person
- *   should not go looking for it in this file. This file decides which shapes
- *   are sure enough to refuse. `harvest-gate.ts` and `storage/turn.ts` decide
- *   what a refusal takes with it: the one file that failed, or every file the
- *   turn wrote. Read that file's header before changing either, because the two
- *   decisions multiply. A shape that is only mostly right is survivable when it
- *   holds one file back. It is not survivable when it takes a plan, a sequence
- *   and a CSV with it, on the Sunday, in a staffed room.
+ *   So each reading now carries `sure`, which answers one question: has this
+ *   shape been run against ordinary founder writing without firing on it? Three
+ *   shapes can say yes. A change ("from 71 days to 38"), an outcome verb with
+ *   somebody it happened to ("we saved a client 11 hours a week"), and a rate
+ *   that says whose it is ("82 per cent of our clients"). Those three fired on
+ *   one of the twenty, and that one was a genuine result claim.
+ *
+ *   result, sure    the file is held. This is rule 5 doing its job.
+ *   result, unsure  a note beside the work. The figure may be perfectly true
+ *                   and simply not written down yet, which is the common case.
+ *   unclear         nothing at all. The rule is saying it cannot read the
+ *                   sentence, and a founder cannot act on that.
+ *   work            nothing at all, and not even a note. 74 of the 89 numbers
+ *                   in the toolkit's own skill prose are quantities of work.
+ *                   The count goes to `notes` for the audit trail.
+ *
+ *   THE VOLUME IS NOT SET HERE. This file decides which reading a number gets
+ *   and which code it carries. `confidence.ts` holds one table saying how loud
+ *   each code may be, with the measurement written beside it, so the whole
+ *   gate's noise can be read in one place instead of five. And `harvest-gate.ts`
+ *   decides what a held file costs: itself, or the whole turn. Three decisions,
+ *   deliberately apart, because they multiply. A shape that is only mostly
+ *   right is survivable when it holds one file. It is not survivable when it
+ *   takes a plan, a sequence and a CSV with it, on the Sunday, in a staffed room.
+ *
+ *   THE FOUNDER CAN OVERRULE IT. They know their own business. A note names the
+ *   figure and offers "that one is right", and confirming writes it into the
+ *   `## Proof` section of their own Brain, where it grounds every post after
+ *   it. `Confirmed` in types.ts carries it and `groundedValues` below reads it.
  *
  * THE OTHER NUMBERS THAT ARE NEVER CLAIMS are taken out before the scan runs:
  *   dates, times of day, positions in a list, `b2b` and `b2c`, the toolkit's own
@@ -361,8 +373,40 @@ function maskNeverAClaim(text: string, isCsv: boolean): string {
  * reads the shape of the claim rather than the noun in it, which is the only
  * thing that works for a noun nobody has thought of yet.
  */
-const PROOF_NOUNS =
-  'customers?|clients?|users?|subscribers?|followers?|fans?|members?|readers?|viewers?|listeners?|people|persons?|women|men|woman|man|mums?|dads?|parents?|families|households|professionals?|freelancers?|creators?|shops?|salons?|studios?|practices|clinics?|agencies|contractors?|builders?|firms?|companies|company|businesses|business|brands?|owners?|testimonials?|reviews?|ratings?|stars?|referrals?|signups?|sign-ups?|subscriptions?|downloads?|attendees?|students?|patients?|sales?|orders?|purchases?|deals?|contracts?|retainers?|staff|employees?|hires?';
+/**
+ * The half of the proof nouns that names a PAYING RELATIONSHIP or a
+ * TRANSACTION. These are the ones a buyer asks you to back up.
+ *
+ * WHY THE LIST IS SPLIT AT ALL, and this is the whole of the fix that put the
+ * customer count back. CLAUDE.md rule 5 names four things: "No fake numbers,
+ * customers, results or testimonials". When rule 5 was split into a held half
+ * and a noted half, every proof noun went into the noted half together, and two
+ * of those four stopped being held. "We have 214 customers on the platform
+ * today." became a note, and so did "We have 40 five star reviews."
+ *
+ * That is how the gap was found rather than argued: the note under
+ * `WORTH_THE_WHOLE_TURN` in harvest-gate.ts still names the customer count as
+ * one of the two sentences rule 5 exists for, and `storage/turn.rules.test.ts`
+ * still asserts it never reaches ge_file. The prose said held and the code had
+ * stopped holding.
+ *
+ * The audience half below is what made the wide list too noisy to hold, and it
+ * stays noted. A follower count is on the profile and a list size is in the
+ * tool. Nobody is misled by either.
+ */
+const COMMERCIAL_PROOF_NOUNS =
+  'customers?|clients?|testimonials?|reviews?|ratings?|sales?|orders?|purchases?|deals?|contracts?|retainers?|subscriptions?|patients?';
+
+/**
+ * The half that names REACH. True, ordinary, and usually checkable by whoever
+ * reads it, so it stays a note. Promoting any of these is what took the
+ * measurement in confidence.test.ts from one held sentence to fourteen.
+ */
+const AUDIENCE_PROOF_NOUNS =
+  'users?|subscribers?|followers?|fans?|members?|readers?|viewers?|listeners?|people|persons?|women|men|woman|man|mums?|dads?|parents?|families|households|professionals?|freelancers?|creators?|shops?|salons?|studios?|practices|clinics?|agencies|contractors?|builders?|firms?|companies|company|businesses|business|brands?|owners?|stars?|referrals?|signups?|sign-ups?|downloads?|attendees?|students?|staff|employees?|hires?';
+
+/** Both halves, for everything that only needs to know a noun is a proof noun. */
+const PROOF_NOUNS = `${COMMERCIAL_PROOF_NOUNS}|${AUDIENCE_PROOF_NOUNS}`;
 
 /**
  * PIPELINE. Things that are a result when they have happened and a target when
@@ -434,6 +478,7 @@ const TIME_AFTER = new RegExp(
 );
 
 const PROOF_AFTER = nounAfter(PROOF_NOUNS);
+const COMMERCIAL_PROOF_AFTER = nounAfter(COMMERCIAL_PROOF_NOUNS);
 const PIPELINE_AFTER = nounAfter(PIPELINE_NOUNS);
 const WORK_AFTER = nounAfter(WORK_UNITS);
 
@@ -644,6 +689,35 @@ const HYPOTHETICAL =
 const CLAIM_FRAME =
   /\b(?:we|i|me|our|my|us|they|them|their|he|him|his|she|her|hers)\b|\b(?:already|so far|to date|last (?:month|year|quarter|week))\b/i;
 
+/**
+ * THE FOUNDER SAYING THEY HAVE THIS MANY. "We have 214 customers", "I now serve
+ * 63 clients", "we have worked with 40 salons".
+ *
+ * WHY A FRAME AND NOT JUST THE NOUN. A commercial noun on its own is not a
+ * claim. Two of the twenty ordinary sentences in confidence.test.ts carry one:
+ * "I want to get to 10 clients by Christmas" and "Most of my work comes from 2
+ * referrals a month". Holding either of those is the gate taking a content plan
+ * away from somebody writing the truth about their own week. What separates
+ * them from an invention is not the word `clients`, it is the founder stating a
+ * present holding: a first person subject, a verb of having or serving, and the
+ * count straight after it.
+ *
+ * The hedges are allowed through on purpose. "Roughly 200 customers" is still a
+ * customer count, and a vague invention is the same problem as a precise one.
+ */
+const HOLDING_CLAIM_BEFORE =
+  /\b(?:we|i|our|my)\b[^.!?]{0,40}?\b(?:have|has|had|serve[sd]?|support(?:s|ed)?|look(?:s|ed)? after|work(?:s|ed)? with|onboard(?:s|ed)?|sign(?:s|ed)? up|bill|billed?|invoiced?|retain(?:s|ed)?)\s+(?:got\s+)?(?:over|about|around|roughly|nearly|almost|more than|just over|up to|some)?\s*$/i;
+
+/**
+ * The same sentence pointed at the future. An ambition is not a claim, and
+ * "I want to get to 10 clients by Christmas" is the shape that proves it.
+ *
+ * Kept separate from HYPOTHETICAL because a target is not a projection: nobody
+ * is doing arithmetic, they are saying what they are aiming at.
+ */
+const AMBITION_FRAME =
+  /\b(?:want|wants|wanted|aim|aims|aiming|goal|target(?:ing)?|hope|hopes|hoping|plan|plans|planning|need|needs|would like|get to|grow to|build to|reach|by (?:christmas|the end|next|q[1-4])|this year i will|going to)\b/i;
+
 /* -------------------------------------------------------------------------- */
 /* Deciding what one number is                                                */
 /* -------------------------------------------------------------------------- */
@@ -654,6 +728,40 @@ export interface Reading {
   kind: NumberKind;
   /** The shape that decided it. Kept so a disagreement can be argued about. */
   because: string;
+  /**
+   * Would this reading stake a founder's file on itself?
+   *
+   * THE MEASUREMENT THAT PUT THIS FIELD HERE. Twenty sentences an ordinary
+   * founder would type were run through `readClaim`, against a Brain that
+   * grounds none of them. Fourteen came back as a result and all fourteen were
+   * held back from the founder. Reading the `because` on each showed why: most
+   * of the shapes that catch a fabrication also catch ordinary true writing.
+   *
+   *   a count of proof   catches "over 340 customers trust us", and also
+   *                      "there are 25 people on my list" and "I have 1,200
+   *                      followers".
+   *   money              catches "our average client adds 1,800 GBP", and also
+   *                      "I charge 2,500 GBP for a full survey".
+   *   a completed count  catches "we have fitted 45 kitchens" either way round.
+   *   a count of pipeline catches "40 bookings" in an ordinary sentence.
+   *   a rate             confident only when the sentence says whose rate it
+   *                      is. "82 per cent of our clients" is a claim about the
+   *                      business. "The average reply rate people quote is 3
+   *                      percent" is a fact about the market.
+   *   a change           "from 71 days to 38". Fired on none of the twenty.
+   *   an outcome         an outcome verb with somebody it happened to. Fired on
+   *                      one of the twenty, and that one was a result claim
+   *                      about a client, which is the shape rule 5 exists for.
+   *
+   * So the last three set this true, the rate only when it names whose it is,
+   * and everything else sets it false. A false reading is still reported. It is
+   * reported as a note the founder can ignore rather than as work they lost.
+   *
+   * READ IT AS A QUESTION ABOUT THE SHAPE, NOT ABOUT THE SENTENCE. "I have
+   * 1,200 followers" may well be invented. The claim is only that this rule
+   * cannot tell, and a rule that cannot tell must not take work away.
+   */
+  sure: boolean;
 }
 
 /**
@@ -777,16 +885,30 @@ export function readClaim(sentence: string, token: NumberToken): Reading {
 
   // 1. A rate. Always a measurement of something that happened.
   if (/%|per cent|percent/i.test(raw)) {
-    if (hypothetical) return { kind: 'unclear', because: 'a rate inside a projection' };
-    return { kind: 'result', because: 'a rate' };
+    if (hypothetical) return { kind: 'unclear', because: 'a rate inside a projection', sure: false };
+    return { kind: 'result', because: 'a rate', sure: claimFrame };
   }
 
   // 2. A count of people, businesses or transactions. Nothing below demotes
   //    this, because "tell them you have 340 customers" is still a claim.
-  if (PROOF_AFTER.test(tail)) return { kind: 'result', because: 'a count of proof' };
+  //
+  //    `sure` SPLITS THIS ONE ROW, AND THE SPLIT IS WHAT PUTS THE CUSTOMER
+  //    COUNT BACK. Two things both have to be true before this holds a file:
+  //    the noun is a paying relationship rather than a reach number, and the
+  //    sentence states it as something the founder HAS right now. Either one on
+  //    its own is ordinary founder writing. Together they are the sentence rule
+  //    5 is named for, and a buyer really does ask where it came from.
+  //
+  //    Everything that is a proof noun and not that shape stays exactly where
+  //    the measurement put it, which is a note.
+  if (COMMERCIAL_PROOF_AFTER.test(tail)) {
+    const stated = HOLDING_CLAIM_BEFORE.test(head) && !AMBITION_FRAME.test(sentence) && !hypothetical;
+    return { kind: 'result', because: stated ? 'a count of customers' : 'a count of proof', sure: stated };
+  }
+  if (PROOF_AFTER.test(tail)) return { kind: 'result', because: 'a count of proof', sure: false };
 
   // 3. A quantity that moved: "from 71 days to 38".
-  if (insideChangeFrame(sentence, at, end)) return { kind: 'result', because: 'a change' };
+  if (insideChangeFrame(sentence, at, end)) return { kind: 'result', because: 'a change', sure: true };
 
   // 3a. Somebody finished doing something, this many times. "You have groomed
   //     340 dogs." The noun is not in any list here and never will be, so what
@@ -797,16 +919,16 @@ export function readClaim(sentence: string, token: NumberToken): Reading {
   //     count a word from the work list.
   if (completedAction(head) && !TIME_IS_THE_NOUN.test(tail)) {
     if (hypothetical) {
-      return { kind: 'unclear', because: 'a completed count inside a projection' };
+      return { kind: 'unclear', because: 'a completed count inside a projection', sure: false };
     }
-    return { kind: 'result', because: 'a count of something already done' };
+    return { kind: 'result', because: 'a count of something already done', sure: false };
   }
 
   // 3b. A time compound: "90 day plan", "30 day content plan". The singular unit
   //     is what marks it, and it only reads that way above one, because "1 day"
   //     is singular for the ordinary reason.
   if (token.value > 1 && ATTRIBUTIVE_TIME.test(tail)) {
-    return { kind: 'work', because: 'a length of time used as a name' };
+    return { kind: 'work', because: 'a length of time used as a name', sure: false };
   }
 
   // 4. The founder is being told to do something, so the number is their work.
@@ -814,39 +936,39 @@ export function readClaim(sentence: string, token: NumberToken): Reading {
   //    because each is a shape that could still be a claim in disguise:
   //    "Charge 2,500 GBP", "Book 40 calls a month", "Cut your admin by 6 hours".
   if (INSTRUCTION_START.test(sentence)) {
-    if (isMoney(raw, tail)) return { kind: 'unclear', because: 'money inside an instruction' };
+    if (isMoney(raw, tail)) return { kind: 'unclear', because: 'money inside an instruction', sure: false };
     if (PIPELINE_AFTER.test(tail)) {
-      return { kind: 'unclear', because: 'a pipeline count inside an instruction' };
+      return { kind: 'unclear', because: 'a pipeline count inside an instruction', sure: false };
     }
     // An outcome word only counts here when there is a quantity for it to have
     // moved. "Cut your admin by 6 hours a week" is a promise wearing an
     // instruction's clothes. "Build to 35, then cut to 25" is a list being
     // trimmed, and the same verb means nothing without a unit behind it.
     if (outcome && (unitAfter(tail) || UNIT_BEFORE.test(head))) {
-      return { kind: 'unclear', because: 'an outcome word inside an instruction' };
+      return { kind: 'unclear', because: 'an outcome word inside an instruction', sure: false };
     }
-    return { kind: 'work', because: 'an instruction to the founder' };
+    return { kind: 'work', because: 'an instruction to the founder', sure: false };
   }
 
   // 5. Money. The most checkable claim there is, unless it is a stated band or
   //    part of a projection.
   if (isMoney(raw, tail)) {
-    if (claimFrame) return { kind: 'result', because: 'money' };
-    if (THRESHOLD_BEFORE.test(head)) return { kind: 'unclear', because: 'a money threshold' };
-    if (hypothetical) return { kind: 'unclear', because: 'money inside a projection' };
-    return { kind: 'result', because: 'money' };
+    if (claimFrame) return { kind: 'result', because: 'money', sure: false };
+    if (THRESHOLD_BEFORE.test(head)) return { kind: 'unclear', because: 'a money threshold', sure: false };
+    if (hypothetical) return { kind: 'unclear', because: 'money inside a projection', sure: false };
+    return { kind: 'result', because: 'money', sure: false };
   }
 
   // 6. Something the founder has been given rather than told to go and get.
-  if (PIPELINE_AFTER.test(tail)) return { kind: 'result', because: 'a count of pipeline' };
+  if (PIPELINE_AFTER.test(tail)) return { kind: 'result', because: 'a count of pipeline', sure: false };
 
   // 7. An outcome verb needs somebody it happened to. "We cut it to 24 hours" is
   //    a result. "List built to 35 and cut to 25" carries the same verb and is a
   //    line on a checklist, so this is checked before the unit test below and
   //    only fires when there is a subject.
   if (outcome && claimFrame) {
-    if (hypothetical) return { kind: 'unclear', because: 'an outcome inside a projection' };
-    return { kind: 'result', because: 'an outcome' };
+    if (hypothetical) return { kind: 'unclear', because: 'an outcome inside a projection', sure: false };
+    return { kind: 'result', because: 'an outcome', sure: true };
   }
 
   // 8. An outcome word with nobody it happened to. It sits ABOVE the unit test
@@ -854,17 +976,17 @@ export function readClaim(sentence: string, token: NumberToken): Reading {
   //    number in it, and reading the "hours" first would file it as homework and
   //    say nothing. A note, not a refusal, because the same shape covers
   //    "list built to 35 and cut to 25", which is a checklist line.
-  if (outcome) return { kind: 'unclear', because: 'an outcome word with nobody it happened to' };
+  if (outcome) return { kind: 'unclear', because: 'an outcome word with nobody it happened to', sure: false };
 
   // 9. A cadence, a duration, a deadline, a horizon or a position.
-  if (unitAfter(tail)) return { kind: 'work', because: 'a quantity of time or work' };
-  if (UNIT_BEFORE.test(head)) return { kind: 'work', because: 'a position in a run' };
+  if (unitAfter(tail)) return { kind: 'work', because: 'a quantity of time or work', sure: false };
+  if (UNIT_BEFORE.test(head)) return { kind: 'work', because: 'a position in a run', sure: false };
   if (BACK_REFERENCE.test(head) && tail.trim().length === 0) {
-    return { kind: 'work', because: 'a back reference to a quantity already stated' };
+    return { kind: 'work', because: 'a back reference to a quantity already stated', sure: false };
   }
-  if (sentence.trim() === raw) return { kind: 'work', because: 'a number on its own in a cell' };
+  if (sentence.trim() === raw) return { kind: 'work', because: 'a number on its own in a cell', sure: false };
 
-  return { kind: 'unclear', because: 'a number with nothing around it to read' };
+  return { kind: 'unclear', because: 'a number with nothing around it to read', sure: false };
 }
 
 /** Money: a currency mark on the number, or a currency word straight after it. */
@@ -886,6 +1008,14 @@ export interface ProofOptions {
    * proof, so refusing one proves nothing. What strict still buys is the case
    * the rule genuinely cannot read: a bare number in a sentence with no noun
    * around it.
+   *
+   * IT NO LONGER REACHES A FOUNDER, and that is worth knowing before you reach
+   * for it. `confidence.ts` files `proof.ungrounded-number` under `nothing`,
+   * because a rule saying it could not read a sentence is not something anybody
+   * can act on, so `runRules` drops it whether strict is set or not. Strict is
+   * therefore a tool for a direct call to this function: a corpus sweep, or a
+   * check over the toolkit's own copy before it ships. Setting it on a founder's
+   * turn changes nothing.
    */
   strict?: boolean;
 }
@@ -896,6 +1026,15 @@ export function groundedValues(ctx: FounderContext): Set<number> {
   const sources: string[] = [];
   if (ctx.brain !== null) sources.push(ctx.brain);
   for (const extra of ctx.grounding ?? []) sources.push(extra.text);
+  // A figure the founder has looked at and said is right is a figure the
+  // founder has given us. It grounds exactly like a line in the Brain, which is
+  // the point: confirming is the founder telling us a fact about their business
+  // that the Brain had not been told yet. Read through the same number reader,
+  // so "1,200" confirmed grounds "1,200" and "1200" alike.
+  for (const c of ctx.confirmed ?? []) {
+    if (c.rule !== RULE) continue;
+    sources.push(c.found);
+  }
 
   for (const text of sources) {
     // The same reader both sides use, so a number is canonicalised the same way
@@ -966,8 +1105,8 @@ export function checkNoInventedProof(
           severity: 'block',
           where: { path: artifact.path, line: 1, column: 1, excerpt: artifact.path },
           found: '',
-          message: 'This was written before your Founder Brain exists, so there is no way to tell which numbers in it are real.',
-          why: 'Everything after the Brain is written from it. Without it, a number in a post is something nobody can check, including you.',
+          message: 'This was written before your Founder Brain exists, so nothing here knows which numbers in it came from you.',
+          why: 'The Brain is the half hour that makes everything after it sound like you. Written before it, a post is a guess about your business that you would only have to write again.',
           recovery: { label: 'Build your Founder Brain first', action: { kind: 'route', skill: 'founder-brain' } },
         },
       ],
@@ -1000,21 +1139,52 @@ export function checkNoInventedProof(
         continue;
       }
 
-      const claim = reading.kind === 'result';
+      // TWO CODES, SPLIT ON `sure`, AND THE SPLIT IS THE WHOLE NOISE FIX.
+      //
+      // Both readings are a result. Only one of them is a shape this rule has
+      // been measured on and does not fire on ordinary founder writing. The
+      // other is reported as a note, because a rule that is right about half
+      // the sentences it speaks on is a rule founders learn to click past, and
+      // then it is not there for the one time it was right.
+      //
+      // `confidence.ts` holds the measurement and turns these two codes into
+      // what the founder actually sees. This file only says which is which.
+      const claim = reading.kind === 'result' && reading.sure;
+      const soft = reading.kind === 'result' && !reading.sure;
       const severity = claim || options.strict === true ? 'block' : 'warn';
       const at = offset + token.index;
+
+      // WHAT THE FOUNDER READS. Not the rule's name for the problem. Four
+      // things, in the order somebody at 10pm needs them: what the line says,
+      // where the figure would have to come from, what it costs THEM if it is
+      // wrong, and the one thing to do next. Never a rule number, never a code.
+      //
+      // It says "we have no record of" and not "you invented". The founder did
+      // not write this sentence, the model did, and the usual reason a true
+      // figure lands here is that nobody has written it down yet.
+      let message: string;
+      if (claim) {
+        message = `This line says your business got a result: ${token.raw}. We have no record of that figure from you, so it would go out as something neither of us can back up.`;
+      } else if (soft) {
+        message = `The figure ${token.raw} is not in anything you have told us yet. If it is right, it is worth adding, so the next post can use it too.`;
+      } else {
+        message = `The figure ${token.raw} came from nowhere we can see, and the line around it does not say what it counts.`;
+      }
+
       violations.push({
         rule: RULE,
-        code: claim ? 'proof.invented-result' : 'proof.ungrounded-number',
+        code: claim ? 'proof.invented-result' : soft ? 'proof.unbacked-figure' : 'proof.ungrounded-number',
         severity,
         where: locate(artifact.path, artifact.text, at),
         found: token.raw,
-        message: claim
-          ? `The number ${token.raw} is not in your Founder Brain, and this line states it as a fact about your business.`
-          : `The number ${token.raw} is not in your Founder Brain, and this line does not make clear where it came from.`,
-        why: 'Nothing here invents a number about your business. If a buyer asks where a figure came from, the answer has to be something you said, not something that was written for you.',
+        message,
+        why: claim
+          ? 'A buyer who reads a result asks where it came from, and in a small industry somebody always does. The answer has to be something you can stand behind on the day.'
+          : 'Your Founder Brain is the record of what is true about your business, and every post is written from it. A figure that is only in one post is a figure you will have to remember on your own.',
         recovery: {
-          label: 'If that number is real, add it to your Founder Brain',
+          label: claim
+            ? 'Tell us the real figure, or say this one is right'
+            : 'Say it is right, or open your Founder Brain',
           action: { kind: 'edit', path: 'founder-brain.md' },
         },
       });

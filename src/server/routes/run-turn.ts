@@ -70,6 +70,7 @@ import type {
 import { getDb, setFounderScope, type Db, type Queryable } from '../db/client.ts';
 import { founders, messages, threads } from '../db/schema.ts';
 import { RulesRefused } from '../rules/harvest-gate.ts';
+import type { Violation } from '../rules/types.ts';
 import { geHome } from '../storage/paths.ts';
 import { runTurn as storageRunTurn, TurnRefused } from '../storage/turn.ts';
 import { skillKeyFor, type ContentRouteCatalogue } from './agent-content.ts';
@@ -246,8 +247,8 @@ export function createRunTurn(deps: RunTurnDeps): RunTurn {
 
       // Warnings from the rules gate. The turn committed, so these are things the
       // founder should see beside the work rather than reasons it was refused.
-      for (const note of committed.gate.notes.slice(0, 3)) {
-        emit({ kind: 'status', text: note.message });
+      for (const text of noteLines(committed.gate.notes)) {
+        emit({ kind: 'status', text });
       }
 
       deps.log.info(
@@ -621,4 +622,39 @@ async function settle(
       'a step after the commit failed. The founder\'s work is committed and is not affected.',
     );
   }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Notes                                                                      */
+/* -------------------------------------------------------------------------- */
+
+/** How many notes go on the screen before the rest are counted instead. */
+export const NOTES_SHOWN = 3;
+
+/**
+ * The status lines a founder reads beside work that was saved.
+ *
+ * THREE, AND THEN SAY SO. Notes are the common volume now. The gate was measured
+ * against ordinary founder writing and most findings were moved off the holding
+ * level onto this one, so a turn carrying more than three notes is an ordinary
+ * Sunday rather than a rare event. Cutting the list at three in silence tells a
+ * founder that was everything, which is the one thing it is not, so what was cut
+ * is counted out loud.
+ *
+ * Three, and not all of them, because a wall of notes beside work that was saved
+ * is the same interruption the measuring exercise existed to remove.
+ *
+ * Pure, and exported, so the counting can be tested without standing up a turn.
+ */
+export function noteLines(notes: readonly Violation[]): string[] {
+  const lines = notes.slice(0, NOTES_SHOWN).map((note) => note.message);
+  const unshown = notes.length - NOTES_SHOWN;
+  if (unshown > 0) {
+    lines.push(
+      unshown === 1
+        ? 'There is 1 more note like these. Ask for the rest and they will be listed.'
+        : `There are ${unshown} more notes like these. Ask for the rest and they will be listed.`,
+    );
+  }
+  return lines;
 }

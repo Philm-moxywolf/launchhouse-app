@@ -17,6 +17,19 @@
  * rather than hidden, behind a disclosure labelled in plain words, because a folder we hide
  * is a folder they do not own.
  *
+ * THE LINE ABOUT THE CHECK IS DELIBERATE, AND SO IS ITS PLACE. `src/server/rules/` reads
+ * every file before it is saved and holds one that breaks a rule. It is a word matcher, so
+ * it misses things, and a founder who believes it is a guarantee will send something without
+ * reading it. Saying that plainly is cheaper than the alternative, which is a founder finding
+ * out from a prospect. It sits on this screen and not on first run because this is where a
+ * founder stands when they are about to use a file, and first run promises two questions in
+ * thirty seconds.
+ *
+ * IT NAMES NEITHER TRACK'S TACTICS, WHICH IS RULE 1. The two specifics worth knowing, cold
+ * DMs and unbacked numbers, are in `docs/PRE-WORK.md` in the content repo, which a founder
+ * reads before the Brain forks them. Putting Instagram on a screen a B2B founder opens every
+ * day would be showing them the other track's material.
+ *
  * RULE 1. The rows are filtered by track here as well as on the server. `ge index` already
  * forks on the Track line, so in the ordinary case every row that arrives is theirs. This
  * filter is what makes a bug on the other side of the wire show up as a missing row rather
@@ -87,6 +100,12 @@ export function Files({ founder }: { readonly founder: Founder }): ReactElement 
       <h1>Your files</h1>
       <p className="lede">
         Everything here is yours. Take a copy whenever you like, and take it with you when the event is over.
+      </p>
+
+      <p className="quiet">
+        The app reads what it writes before it saves it, and holds back a file that breaks one of the rules
+        this programme runs on. That catches the obvious mistakes and it does not catch everything. Read a
+        file here before you send it to somebody.
       </p>
 
       <FileList

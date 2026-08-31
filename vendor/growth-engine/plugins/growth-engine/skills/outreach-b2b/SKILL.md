@@ -50,7 +50,7 @@ Tell them to build the list as homework and to verify emails before sending. An 
 Four to five touches over two to three weeks.
 
 - Touch 1: the opener. Specific to them, one clear reason for the message, one low-friction ask.
-- Touch 2: proof. A result or case relevant to their situation.
+- Touch 2: proof. A result or case relevant to their situation, taken from the Brain's Proof section and from nowhere else.
 - Touch 3: a different angle on the same problem.
 - Touch 4: a short, direct close.
 - Touch 5, optional: the break-up.
@@ -70,7 +70,15 @@ Rules that are not negotiable:
 
 **Stop on reply.** In Apollo this is on by default, as is pausing on an out of office. Confirm it is on rather than assuming. On the manual route this is the founder's job, and it is the single thing most likely to be forgotten three weeks after the event.
 
-Never write claims the Brain does not support.
+**Never write a claim the Brain does not support, and never write a number the founder did not give you.**
+
+If the Proof section is thin, touch 2 is still touch 2. Write it from one of these instead, in this order:
+
+- The one named case they do have, in the detail they gave you.
+- What they have seen across the jobs they have done. The fault that turns up again and again, the thing every owner says in the first meeting.
+- The step they take that the cheaper option skips. That is method, and it needs no number at all.
+
+A specific observation about the reader's own world reads as true. A number nobody gave you can be checked, and in a trade this size somebody will check it.
 
 ## Step 3: first lines
 

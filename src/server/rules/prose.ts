@@ -118,8 +118,8 @@ function checkDashes(artifact: Artifact, out: Violation[]): void {
       severity: 'block',
       where: locate(artifact.path, artifact.text, match.index),
       found,
-      message: `This line has ${dashName(found)} in it. The house style does not use either one.`,
-      why: 'Every piece a founder publishes should read like the same person wrote it. A dash that appears in some pieces and not others is the fastest way to make it read like two people did.',
+      message: `There is ${dashName(found)} on this line. Everything else you have was written without one.`,
+      why: 'Your pieces should read like one person wrote them. A dash that turns up in some and not others is what makes a set read like it came from two places.',
       recovery: ASK_AGAIN,
     });
   }
@@ -141,8 +141,8 @@ function checkBannedWords(artifact: Artifact, out: Violation[]): void {
       severity: 'block',
       where: locate(artifact.path, artifact.text, at),
       found: word,
-      message: `The word "${word}" is on the list this toolkit does not use.`,
-      why: 'Your buyers have read that word on a hundred landing pages and it tells them nothing about you. Saying the specific thing instead is what makes a post sound like a person.',
+      message: `The word "${word}" went in here. Your buyers have read it on a hundred other pages, so it tells them nothing about you.`,
+      why: 'The specific thing you actually do is what makes a post sound like a person. A word anybody could have written is a line a buyer skips.',
       recovery: ASK_AGAIN,
     });
   }
@@ -159,8 +159,8 @@ function checkBannedPhrases(artifact: Artifact, out: Violation[]): void {
       severity: 'block',
       where: locate(artifact.path, artifact.text, match.index),
       found: match[0],
-      message: `The phrase "${match[0]}" is on the list this toolkit does not use.`,
-      why: 'Your buyers have read that phrase on a hundred landing pages and it tells them nothing about you. Saying the specific thing instead is what makes a post sound like a person.',
+      message: `The phrase "${match[0]}" went in here. Your buyers have read it on a hundred other pages, so it tells them nothing about you.`,
+      why: 'The specific thing you actually do is what makes a post sound like a person. A phrase anybody could have written is a line a buyer skips.',
       recovery: ASK_AGAIN,
     });
   }
@@ -180,8 +180,8 @@ function checkRanges(artifact: Artifact, out: Violation[]): void {
       severity: 'block',
       where: locate(artifact.path, artifact.text, match.index),
       found,
-      message: `The range "${found}" is written with a dash. Write it as "${better}".`,
-      why: 'A dash between two numbers reads as a minus sign to about a third of people, and it breaks when the text is pasted somewhere the font is different.',
+      message: `The range "${found}" has a dash in it. Written as "${better}" it reads the same way everywhere you paste it.`,
+      why: 'A dash between two numbers looks like a minus sign to a lot of people, and it can turn into a stray character when the font changes.',
       recovery: ASK_AGAIN,
     });
   }
@@ -371,9 +371,9 @@ function checkReplyPromises(artifact: Artifact, out: Violation[]): void {
           // than an exception, because a rule with an exception for its own copy is a
           // rule somebody will quote at you.
           message: asserted
-            ? 'This line tells the reader a reply is coming. Nothing here can say that.'
-            : 'This line puts a reply and a guarantee in one sentence, and it does not read clearly as a refusal to make one. It was kept, so read it and decide.',
-          why: 'Whether anyone replies depends on your list, your offer and your timing, and none of the three is ours to promise. Twenty five good messages is the work. A reply rate is not something anybody can hand you.',
+            ? 'This line tells your reader they will hear back. Nobody can say that on your behalf, and it is the sort of line a buyer remembers if it turns out not to be true.'
+            : 'This line puts a reply and a guarantee close together and it is not clear which way round. It was kept, so read it once and decide.',
+          why: 'Whether anyone writes back comes down to your list, your offer and your timing. Twenty five good messages is the work you can control. A number of replies is not something anybody can hand you.',
           recovery: ASK_AGAIN,
         });
       }

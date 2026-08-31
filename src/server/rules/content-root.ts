@@ -28,6 +28,11 @@
  *   developer could be running the rules gate against prose that is not what
  *   founders get, and never notice. The app runs on the content the app ships.
  *
+ *   AND A GE_CONTENT_ROOT THAT DOES NOT RESOLVE IS AN ERROR, not a fall
+ *   through. It was one candidate in a list, so setting it to a stale checkout
+ *   or a typo used the vendored copy instead and said nothing. Same shape as
+ *   the sibling fallback, same answer.
+ *
  * CALLED BY: validate-source.ts, gates-source.ts, ownership.ts, and the tests in
  *            this folder.
  * READS:     GE_CONTENT_ROOT, through src/server/env.ts and never through
@@ -70,6 +75,24 @@ function candidates(): string[] {
   return list;
 }
 
+/**
+ * The path somebody set on purpose, when they set one.
+ *
+ * SETTING IT AND GETTING SOMETHING ELSE IS THE FAILURE THIS SEPARATES OUT.
+ * `GE_CONTENT_ROOT` used to be one candidate in a list, so pointing it at a tree
+ * that is not the content repo, a stale checkout, a typo, a half finished clone,
+ * quietly fell through to the vendored copy. Everything then worked, and the
+ * person who set it was checking founder artifacts against prose they had not
+ * chosen, believing they had chosen it.
+ *
+ * That is the same shape as the sibling fallback this file already removed, and
+ * it gets the same answer: a deliberate act that cannot be honoured is an error,
+ * never a downgrade.
+ */
+function overrideRoot(): string | undefined {
+  return lateSettings().contentRoot;
+}
+
 function looksLikeContentRepo(dir: string): boolean {
   return PROOF_FILES.every((rel) => existsSync(join(dir, rel)));
 }
@@ -85,6 +108,21 @@ let cached: string | null = null;
  */
 export function contentRoot(): string {
   if (cached !== null) return cached;
+
+  const override = overrideRoot();
+  if (override !== undefined && !looksLikeContentRepo(override)) {
+    throw new Error(
+      [
+        'GE_CONTENT_ROOT is set and what it points at is not the content repo.',
+        'The rules gate refuses rather than quietly use the vendored copy instead, because then the rules would be',
+        'checking founder artifacts against prose nobody chose.',
+        `Set to: ${override}`,
+        'Looked there for both of these:',
+        ...PROOF_FILES.map((f) => `  ${f}`),
+        'Fix: point it at a checkout of the content repo, or unset it to use the copy this deployment ships.',
+      ].join('\n'),
+    );
+  }
 
   const tried = candidates();
   for (const dir of tried) {

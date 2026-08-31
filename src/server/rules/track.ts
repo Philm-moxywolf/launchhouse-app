@@ -165,8 +165,8 @@ function checkFileScope(artifact: Artifact, ctx: FounderContext, out: Violation[
       severity: 'block',
       where: { path: artifact.path, line: 1, column: 1, excerpt: artifact.path },
       found: name,
-      message: `${name} belongs to one track only, and no track has been chosen yet.`,
-      why: 'The track is chosen once, in your Founder Brain, and everything after that follows it. Writing a file for one track before that choice exists is how a founder ends up with two half sets of work.',
+      message: `${name} only makes sense once you have picked B2B or B2C, and that has not happened yet.`,
+      why: 'You pick once, in your Founder Brain, and everything after that follows it. Built before the choice, this would be half a set of work for a track that might not be yours.',
       recovery: { label: 'Build your Founder Brain first', action: { kind: 'route', skill: 'founder-brain' } },
     });
     return;
@@ -179,8 +179,8 @@ function checkFileScope(artifact: Artifact, ctx: FounderContext, out: Violation[
       severity: 'block',
       where: { path: artifact.path, line: 1, column: 1, excerpt: artifact.path },
       found: name,
-      message: `${name} is a file for ${TRACK_NAME[fileTrack]}, and you are on ${TRACK_NAME[ctx.track]}.`,
-      why: 'You picked your track once and nothing after that should ask you again or hand you the other one. A file from the other track is work you cannot use, and it makes the rest of the folder harder to trust.',
+      message: `${name} is built for ${TRACK_NAME[fileTrack]}. You are on ${TRACK_NAME[ctx.track]}, so it would be an hour spent on the wrong thing.`,
+      why: 'You picked your track once and nothing should hand you the other one. A file from the other side is work you cannot use, and finding one makes the rest of the folder harder to trust.',
       recovery: { label: 'See what is next on your track', action: { kind: 'route', skill: 'status' } },
     });
   }
@@ -202,8 +202,8 @@ function checkBrainTrackLine(artifact: Artifact, ctx: FounderContext, out: Viola
       severity: 'block',
       where: { path: artifact.path, line: 1, column: 1, excerpt: '# Founder Brain' },
       found: '',
-      message: 'This Brain has no Track line, so nothing after it knows which half of the toolkit to build.',
-      why: 'The Track line is the one line eleven later steps read. Without it they have nothing to fork on and you would be asked again at every step.',
+      message: 'Your Brain has no Track line yet, so nothing after it knows whether to build you the B2B half or the B2C half.',
+      why: 'Eleven later steps read that one line. Without it you would be asked which track you are on at every single one of them.',
       recovery: { label: 'Finish your Founder Brain', action: { kind: 'route', skill: 'founder-brain' } },
     });
     return;
@@ -216,8 +216,8 @@ function checkBrainTrackLine(artifact: Artifact, ctx: FounderContext, out: Viola
       severity: 'block',
       where: locate(artifact.path, artifact.text, artifact.text.toLowerCase().indexOf('track')),
       found: declared,
-      message: `The Track line reads "${declared}". It has to read b2b or b2c.`,
-      why: 'Every later step reads that one word. Anything else and the fork has nothing to match on.',
+      message: `Your Track line reads "${declared}". It needs to say b2b or b2c, exactly.`,
+      why: 'Every later step reads that one word. Anything else and they have nothing to match on, so you get asked again at each step.',
       recovery: { label: 'Finish your Founder Brain', action: { kind: 'route', skill: 'founder-brain' } },
     });
     return;
@@ -230,8 +230,8 @@ function checkBrainTrackLine(artifact: Artifact, ctx: FounderContext, out: Viola
       severity: 'block',
       where: locate(artifact.path, artifact.text, artifact.text.toLowerCase().indexOf('track')),
       found: declared,
-      message: `This Brain says the track is ${declared}, and your session is running on ${ctx.track}.`,
-      why: 'Those two have to agree, because one of them decides which steps you are shown and the other decides what gets written. If they disagree, half your work would be built for the other track.',
+      message: `Your Brain says ${declared} and this session is running on ${ctx.track}. They need to agree.`,
+      why: 'One of them picks the steps you are shown and the other picks what gets written into them. While they disagree, half your work would come out built for the other track.',
       recovery: { label: 'Open your Founder Brain and check the Track line', action: { kind: 'edit', path: artifact.path } },
     });
   }
@@ -332,9 +332,9 @@ function checkVocabulary(artifact: Artifact, ctx: FounderContext, out: Violation
           found: artifact.text.slice(offset + match.index, offset + match.index + match[0].length),
           message:
             term.severity === 'block'
-              ? `This mentions ${term.label}, which belongs to ${TRACK_NAME[wrong]}. You are on ${TRACK_NAME[ctx.track]}.`
-              : `This mentions ${term.label}, which usually belongs to ${TRACK_NAME[wrong]}. Worth a look before you use it.`,
-          why: 'You chose your track once and everything after that is meant to be built for it. Material from the other track is not work you can use, and finding it makes the rest harder to trust.',
+              ? `This uses ${term.label}, which is part of the ${TRACK_NAME[wrong]} method. You are on ${TRACK_NAME[ctx.track]}, where it does not apply.`
+              : `This mentions ${term.label}, which usually sits on the ${TRACK_NAME[wrong]} side. Probably fine. Worth a glance.`,
+          why: 'You picked your track once and everything after it is built for that side. Advice from the other side is not work you can use, and following it costs a morning.',
           recovery: { label: 'Ask for that one again', action: { kind: 'reply' } },
         });
       }

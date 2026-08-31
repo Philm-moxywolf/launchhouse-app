@@ -69,6 +69,10 @@ Do not ask B2B questions of a B2C founder or the reverse. It wastes their time a
 3. What proof do you have? Results, numbers, named customers, case studies, testimonials, credentials.
 4. What do you want more of in the next 90 days? Leads, sales, followers, retention.
 
+**Ask question 3 in their world, not in business language.** Most founders here run small local businesses, so the countable things are dogs, weddings, kitchens, boilers, meals, sessions, callouts and repeat bookings, not customers and firms. Ask how many they have done, how long they have been doing it, how many come back, and which one went best. Write the numbers down exactly as they said them, and write unknown where they do not know.
+
+That last part is the important one. A number recorded here is a number every other engine is allowed to use. A gap recorded here is a gap nothing downstream will quietly fill in for them.
+
 Proof matters more than founders expect. It is the raw material for every post and every message. If they have none, say so plainly and note it, because the content engine will lean on story and point of view instead.
 
 ### The thesis
@@ -155,7 +159,7 @@ B2B: ICP firmographics, buyer persona, trigger events, three named best-fit acco
 B2C: persona, desire, attention map, adjacent purchases.
 
 ## Proof
-Results, numbers, named customers, testimonials, credentials. Note explicitly if thin.
+Results, numbers, named customers, testimonials, credentials, and the plain counts from their own diary or invoices, written as they said them. Note explicitly if thin, and write unknown rather than guessing.
 
 ## Goal, next 90 days
 

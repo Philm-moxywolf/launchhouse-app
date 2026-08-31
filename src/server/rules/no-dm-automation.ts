@@ -1290,20 +1290,25 @@ function checkOffers(artifact: Artifact, out: Violation[], notes: string[]): voi
     const inferred = channel.strength === 1;
     const severity: Violation['severity'] = refusing || evidence < 2 ? 'warn' : 'block';
 
+    // WHAT THE FOUNDER READS. They did not write this line. The model did, and
+    // it wrote something that would cost them their Instagram account if they
+    // acted on it. So the sentence names what happened, then what it would cost
+    // THEM, and it never says "that is not something this product does", which
+    // is the app talking about itself to somebody who asked about their business.
     let code: string;
     let message: string;
     if (refusing) {
       code = 'dm.mentioned-while-refusing';
-      message = `This line mentions ${delegate.label} while saying not to. Read it once to be sure it reads as a refusal.`;
+      message = `This line explains why ${delegate.label} is done by hand. That is the right answer.`;
     } else if (evidence < 2) {
       code = 'dm.possible-offer';
-      message = `This line may be offering ${delegate.label}, and it does not say who asked for them. Say what sets the message off, or say that you send each one yourself.`;
+      message = `This line might be about ${delegate.label} going out on their own. If it is about your inbox answering people who wrote to you first, it is fine as it is.`;
     } else if (inferred) {
       code = 'dm.offered-by-inference';
-      message = `This reads as ${delegate.label}, to people who did not ask. It does not say DM anywhere, so read it once: if it is about email, say so, and if it is about Instagram, take it out.`;
+      message = `This reads as messages going out to people who did not ask. It never says Instagram, so it may be about email, where this is fine. If it is Instagram, that is the one that gets accounts restricted.`;
     } else {
       code = 'dm.offered';
-      message = `This offers ${delegate.label}. That is not something this product does, or should suggest you do elsewhere.`;
+      message = `This suggests ${delegate.label}. Instagram restricts accounts that do it, and yours is the account your whole plan runs through.`;
     }
 
     const violation: Violation = {
@@ -1313,9 +1318,9 @@ function checkOffers(artifact: Artifact, out: Violation[], notes: string[]): voi
       where,
       found: sentence.text.slice(coreStart, coreEnd).trim().slice(0, 160),
       message,
-      why: 'Automated cold DMs get accounts restricted, and Instagram only allows messaging after someone has messaged you first. Your twenty five go out by hand, from your own account, spread out. The automation you do get is on the inbound side, after somebody comes to you.',
+      why: 'Instagram only lets a message go out after the other person has written to you first, and it restricts accounts that get round that. There is no appeal desk. Your twenty five go out by hand, from your own account, spread over the week, and the automation you do get sits on the inbound side, after somebody comes to you.',
       recovery: {
-        label: 'See how the inbound side works instead',
+        label: 'Set up the inbound automation instead',
         action: { kind: 'route', skill: 'ghl-workflows' },
       },
     };
