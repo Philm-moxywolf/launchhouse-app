@@ -41,7 +41,6 @@ import {
   gateHarvest,
   notGatedReason,
   outcomeFor,
-  RulesRefused,
   GE_OWNED_FILES,
   NOT_GATED_FOLDERS,
   WORTH_THE_WHOLE_TURN,

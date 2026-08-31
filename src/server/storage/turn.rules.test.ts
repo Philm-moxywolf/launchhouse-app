@@ -70,7 +70,6 @@ import type { Db, Queryable } from '../db/client.ts';
 import { founders, geBlob, geEvent, geFile } from '../db/schema.ts';
 import { resetContentRootCacheForTests } from '../rules/content-root.ts';
 import { resetGatesCacheForTests } from '../rules/gates-source.ts';
-import { RulesRefused } from '../rules/harvest-gate.ts';
 import { resetOwnershipCacheForTests } from '../rules/ownership.ts';
 import { assertRulesSourcesReady, resetRulesSourcesReadyForTests } from '../rules/sources-ready.ts';
 import { resetHouseStyleCacheForTests } from '../rules/validate-source.ts';
