@@ -324,13 +324,21 @@ test('THE PARTS THAT ARE NOT BUILT SAY SO, AND SAY IT IN WORDS A FOUNDER CAN ACT
 
   const { connectGhl, saveVoiceSample } = await import('../../web/lib/api.ts');
 
+  // THE GOHIGHLEVEL HALF OF THIS TEST CHANGED ON 31 AUGUST, when the check got built.
+  // It used to assert a 501 saying "bring it to the clinic". What it asserts now is the
+  // more useful property: a token pasted before a Location ID is saved never reaches
+  // GoHighLevel at all, and the founder is sent back one step rather than being told
+  // something went wrong.
+  //
+  // THAT IS ALSO WHAT KEEPS THIS SUITE OFF THE NETWORK. The route asks the store for a
+  // location first, and this harness has none, so the call is refused before a socket
+  // could open. A regression that reordered those two would make this test slow and
+  // flaky rather than silently reaching a vendor, which is the failure worth having.
   const connected = await connectGhl('pit-not-a-real-token');
-  assert.equal(connected.ok, false, 'a token was accepted against a check that has never run');
+  assert.equal(connected.ok, false, 'a token was accepted with no location to check it against');
   if (!connected.ok) {
-    // `not_built_yet` and not `server`. The founder is being told this part is
-    // not connected, which is true, rather than that something went wrong.
-    assert.equal(connected.problem.kind, 'not_built_yet');
-    assert.match(connected.problem.text, /23 September/, 'it does not say when they can do it instead');
+    assert.notEqual(connected.problem.kind, 'server', 'a missing location is the founder\'s step, not our crash');
+    assert.match(connected.problem.text, /Location ID/, 'it has to name the thing they are missing');
     assert.doesNotMatch(connected.problem.text, /[–—]/, 'house style: no dashes');
   }
 

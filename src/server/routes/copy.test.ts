@@ -70,17 +70,18 @@ test('THE PARTS THAT ARE NOT BUILT SAY WHEN THE FOUNDER CAN DO IT INSTEAD', () =
   // 501 is this folder's word for "the address exists and we cannot do this
   // yet". A founder reading that needs a date or an alternative, because "not
   // yet" with neither is indistinguishable from never.
-  assert.equal(SETUP_ERRORS.ghlCheckNotBuilt.status, 501);
-  assert.match(SETUP_ERRORS.ghlCheckNotBuilt.message, /23 September/);
+  //
+  // THE GOHIGHLEVEL ONE WAS HERE AND IS GONE, on 31 August 2026, because the check
+  // got built. Its refusal was deleted rather than reworded: a 501 nobody can reach
+  // is a sentence that rots, and `setup-key.test.ts` now asserts that the refusal
+  // and the token box on step 5 cannot both exist.
+  assert.equal('ghlCheckNotBuilt' in SETUP_ERRORS, false, 'the GoHighLevel check is built, so its refusal must be gone');
 
   assert.equal(FILE_ERRORS.sampleNotBuilt.status, 501);
   assert.match(FILE_ERRORS.sampleNotBuilt.message, /messages instead/);
-
-  // And both say the founder's work is safe, which is the first thing they want
-  // to know and the last thing a refusal usually says.
-  for (const e of [SETUP_ERRORS.ghlCheckNotBuilt, FILE_ERRORS.sampleNotBuilt]) {
-    assert.match(e.message, /Nothing you have made is affected/);
-  }
+  // It says the founder's work is safe, which is the first thing they want to know
+  // and the last thing a refusal usually says.
+  assert.match(FILE_ERRORS.sampleNotBuilt.message, /Nothing you have made is affected/);
 });
 
 /**

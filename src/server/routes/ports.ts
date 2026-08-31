@@ -264,6 +264,16 @@ export interface AppStore {
   saveLocationId(founderId: string, vendor: string, locationId: string, at: Date): Promise<void>;
 
   /**
+   * The location id this founder saved, or null.
+   *
+   * It sits here beside its own write rather than being read straight from the
+   * database by the route. A route that reaches for `getDb()` is a route that cannot
+   * run in a harness without one, and the GoHighLevel connect route found that out by
+   * answering a founder with a server error instead of a sentence.
+   */
+  locationIdFor(founderId: string, vendor: string): Promise<string | null>;
+
+  /**
    * Delete our copy of a credential. IT DOES NOT SWITCH THE TOKEN OFF at the
    * vendor, and the screen says so, because a founder told "disconnected" who
    * believes the token is dead has a live credential they have stopped

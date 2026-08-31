@@ -535,6 +535,14 @@ export class PgAppStore implements AppStore {
    * the vendor, so saying anything else here would be a claim we have not
    * earned.
    */
+  async locationIdFor(founderId: string, vendor: string): Promise<string | null> {
+    const rows = await this.db
+      .select({ locationId: connections.locationId })
+      .from(connections)
+      .where(and(eq(connections.founderId, founderId), eq(connections.vendor, vendor)));
+    return rows[0]?.locationId ?? null;
+  }
+
   async saveLocationId(founderId: string, vendor: string, locationId: string, at: Date): Promise<void> {
     await this.db
       .insert(connections)

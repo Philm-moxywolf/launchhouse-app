@@ -327,17 +327,17 @@ test('THE SCREEN AND THE ROUTE CANNOT DISAGREE ABOUT WHETHER A TOKEN CAN BE CHEC
   // them, a notice saying there was no point pasting one in. A founder pasted, pressed
   // Connect, and got that same sentence back as an error.
   //
-  // The box is now hidden by GHL_TOKEN_CHECK_IS_BUILT. If somebody flips that constant
-  // without writing the call, the box comes back on a screen whose button still 501s,
-  // which is the same bug with an extra step. So the two are asserted to agree here.
+  // The box is gated on GHL_TOKEN_CHECK_IS_BUILT. The route's "not built" refusal is
+  // the other half. Exactly one of them may exist at a time, so flipping the flag
+  // without writing the call, or removing the call without hiding the box, fails here.
   const walk = await import('../../../app/content/ghl-walk.ts');
   const setup = await import('./setup.ts');
-  const notBuilt = setup.SETUP_ERRORS.ghlCheckNotBuilt.status === 501;
+  const refusalExists = 'ghlCheckNotBuilt' in setup.SETUP_ERRORS;
   assert.equal(
     walk.GHL_TOKEN_CHECK_IS_BUILT,
-    !notBuilt,
+    !refusalExists,
     walk.GHL_TOKEN_CHECK_IS_BUILT
-      ? 'the walk shows a token box but the route still answers 501. Write the call, or set GHL_VERIFY_CALL_IS_WRITTEN back to false.'
+      ? 'the walk shows a token box and the route still carries a not-built refusal. Remove one of them.'
       : 'the route can check a token but the walk still hides the box. Set GHL_VERIFY_CALL_IS_WRITTEN to true.',
   );
 });

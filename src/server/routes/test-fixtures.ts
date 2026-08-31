@@ -314,6 +314,10 @@ export class MemoryAppStore implements AppStore {
     return Promise.resolve(this.connections.get(`${founderId}\u0000${vendor}`) ?? null);
   }
 
+  locationIdFor(founderId: string, vendor: string): Promise<string | null> {
+    return Promise.resolve(this.connections.get(`${founderId}\u0000${vendor}`)?.locationId ?? null);
+  }
+
   saveLocationId(founderId: string, vendor: string, locationId: string, at: Date): Promise<void> {
     const key = `${founderId}\u0000${vendor}`;
     const existing = this.connections.get(key);

@@ -72,6 +72,8 @@ import type { FastifyInstance, RouteHandlerMethod } from 'fastify';
 
 import { GHL_WALK_STEPS } from '../../../app/content/ghl-walk.ts';
 import { GHL_TOKEN_PREFIX_GUESS } from '../integrations/contracts/ghl.ts';
+import { fetchSocialAccounts } from '../integrations/ghl-accounts.ts';
+import { saveGhlToken } from '../integrations/ghl-token-store.ts';
 import { checkAnthropicKey, problemOf, readPastedKey, type KeyProblem } from '../agent/anthropic-check.ts';
 import { anthropicKeyFor, describeAnthropicKey } from '../agent/anthropic-key.ts';
 import { forgetStoredAnthropicKey, saveAnthropicKey } from '../agent/anthropic-key-store.ts';
@@ -116,6 +118,16 @@ const MAX_EVIDENCE = 500;
  * encrypted.
  */
 const MAX_LOCATION_ID = 200;
+
+/**
+ * A generous ceiling on a pasted token, not a shape test.
+ *
+ * `contracts/ghl.ts` says the `pit-` prefix is a guess and that a guess must never stop
+ * a founder who pasted the right thing. The same applies to length: this exists so a
+ * megabyte of pasted document does not reach the vendor, and nothing narrower is
+ * claimed about what a real token looks like.
+ */
+const MAX_TOKEN_CHARACTERS = 500;
 
 /** The `pit-` guard from receipt.sh:110, run before any value is stored. */
 export function looksLikeAToken(value: string): boolean {
@@ -165,11 +177,15 @@ export const SETUP_ERRORS = {
    * clinic, because "not yet" with no date is the same as "never" to somebody
    * trying to finish a checklist.
    */
-  ghlCheckNotBuilt: {
-    status: 501,
-    code: 'ghl_check_not_built',
-    message:
-      'We cannot check a GoHighLevel token yet, so there is no point pasting one in. Nothing you have made is affected. Bring the token to the setup clinic on 23 September and a mentor will connect it with you.',
+  badToken: {
+    status: 400,
+    code: 'bad_token',
+    message: 'That did not arrive as a token we can read. Copy it again from Private Integrations and paste it in.',
+  },
+  noLocationYet: {
+    status: 400,
+    code: 'no_location_yet',
+    message: 'We need your Location ID before the token, because the check asks GoHighLevel about that one account. Go back a step and paste it in.',
   },
 } as const satisfies Record<string, FounderError>;
 
@@ -498,25 +514,79 @@ export async function registerSetupRoutes(app: FastifyInstance, deps: RouteDeps)
   });
 
   /**
-   * Paste the token, and check it.
+   * Paste the token, check it, and keep it if it works.
    *
-   * Both refuse, for the reason in the header of this file. They are registered
-   * rather than absent so the browser gets a sentence written for a founder
-   * instead of "there is nothing at that address", and so the contract test can
-   * see that the address exists.
+   * ONE CALL DOES BOTH JOBS. Asking GoHighLevel for this founder's social accounts
+   * answers "is this token real" with its status and "whose token is it" with its
+   * rows, and the second is what step 6 reads back. A tick could be a bug; a founder's
+   * own page name could not.
+   *
+   * NOTHING IS STORED UNTIL IT HAS ANSWERED. A row written before the check is a
+   * credential nobody is watching, and the founder still has the token in front of
+   * them to paste again. So the order is: call, then save, then say connected.
+   *
+   * THE LOCATION MISMATCH IS FREE. Every account id carries the location it belongs
+   * to, so a token from a different sub account than the one the founder typed is
+   * caught here rather than at the first post three weeks later.
    */
-  const notBuilt: RouteHandlerMethod = async (request, reply) => {
+  const connectToken: RouteHandlerMethod = async (request, reply) => {
     if (!(await deps.auth.requireFounder(request, reply))) return reply;
     const founder = deps.auth.founderOf(request);
-    deps.log.warn(
-      { founderId: founder.id, path: request.url.split('?')[0] ?? '' },
-      'a founder reached the GoHighLevel check, which is not built because the spike has never run',
-    );
-    return reply.code(SETUP_ERRORS.ghlCheckNotBuilt.status).send(errorBody(SETUP_ERRORS.ghlCheckNotBuilt));
+
+    const token = readString(request.body, 'token', MAX_TOKEN_CHARACTERS);
+    if (token === null) {
+      return reply.code(SETUP_ERRORS.badToken.status).send(errorBody(SETUP_ERRORS.badToken));
+    }
+
+    const stored = await deps.store.locationIdFor(founder.id, GHL);
+    if (stored === null) {
+      return reply.code(SETUP_ERRORS.noLocationYet.status).send(errorBody(SETUP_ERRORS.noLocationYet));
+    }
+
+    const outcome = await fetchSocialAccounts(token, stored);
+
+    if (outcome.kind === 'unreadable') {
+      // OUR PROBLEM, NOT THEIRS, and it is logged as one. `why` never carries the
+      // token: `ghl-accounts.ts` is tested for that.
+      deps.log.error({ founderId: founder.id, why: outcome.why }, 'the GoHighLevel accounts read could not be understood');
+      return reply.code(200).send({ ok: false, kind: 'vendor_unavailable', call: 'accounts' });
+    }
+    if (outcome.kind !== 'ok') {
+      deps.log.warn({ founderId: founder.id, kind: outcome.kind }, 'a GoHighLevel token was refused');
+      return reply.code(200).send({ ok: false, kind: outcome.kind, call: 'accounts' });
+    }
+
+    // The token works. Does it belong to the location they typed?
+    if (outcome.locationIds.length > 0 && !outcome.locationIds.includes(stored)) {
+      deps.log.warn({ founderId: founder.id }, 'the token works but its accounts belong to another location');
+      return reply.code(200).send({ ok: false, kind: 'location_mismatch', call: 'accounts' });
+    }
+    if (outcome.accounts.length === 0) {
+      return reply.code(200).send({ ok: false, kind: 'no_accounts', call: 'accounts' });
+    }
+
+    const now = deps.clock.now();
+    await saveGhlToken(founder.id, token, stored, now);
+
+    return reply.code(200).send({
+      ok: true,
+      ghl: {
+        connected: true,
+        locationId: stored,
+        // Still null: reading a location's NAME back is a separate call nobody has
+        // made. The accounts below are the proof step 6 shows, and they are better
+        // proof than a location name because the founder connected them by hand.
+        locationName: null,
+        accounts: outcome.accounts.map((a) => ({ platform: a.platform, name: a.name })),
+        expired: outcome.expired.map((a) => ({ platform: a.platform, name: a.name })),
+        contacts: 'not_checked',
+        tokenMadeAt: now.toISOString(),
+      },
+    });
   };
 
-  app.post('/api/setup/ghl/token', notBuilt);
-  app.post('/api/setup/ghl/verify', notBuilt);
+  app.post('/api/setup/ghl/token', connectToken);
+  app.post('/api/setup/ghl/verify', connectToken);
 
   /**
    * Disconnect.

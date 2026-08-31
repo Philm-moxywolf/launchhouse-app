@@ -273,7 +273,7 @@ export const GHL_CONTRACT_HAS_WHAT_A_CHECK_NEEDS =
  * `routes/setup.test.ts` asserts the route and this constant agree, so flipping one
  * without the other fails the build rather than lying to a founder.
  */
-export const GHL_VERIFY_CALL_IS_WRITTEN = false;
+export const GHL_VERIFY_CALL_IS_WRITTEN = true;
 
 /** Both halves. The token box on step 5 appears when this is true and not before. */
 export const GHL_TOKEN_CHECK_IS_BUILT =
