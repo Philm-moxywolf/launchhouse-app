@@ -208,6 +208,80 @@ export const GHL_MENU_PATHS_SOURCE =
 export const GHL_MENU_PATH_HEDGE = 'When we last looked';
 
 /* -------------------------------------------------------------------------- */
+/* Evidenced: read off a workflow that runs against real GoHighLevel           */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * WHERE THESE CAME FROM, and how far they can be trusted.
+ *
+ * SOURCE: an n8n workflow, "Moxywolf Blog and Social Posting Automation to Blog and
+ * GHL Socials 2.0", supplied on 31 August 2026. It posts to GoHighLevel on a
+ * schedule in production, so its calls are not documentation and not a guess: they
+ * are requests that a real GoHighLevel account has been answering.
+ *
+ * THAT IS A THIRD KIND OF EVIDENCE and this file only had two, so it is worth
+ * naming. An UNVERIFIED value is a real string nobody has checked. A PENDING entry
+ * has no value at all. These are neither: somebody else's account has answered
+ * them, repeatedly, and we have not put our own token behind them.
+ *
+ * WHAT THAT DOES NOT COVER, said plainly, because the gap is the useful part:
+ *
+ *   The token may not be the same kind. That workflow's Authorization header could
+ *   be carrying an agency token where a founder will carry a sub account Private
+ *   Integration token. The header SHAPE is proven either way. Whether our seven
+ *   scopes are grantable on the 97 dollar tier is untouched by this and is still
+ *   spike S-01.
+ *
+ *   Nothing here proves a response shape. The calls are proven; the fields that
+ *   come back are not, because a workflow that posts does not have to read.
+ *
+ *   Nothing here proves what a refusal looks like, which is still S-01.
+ *
+ * WHAT WOULD PROMOTE THESE TO VERIFIED: one call with a founder's own token, from
+ * this app, and the response written down. That is still spike S-02, and it is now
+ * a much smaller spike than it was this morning.
+ */
+
+/**
+ * EVERY PATH IN THIS DIRECTORY, WITH WHERE IT CAME FROM.
+ *
+ * `vendor-facts.test.ts` extracts every path shaped string in these files and fails
+ * if one is not a key here. That is the guard that used to say "no path at all",
+ * which was the right rule while there was no evidence and the wrong one the moment
+ * there was: it would have kept real knowledge out of the file to keep guesses out,
+ * and guesses were the only thing it was ever aimed at.
+ *
+ * A path added without a line here fails the build. Adding provenance is therefore
+ * the same act as adding a path, which is the property worth having.
+ */
+export const GHL_PATH_PROVENANCE: Readonly<Record<string, string>> = {
+  '/social-media-posting/': 'Allowlist prefix for the two social calls below.',
+  '/blogs/': 'Allowlist prefix. The blog call is in the source workflow and this product does not use it yet, so the prefix is here and no entry reads it.',
+  '/social-media-posting/{locationId}/accounts':
+    'n8n workflow "Moxywolf Blog and Social Posting Automation to Blog and GHL Socials 2.0", node "Get Social ID\'s from GHL", 31 August 2026.',
+  '/social-media-posting/{locationId}/posts':
+    'Same workflow, node "Post to Social LinkedIn Image3". Runs on a schedule against a real account.',
+};
+
+/** The API version header value. Sent on every call in the source workflow. */
+export const GHL_API_VERSION = '2021-07-28';
+
+/**
+ * THE LOCATION ID IS A PATH SEGMENT, NOT A HEADER, and that changed a shape here.
+ *
+ * `headerNames` used to be typed `{ auth, location, version }` because nobody knew
+ * where the location went. Every call in the source workflow puts it in the path
+ * and sends no location header at all, so the third name was a field waiting to be
+ * filled with something that does not exist. The shape is ours to decide and the
+ * evidence decided it.
+ *
+ * Path templates below carry `{locationId}` for that reason. Substitution is the
+ * caller's job and it is deliberately not a string concatenation helper here: this
+ * file is data, it reaches the browser bundle, and it holds no logic.
+ */
+export const GHL_LOCATION_ID_IS_A_PATH_SEGMENT = true;
+
+/* -------------------------------------------------------------------------- */
 /* Pending: details with no value at all                                      */
 /* -------------------------------------------------------------------------- */
 
@@ -223,34 +297,60 @@ export const GHL_MENU_PATH_HEDGE = 'When we last looked';
  * the difference only shows up on the day it matters.
  */
 export const GHL = {
-  hosts: pending<readonly string[]>(
-    'S-02',
-    'the hostnames GoHighLevel is reached on. Every outbound call is refused until this is a real list, because the allowlist is what a request is checked against before a socket opens.',
-  ),
-  baseUrl: pending<string>(
-    'S-02',
-    'the REST base URL, or the MCP endpoint used over plain JSON-RPC. Which of the two is also part of the question.',
-  ),
-  permittedPathPrefixes: pending<readonly string[]>(
-    'S-02',
-    'the paths this product is allowed to reach. Rule 2 layer 2 is an allowlist, so it cannot be written until the real paths are known.',
-  ),
-  headerNames: pending<{ auth: string; location: string; version: string }>(
-    'S-02',
-    'the auth header name, the location header name, and whether an API version header is required.',
-  ),
+  /** EVIDENCED. Every GoHighLevel call in the source workflow goes to this one host. */
+  hosts: ['services.leadconnectorhq.com'] as readonly string[],
+  /**
+   * EVIDENCED. Plain REST, not MCP over JSON-RPC. That was the open half of this
+   * entry's old question and the workflow settles it: ordinary HTTP requests with a
+   * bearer token and a version header.
+   */
+  baseUrl: 'https://services.leadconnectorhq.com',
+  /**
+   * EVIDENCED, and deliberately only these two. The allowlist is rule 2 layer 2, so
+   * it is the wrong place to be generous: a prefix nobody needs today is a prefix
+   * nothing checks tomorrow. Add one when a call needs it, not in advance.
+   */
+  permittedPathPrefixes: ['/social-media-posting/', '/blogs/'] as readonly string[],
+  /**
+   * EVIDENCED. `Authorization: Bearer <token>` and `Version: 2021-07-28`, on every
+   * call. There is no location header: see GHL_LOCATION_ID_IS_A_PATH_SEGMENT above,
+   * which is why this shape lost a field rather than gaining a value.
+   */
+  headerNames: { auth: 'Authorization', version: 'Version' },
   readLocation: pending<{ method: string; path: string }>(
     'S-02',
     'the call that reads a location back, and the field in the response that carries its name. Step 6 of the token walk reads the founder their own page name, and a page name a bug cannot fake is the whole proof.',
   ),
-  listSocialAccounts: pending<{ method: string; path: string }>(
-    'S-02',
-    'the call that lists connected social accounts, and the shape of a row in the response.',
-  ),
-  createPost: pending<{ method: string; path: string; body: unknown }>(
-    'S-02',
-    'the method, path and request body for creating a post. Until this lands the product exports a Social Planner CSV instead, which is a working path and not a degraded one.',
-  ),
+  /**
+   * EVIDENCED for the call. NOT for the response: a workflow that reads account ids
+   * out by hand does not tell us what a row is shaped like, and step 6 of the token
+   * walk reads a founder their own account names back. So the request is settled and
+   * the row shape is still S-02.
+   */
+  listSocialAccounts: { method: 'GET', path: '/social-media-posting/{locationId}/accounts' },
+  /**
+   * EVIDENCED, body and all. `status` is 'scheduled' in the source workflow and the
+   * draft path presumably differs, which is one word and is not something to guess:
+   * whichever word a draft takes is S-02, and until it is known the CSV export stays
+   * the way drafts reach a founder, which is a working path and not a degraded one.
+   *
+   * `userId` is in the body and is a fourth thing a founder has to supply, alongside
+   * the token, the location id and the account ids. The token walk does not ask for
+   * it today. That is a real gap in the walk rather than a gap in this file.
+   */
+  createPost: {
+    method: 'POST',
+    path: '/social-media-posting/{locationId}/posts',
+    body: {
+      accountIds: 'string[], from listSocialAccounts',
+      summary: 'string, the post text',
+      type: "'post'",
+      status: "'scheduled', and the draft word is not yet known",
+      scheduleDate: 'ISO 8601 instant, see scheduleEncoding',
+      userId: 'string, and nothing collects this from a founder yet',
+      media: '[{ url, type, caption }], optional',
+    },
+  },
   readPost: pending<{ method: string; path: string }>(
     'S-02',
     'the call that reads one post back. Every write is read back, and the read back is what catches a credential mix up after the fact.',
@@ -268,9 +368,33 @@ export const GHL = {
     'A2',
     'the call that adds a contact, for the "push my 25 people into the CRM" commit.',
   ),
+  /**
+   * STILL PENDING, AND THIS IS THE ONE TO READ, because it looks answered and is not.
+   *
+   * The source workflow sends `scheduleDate` as a full ISO 8601 instant in UTC, from
+   * `Date.toISOString()`, for example 2026-09-08T15:00:00.000Z. So of the four
+   * candidate encodings, one is evidenced and the other three are not. That is real
+   * progress and it is not the answer.
+   *
+   * WHAT IS STILL OPEN. Whether GoHighLevel treats that offset as authoritative, or
+   * ignores it and reads the wall clock in the location's own timezone. The source
+   * workflow cannot tell us: its own comment says it uses UTC "to avoid DST
+   * weirdness", so it sidesteps the question rather than answering it, and it never
+   * checks what hour the post actually went out in the location's zone.
+   *
+   * WHY THAT MATTERS AT 130x. A founder means half past nine where they are. If the
+   * offset is authoritative, converting from America/New_York is correct and
+   * daylight saving is handled by the conversion. If it is reinterpreted, the same
+   * value posts four or five hours off, in the same direction, for everybody, and it
+   * changes twice a year.
+   *
+   * WHAT WOULD SETTLE IT, and it is now five minutes rather than a spike: schedule
+   * one post for a known instant, then look at what time GoHighLevel says it will go
+   * out. One post, one glance.
+   */
   scheduleEncoding: pending<{ branch: string }>(
     'S-03',
-    'how GoHighLevel interprets the schedule value. The founder means 09:30 where they are. Four encodings are candidates and none is implemented, because a post at the wrong hour for 130 people is worse than a post they scheduled by hand. Until this lands the product creates drafts and does not schedule.',
+    "how GoHighLevel READS the schedule value. The value's format is evidenced: a full ISO 8601 UTC instant, as sent by the source workflow. What is not known is whether the offset is authoritative or is reinterpreted in the location's timezone, and the two differ by hours in the same direction for every founder. Schedule one post for a known instant and look at the time it shows.",
   ),
   scopeRefusalStatus: pending<number>(
     'S-01',

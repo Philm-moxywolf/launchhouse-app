@@ -62,6 +62,7 @@ import {
   GHL_SCOPE_BY_ID,
   GHL_SCOPE_STRINGS_UNVERIFIED,
   GHL_TOKEN_PREFIX_IS_A_GUESS,
+  GHL_PATH_PROVENANCE,
 } from './ghl.ts';
 import {
   FORBIDDEN_GHL_SCOPES,
@@ -292,18 +293,54 @@ test('the contracts directory imports nothing outside itself', () => {
   }
 });
 
-test('the contract holds no invented vendor path', () => {
-  // The rule the build document asks for by name: no placeholder path in this
-  // directory. A plausible path reads as knowledge, and the day the spike runs it
-  // is wrong in a way nobody traces.
+test('NO VENDOR PATH WITHOUT ITS PROVENANCE, which is what the old rule was aiming at', () => {
+  // THIS TEST USED TO ASSERT THERE WERE NO PATHS AT ALL, and that was correct for
+  // as long as there was no evidence: the thing being kept out is a plausible path,
+  // because a plausible path reads as knowledge and the day the spike runs it is
+  // wrong in a way nobody traces.
+  //
+  // Then real evidence arrived, from a workflow that posts to GoHighLevel on a
+  // schedule in production. Under the old rule that knowledge could not be written
+  // down, which is the guard working against its own purpose: it was aimed at
+  // guesses and it had started excluding facts.
+  //
+  // So the rule is now the one it always meant. A path may be here. It may not be
+  // here anonymously. Every path shaped string has to be a key in
+  // GHL_PATH_PROVENANCE, whose value says where it came from, which makes adding a
+  // path and recording its source the same act.
   const files = sourceFiles(HERE).filter((file) => !file.endsWith(`${sep}pending.ts`));
+  const known = new Set(Object.keys(GHL_PATH_PROVENANCE));
+
   for (const file of files) {
     const source = readFileSync(file, 'utf8');
-    const paths = codeLinesWith(source, "'/").filter((line) => /'\/[a-z0-9]/i.test(line));
-    assert.deepEqual(
-      paths,
-      [],
-      `${relative(REPO_ROOT, file)} carries something shaped like a vendor path. Every endpoint here is a hole until a spike fills it:\n  ${paths.join('\n  ')}`,
+    // The registry declares the paths, so reading it would make every path vouch
+    // for itself. Everything after it is what gets checked.
+    const body = source.includes('GHL_PATH_PROVENANCE: Readonly')
+      ? source.slice(source.indexOf('};', source.indexOf('GHL_PATH_PROVENANCE: Readonly')))
+      : source;
+
+    for (const line of codeLinesWith(body, "'/")) {
+      for (const m of line.matchAll(/'(\/[A-Za-z0-9][^']*)'/g)) {
+        const found = m[1] ?? '';
+        assert.ok(
+          known.has(found),
+          `${relative(REPO_ROOT, file)} carries the path "${found}" and nothing says where it came from. Add it to GHL_PATH_PROVENANCE with its source, or make it a pending() hole.`,
+        );
+      }
+    }
+  }
+});
+
+test('every recorded provenance names a real source, not a shrug', () => {
+  // A registry whose values could be empty would turn the guard above into a
+  // formality: paste the path in, paste it into the registry, done. The value has
+  // to actually say something, and it has to say where.
+  for (const [path, source] of Object.entries(GHL_PATH_PROVENANCE)) {
+    assert.ok(source.trim().length >= 30, `${path} has provenance too short to be a source: "${source}"`);
+    assert.match(
+      source,
+      /workflow|spike|Allowlist prefix|read off|response from/i,
+      `${path} does not say where it came from: "${source}"`,
     );
   }
 });
