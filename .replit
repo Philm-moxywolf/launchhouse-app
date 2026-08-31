@@ -50,9 +50,29 @@
 # changes what a founder gets.
 run = "npm run start"
 entrypoint = "src/server/index.ts"
+# Node 22. Not a preference, and this comment was deleted once and is back because the thing
+# it warns about then happened. The imported workspace briefly came up as nodejs-20, which
+# contradicts the engines range in package.json, and it had to be corrected by hand.
+#
+# The Agent SDK ships the Linux CLI binary the agent loop spawns as a PER PLATFORM OPTIONAL
+# dependency. An install that skips optional dependencies fails at the founder's first
+# message, not at install time. src/server/boot/platform-cli.ts resolves that binary at boot,
+# reads its ELF interpreter to check the libc matches the host, RUNS it, and refuses to
+# report ready when it cannot.
+#
+# CONFIRMED ON THE REAL MACHINE, 31 August 2026, by the probe: Node v22.22.0, Linux x64, and
+# @anthropic-ai/claude-agent-sdk-linux-x64/claude executes and reports 2.1.251. The musl
+# build is also present in the tree and is correctly never selected on this glibc host.
+#
+# "web" and "nix" were added by Replit when the workspace was imported. They are the
+# workspace's own modules and are left as Replit set them.
 modules = ["web", "nix", "nodejs-22"]
 
 [nix]
+# Moved from stable-24_05 by Replit on import. replit.nix pins the tools ge shells out to,
+# and a channel move changes their versions, which is the whole reason that pin exists. The
+# probe ran on 25_05 and answered the shell utilities question successfully, so ge has what
+# it needs on this channel. Re-check if this line moves again.
 channel = "stable-25_05"
 
 [env]
@@ -62,6 +82,14 @@ channel = "stable-25_05"
 # it cannot be corrected afterwards. env.ts asserts this is UTC and refuses to start if it
 # is not.
 TZ = "UTC"
+
+# Nothing else is set here on purpose. A slim Node build would not know America/New_York, and
+# every scheduled post depends on that zone resolving, but the answer to that is a boot
+# assertion rather than an environment variable: env.ts constructs a formatter for New York
+# inside a try and refuses to start if it throws. An assertion cannot be silently wrong.
+#
+# MEASURED, 31 August 2026: the probe reports full ICU on this image and correct New York
+# daylight saving transitions. The assertion has something real to stand on now.
 
 [[ports]]
 localPort = 5000
@@ -97,14 +125,24 @@ run = ["npm", "run", "start"]
 build = ["bash", "-c", "npm ci && npm run build"]
 
 # =========================================================================================
-# Deployment: configure it in the Deployments pane, not here.
+# Deployment: the [deployment] section above is load bearing. Do not delete it.
 # =========================================================================================
 #
-# There is deliberately no [deployment] section in this file. The key names under it have
-# changed more than once, and a stale key written from memory produces a deployment that
-# looks configured and is not. Open the Deployments pane and set it there.
+# THIS COMMENT USED TO SAY THE OPPOSITE, and the reasoning was right for one deployment and
+# wrong for a hundred and thirty. It said there was deliberately no [deployment] section
+# because the key names had changed before and a stale key produces a deployment that looks
+# configured and is not. That risk is real. It is simply the smaller one.
 #
-# Choose RESERVED VM, not Autoscale. Four reasons, all specific to this product:
+# THE BIGGER ONE IS THE REMIX. A remix copies files and configuration. It does NOT copy pane
+# settings. So a deployment target that lives only in the Deployments pane is a setting each
+# founder picks for themselves, the default is Autoscale, and Autoscale breaks this app in
+# ways that read as flakiness rather than as failure. In the file, every remix inherits it.
+#
+# The key names above are not written from memory. They were produced by Replit's own agent
+# against a live workspace on 31 August 2026 and the deployment they describe published and
+# ran. deploymentTarget was "autoscale" on the first attempt and that attempt was wrong.
+#
+# RESERVED VM, not Autoscale. Four reasons, all specific to this product:
 #
 #   1. A turn that reads three files and writes one runs 30 to 180 seconds. Autoscale bills
 #      per request second and enforces request timeouts.
@@ -122,8 +160,8 @@ build = ["bash", "-c", "npm ci && npm run build"]
 # every durable thing is in Postgres, so a restart loses only in flight turns and those re
 # queue from the turns table on boot.
 #
-# Build command:  npm ci && npm run build
-# Run command:    npm run start
+# Build command:  npm ci && npm run build      <- now set in [deployment] above
+# Run command:    npm run start                <- now set in [deployment] above
 #
 # BOTH OF THOSE NOW BUILD THE BROWSER BUNDLE, and that repetition is deliberate rather than
 # sloppy. `npm run build` builds it here, at build time, where it belongs and where a failure

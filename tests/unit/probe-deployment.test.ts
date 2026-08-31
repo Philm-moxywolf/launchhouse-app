@@ -157,10 +157,26 @@ describe("the page a non developer pastes back", () => {
   const page = renderReport([checkTimezone()]);
 
   test("wraps to something readable in a chat window", () => {
+    // Long unbroken file paths are allowed through, because breaking a path makes it
+    // uncopyable. Everything that CAN wrap must wrap.
+    //
+    // THE RULE USED TO BE "does this line contain a space", AND THAT MADE THE SUITE DEPEND
+    // ON WHERE IT WAS CHECKED OUT. A line like `  Working folder  /very/long/path` has
+    // spaces, so it was asserted, and it failed on any machine whose working folder path was
+    // long. That is the test measuring the machine rather than the code. On Replit the path
+    // is short and it passed; in a deep scratch directory it did not, and neither outcome
+    // said anything about whether the report wraps.
+    //
+    // So the question is now the honest one: could this line have been wrapped at all? A
+    // line carrying a single token too long to fit could not, whatever the wrapper did.
     for (const line of page.split("\n")) {
-      // Long unbroken file paths are allowed through, because breaking a path makes it
-      // uncopyable. Everything with a space in it wraps.
-      if (/\s/.test(line.trim())) assert.ok(line.length <= 92, `too long: ${line}`);
+      if (line.length <= 92) continue;
+      const longest = Math.max(0, ...line.trim().split(/\s+/).map((t) => t.length));
+      const indent = line.length - line.trimStart().length;
+      assert.ok(
+        indent + longest > 92,
+        `too long and it could have wrapped, longest token is ${String(longest)}: ${line}`,
+      );
     }
   });
 

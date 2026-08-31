@@ -17,12 +17,20 @@ vendored `vendor/growth-engine` content is already present in this copy.
 
 ## First run
 
-The Replit Postgres database is connected and the schema has been applied automatically. The
-app starts safely without user credentials, but sign-in remains unavailable until:
+This file was written against the original workspace, where a database was already attached.
+**A remix does not inherit that.** A remixed copy gets a fresh, empty database and no
+connection to the original, so the first step below is a real step and not a formality.
 
-1. Add `OWNER_PASSPHRASE` in Replit Secrets. Use at least 12 characters.
-2. Open the app and sign in.
-3. Add the founder's Anthropic API key on the in-app Setup screen.
+The app starts safely with all of this missing. It serves a page headed "Start here" that
+names whatever is not done yet and what to do about each one, so nothing here has to be
+memorised. Sign-in stays unavailable until:
+
+1. Open the Database pane and create a Postgres database. Replit fills in `DATABASE_URL`
+   itself. The app applies its own migrations at boot, so there is nothing to run by hand.
+2. Add `OWNER_PASSPHRASE` in Replit Secrets. Use at least 12 characters. This is the only
+   way into the app and it is not something the app asks you to invent on screen.
+3. Open the app and sign in.
+4. Add the founder's Anthropic API key on the in-app Setup screen.
 
 Do not place vendor credentials in process-level environment variables. The app stores
 founder-specific credentials in its database instead.
