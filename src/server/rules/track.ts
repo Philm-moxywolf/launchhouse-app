@@ -205,14 +205,52 @@ function checkFileScope(artifact: Artifact, ctx: FounderContext, out: Violation[
   }
 }
 
+/**
+ * The track this file declares about itself, or null when it declares nothing.
+ *
+ * schemas/brain.md: the label is read without case, with the list dash and the
+ * stars taken off, and only above the first `## ` line.
+ */
+function declaredTrack(text: string): string | null {
+  const header = text.split(/^## /m)[0] ?? '';
+  const match = /^[-*\s]*\**\s*track\s*:?\**\s*:?\s*(\S+)/im.exec(header);
+  return match?.[1]?.replace(/\*/g, '').trim().toLowerCase() ?? null;
+}
+
+/**
+ * Which track this artifact's words should be read against.
+ *
+ * Normally the founder record, and for every file except one that is the only
+ * answer. The exception is the Brain, and it is the exception because the Brain
+ * is where the track is decided: `founder.track` is a cache of its Track line,
+ * written from it after the turn commits. So during the turn that changes the
+ * track, the record is the stale half and the Brain is the true one.
+ *
+ * WITHOUT THIS, THE TRACK CANNOT BE CHANGED, and the failure is a quiet one. A
+ * founder moving to B2B gets a Brain full of B2B words, written correctly. Every
+ * one of them is then read against the b2c record still in the database, so ICP,
+ * DKIM and sequence are all refused, the Brain is held, the turn rolls back, and
+ * the record never moves. The next attempt does the same thing.
+ *
+ * The model sees none of that. Its writes reached the disk and reported success,
+ * and the rollback happened underneath it, so it reports the work as done and
+ * the file on disk is still the old one. That is what this looked like from the
+ * outside on 1 September, and it was read as writes silently failing to save.
+ *
+ * Making the Track line itself a note was not enough on its own. The line was
+ * never the thing being refused. The words were.
+ */
+function vocabularyTrack(artifact: Artifact, ctx: FounderContext): Track | null {
+  if (baseName(artifact.path) !== 'founder-brain.md') return ctx.track;
+  const declared = declaredTrack(artifact.text);
+  if (declared === 'b2b' || declared === 'b2c') return declared;
+  return ctx.track;
+}
+
 function checkBrainTrackLine(artifact: Artifact, ctx: FounderContext, out: Violation[]): void {
   if (baseName(artifact.path) !== 'founder-brain.md') return;
 
-  // schemas/brain.md: the label is read without case, with the list dash and
-  // the stars taken off, and only above the first `## ` line.
-  const header = artifact.text.split(/^## /m)[0] ?? '';
-  const match = /^[-*\s]*\**\s*track\s*:?\**\s*:?\s*(\S+)/im.exec(header);
-  const declared = match?.[1]?.replace(/\*/g, '').trim().toLowerCase() ?? null;
+  const declared = declaredTrack(artifact.text);
 
   if (declared === null) {
     out.push({
@@ -406,7 +444,7 @@ export function checkTrack(
 
   const scanWords = options.checkVocabulary ?? artifact.authored === 'model';
   if (scanWords) {
-    checkVocabulary(artifact, ctx, violations);
+    checkVocabulary(artifact, { ...ctx, track: vocabularyTrack(artifact, ctx) }, violations);
   } else {
     notes.push(`The words in ${artifact.path} were not scanned, because the founder wrote them.`);
   }

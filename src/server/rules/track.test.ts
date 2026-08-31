@@ -38,21 +38,46 @@ test('each worked example brain passes on its own track', () => {
   }
 });
 
-test('the B2B brain handed to a B2C founder is refused, and Apollo is named', () => {
+// THESE TWO CHANGED ON 1 SEPTEMBER AND THE REASON IS A JUDGEMENT, SO IT IS
+// WRITTEN DOWN. They used to assert that a Brain declaring the other track was
+// refused. That case cannot be told apart from a founder changing track: both
+// are a Brain declaring b2b, full of B2B words, while the record still says b2c.
+// One of them had to win.
+//
+// Not being able to change track is certain, happens at session 1, and is the
+// mistake the help skill already names. A Brain that wrongly declares the other
+// track needs a skill bug that rewrites the Track line, and it fails loudly,
+// because every one of that founder's files drops out of their list at once.
+//
+// So the Brain may declare a new track, and the founder is told. The Apollo
+// guard is kept where it still applies, which is the Brain that is staying put.
+
+test('the B2B brain arriving on a B2C founder is the track changing, and it is said out loud', () => {
   const result = checkTrack(art('founder-brain.md', exampleBrain('b2b')), ctx('b2c'));
-  assert.equal(result.ok, false);
-  const codes = result.violations.map((v) => v.code);
-  assert.ok(codes.includes('track.brain-disagrees'), 'the Track line disagreement is caught');
-  const words = result.violations.filter((v) => v.code === 'track.wrong-track-word');
+  assert.equal(result.ok, true, 'the Brain is where the track is decided');
   assert.ok(
-    words.some((v) => v.found.toLowerCase() === 'apollo'),
-    'Apollo must never reach a B2C founder',
+    result.violations.some((v) => v.code === 'track.brain-disagrees'),
+    'and the founder is told their side is changing, because nothing about this may be silent',
   );
 });
 
-test('the B2C brain handed to a B2B founder is refused', () => {
-  const result = checkTrack(art('founder-brain.md', exampleBrain('b2c')), ctx('b2b'));
+test('Apollo in a Brain that is staying on B2C is still refused', () => {
+  // The half of the old test that is still true, and the half that was doing the
+  // work. A founder who is not changing track must never be handed Apollo.
+  const staying = exampleBrain('b2c') + '\n\nBuild the list in Apollo and export it.\n';
+  const result = checkTrack(art('founder-brain.md', staying), ctx('b2c'));
   assert.equal(result.ok, false);
+  assert.ok(
+    result.violations.some(
+      (v) => v.code === 'track.wrong-track-word' && v.found.toLowerCase() === 'apollo',
+    ),
+    'Apollo must never reach a founder who is staying B2C',
+  );
+});
+
+test('the B2C brain arriving on a B2B founder is the track changing too', () => {
+  const result = checkTrack(art('founder-brain.md', exampleBrain('b2c')), ctx('b2b'));
+  assert.equal(result.ok, true);
   assert.ok(result.violations.some((v) => v.code === 'track.brain-disagrees'));
 });
 
@@ -221,4 +246,37 @@ test('a Brain with no Track line at all is still refused', () => {
   const result = checkTrack(art('founder-brain.md', '# Founder Brain\n\nModel: service\n'), ctx('b2c'));
   assert.equal(result.ok, false);
   assert.equal(result.violations[0]?.code, 'track.missing-from-brain');
+});
+
+test('a Brain moving to the other track is read against the track it declares', () => {
+  // THE SECOND HALF OF THE DEADLOCK, 1 September 2026. Making the Track line a
+  // note was not enough. A founder moving to B2B writes a Brain full of B2B
+  // words, and every one of them was read against the b2c record still in the
+  // database, so the Brain was held on ICP and DKIM and the record never moved.
+  const brain = [
+    '# Founder Brain',
+    '',
+    '- **Track:** b2b',
+    '',
+    '## Audience',
+    'The ICP is heads of digital learning at independent schools.',
+    'Email from a domain with SPF, DKIM and DMARC, then a short sequence.',
+  ].join('\n');
+  const result = checkTrack(art('founder-brain.md', brain), ctx('b2c'));
+  assert.equal(result.ok, true, 'the Brain is where the track is decided');
+  assert.equal(result.violations.length, 1);
+  assert.equal(result.violations[0]?.code, 'track.brain-disagrees');
+});
+
+test('only the Brain gets that, every other file is read against the record', () => {
+  const post = 'The ICP is heads of digital learning, reached by cold email.';
+  const result = checkTrack(art('content-30.md', post), ctx('b2c'));
+  assert.equal(result.ok, false, 'a content file cannot declare its way onto the other track');
+});
+
+test('a Brain with no readable Track line falls back to the record', () => {
+  const brain = '# Founder Brain\n\n- **Track:** wibble\n\n## Audience\n\nThe ICP is schools.\n';
+  const result = checkTrack(art('founder-brain.md', brain), ctx('b2c'));
+  assert.equal(result.ok, false);
+  assert.ok(result.violations.some((v) => v.code === 'track.unknown-value'));
 });
