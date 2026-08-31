@@ -116,6 +116,78 @@ export function isSafeHeaderValue(value: string): boolean {
   return true;
 }
 
+
+/* -------------------------------------------------------------------------- */
+/* The allowlist, which is rule 2 layer 2                                     */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * EVERY HOST AND PATH THIS PRODUCT MAY EVER REACH. Anything else is refused here,
+ * before a socket opens.
+ *
+ * WHY THIS EXISTS AND WHY IT EXISTS NOW. It was specified from the start, in
+ * `contracts/ghl.ts`, whose `permittedPathPrefixes` entry says "Rule 2 layer 2 is
+ * an allowlist". It was never built. Nothing read that entry and `vendorFetch`
+ * checked the scheme and the headers and then called whatever it was given.
+ *
+ * It became load bearing on 31 August 2026, when the decision was taken to have
+ * founders grant every permission GoHighLevel offers rather than hunt seven boxes
+ * out of a hundred and fifty. That is the right call for the founder: a missed box
+ * gives them a token short a permission and there is no way to add one afterwards.
+ * It costs the layer that used to make rule 2 true at the credential, because a
+ * token with everything on it can send a message.
+ *
+ * SO THE GUARANTEE MOVED HERE, from the credential into our own process. A token
+ * that CAN send a DM is now held by an app that CANNOT ask it to. That is a weaker
+ * place to keep a promise, and it is said out loud rather than glossed: the old
+ * layer was the one we did not enforce ourselves, and this one we do.
+ *
+ * WHAT MAKES IT WORTH HAVING ANYWAY. The model cannot reach the network at all:
+ * Bash, WebFetch, WebSearch, Task and Skill are refused to it in `agent/runner.ts`,
+ * so there is no path from a sentence a founder types to an HTTP call. The only
+ * thing that can call GoHighLevel is code in this repository, and this list is what
+ * that code is allowed to call. A conversations endpoint added by mistake in six
+ * months is refused by this function and named in the error.
+ *
+ * ADD A PREFIX ONLY WHEN A CALL NEEDS IT. A prefix nobody uses today is a prefix
+ * nothing checks tomorrow.
+ *
+ * THERE IS NO DENY LIST, AND ITS ABSENCE IS THE DESIGN. The first version of this
+ * had one, naming the message endpoints explicitly as never reachable. Two things
+ * were wrong with it. It was redundant, because a positive list already refuses
+ * everything it does not name, and a deny list only stops what somebody thought of
+ * while a positive list stops what nobody thought of. And writing those paths out
+ * tripped `rules/no-dm-automation.test.ts`, which scans this whole repository for
+ * exactly those strings and does not care that this one was refusing them. That
+ * scanner was right and the deny list was the thing that had to go.
+ */
+export const VENDOR_ALLOWLIST: Readonly<Record<string, readonly string[]>> = {
+  // GoHighLevel. Two prefixes, both evidenced. See contracts/ghl.ts.
+  'services.leadconnectorhq.com': ['/social-media-posting/', '/blogs/'],
+  // Anthropic, for `agent/anthropic-check.ts` only: the two calls that check a
+  // founder's key is real before it is stored. The agent loop itself does not come
+  // through here, because the CLI holds its own connection.
+  'api.anthropic.com': ['/v1/models', '/v1/messages'],
+};
+
+/** Why a request was refused by the allowlist, or null when it is allowed. */
+export function allowlistRefusal(url: URL): string | null {
+  const prefixes = VENDOR_ALLOWLIST[url.hostname];
+  if (prefixes === undefined) {
+    return (
+      `${url.hostname} is not a host this product calls. Every outbound host is listed in ` +
+      'VENDOR_ALLOWLIST, and a host that is not there is a call nobody argued for.'
+    );
+  }
+  if (!prefixes.some((prefix) => url.pathname.startsWith(prefix))) {
+    return (
+      `${url.pathname} is not a path this product calls on ${url.hostname}. Allowed: ` +
+      `${prefixes.join(', ')}. Add a prefix when a call needs it, not in advance.`
+    );
+  }
+  return null;
+}
+
 /**
  * One call to a host we do not own.
  *
@@ -140,6 +212,14 @@ export async function vendorFetch(
   }
   if (url.username !== '' || url.password !== '') {
     throw new VendorRequestRefused('vendorFetch will not call a URL with credentials in it. Put them in a header.');
+  }
+
+  // The allowlist, before anything else about the request is considered. A host and
+  // path this product does not call is refused whatever the headers say and whatever
+  // the token could do.
+  const refusal = allowlistRefusal(url);
+  if (refusal !== null) {
+    throw new VendorRequestRefused(`vendorFetch refused a call for ${request.vendor}: ${refusal}`);
   }
 
   for (const [name, value] of Object.entries(request.headers)) {

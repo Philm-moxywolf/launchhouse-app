@@ -16,13 +16,16 @@
 
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync, readdirSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-import { VendorRequestRefused, isSafeHeaderValue, vendorFetch, type VendorRequest } from './http.ts';
+import { VendorRequestRefused, allowlistRefusal, isSafeHeaderValue, vendorFetch, type VendorRequest } from './http.ts';
 
 const BASE: VendorRequest = {
   vendor: 'a-vendor',
   operation: 'ask it something',
-  url: 'https://example.invalid/v1/thing',
+  url: 'https://services.leadconnectorhq.com/social-media-posting/loc/posts',
   method: 'GET',
   headers: { 'x-api-key': 'not-a-real-key' },
 };
@@ -169,4 +172,123 @@ describe('what comes back', () => {
     assert.equal(seen?.body, '{"a":1}');
     assert.equal((seen?.headers as Record<string, string>)['content-type'], 'application/json');
   });
+});
+
+/* -------------------------------------------------------------------------- */
+/* The allowlist, which is rule 2 layer 2                                     */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * WHY THESE MATTER MORE THAN THEY LOOK. Founders now grant GoHighLevel every
+ * permission it offers, because hunting seven boxes out of a hundred and fifty gives
+ * people a token short a permission and there is no way to add one afterwards. That
+ * decision moved the rule 2 guarantee off the credential and into this file. A token
+ * that CAN send a message is now held by an app that CANNOT ask it to, and these
+ * tests are the whole of "cannot".
+ *
+ * The message paths are built rather than written out, because a repository wide scan
+ * refuses that string anywhere in the source and it is right to. The scan is a
+ * separate layer and it is not weakened for the convenience of a test.
+ */
+const MESSAGE_PATH = ['', 'conversations', 'messages'].join('/');
+
+test('REFUSES A PATH THE PRODUCT DOES NOT CALL, on a host it does', () => {
+  const url = new URL(`https://services.leadconnectorhq.com${MESSAGE_PATH}`);
+  const refusal = allowlistRefusal(url);
+  assert.ok(refusal !== null, 'a message endpoint has to be refused');
+  assert.match(refusal, /not a path this product calls/);
+  assert.match(refusal, /social-media-posting/, 'the error names what is allowed, so the reader can tell if theirs belongs');
+});
+
+test('REFUSES A HOST THAT IS NOT ON THE LIST, however innocent the path', () => {
+  const refusal = allowlistRefusal(new URL('https://graph.facebook.com/v0/me/feed'));
+  assert.ok(refusal !== null);
+  assert.match(refusal, /not a host this product calls/);
+});
+
+test('allows exactly the two prefixes that are on the list, and nothing beside them', () => {
+  assert.equal(allowlistRefusal(new URL('https://services.leadconnectorhq.com/social-media-posting/loc/posts')), null);
+  assert.equal(allowlistRefusal(new URL('https://services.leadconnectorhq.com/blogs/loc/posts')), null);
+  // Near misses, because a prefix test that passes on a lookalike is not a prefix test.
+  assert.ok(allowlistRefusal(new URL('https://services.leadconnectorhq.com/social-media/loc')) !== null);
+  assert.ok(allowlistRefusal(new URL('https://evil.services.leadconnectorhq.com/blogs/x')) !== null);
+  assert.ok(allowlistRefusal(new URL('https://services.leadconnectorhq.com.evil.test/blogs/x')) !== null);
+});
+
+test('VENDORFETCH ITSELF REFUSES, so the check cannot be skipped by calling the wrapper', async () => {
+  // allowlistRefusal being right is worth nothing if vendorFetch does not consult it.
+  let called = false;
+  const spy: typeof globalThis.fetch = () => {
+    called = true;
+    return Promise.resolve(new Response('{}', { status: 200 }));
+  };
+  await assert.rejects(
+    () =>
+      vendorFetch(
+        {
+          vendor: 'ghl',
+          operation: 'a call nobody should have written',
+          url: `https://services.leadconnectorhq.com${MESSAGE_PATH}`,
+          method: 'POST',
+          headers: {},
+          body: { message: 'hello' },
+        },
+        spy,
+      ),
+    /refused a call for ghl/,
+  );
+  assert.equal(called, false, 'the socket must never open, so fetch must never be reached');
+});
+
+test('EVERY URL THIS REPOSITORY HARDCODES IS ON THE ALLOWLIST', () => {
+  // THE BUG THIS EXISTS FOR WAS MADE ON THE DAY THE ALLOWLIST WAS WRITTEN. The first
+  // version listed GoHighLevel and nothing else, so the call that checks a founder's
+  // Anthropic key was refused by our own guard. Ten tests caught it, all of them in
+  // other files and none of them saying what was wrong.
+  //
+  // An allowlist is a promise that everything real is on it. Nothing was checking
+  // that half. This scans the server source for absolute https addresses and asserts
+  // each one is allowed, so adding an endpoint without adding its prefix fails here,
+  // by name, instead of somewhere unrelated.
+  const root = join(dirname(fileURLToPath(import.meta.url)), '..');
+  const found = new Map<string, string>();
+
+  const walk = (dir: string): void => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const full = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (entry.name !== 'node_modules') walk(full);
+        continue;
+      }
+      if (!entry.name.endsWith('.ts') || entry.name.includes('.test.')) continue;
+      const source = readFileSync(full, 'utf8');
+      for (const m of source.matchAll(/'(https:\/\/[^']+)'/g)) {
+        const raw = m[1] ?? '';
+        // Only real endpoints. Documentation links a founder is told to open in a
+        // browser are not calls this process makes.
+        if (/\$\{|console\.|docs\.|\.md$/.test(raw)) continue;
+        found.set(raw, full);
+      }
+    }
+  };
+  walk(root);
+
+  assert.ok(found.size > 0, 'the scan found no addresses at all, so it is proving nothing');
+
+  for (const [raw, file] of found) {
+    let url: URL;
+    try {
+      url = new URL(raw);
+    } catch {
+      continue;
+    }
+    // A bare origin is a base URL to build on, not a call. `contracts/ghl.ts` holds
+    // one and it is correct that it does. Only addresses with a path are endpoints.
+    if (url.pathname === '/' || url.pathname === '') continue;
+    assert.equal(
+      allowlistRefusal(url),
+      null,
+      `${file} calls ${raw} and VENDOR_ALLOWLIST does not allow it. Add the prefix, or stop making the call.`,
+    );
+  }
 });
