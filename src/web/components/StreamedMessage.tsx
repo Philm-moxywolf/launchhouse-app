@@ -28,6 +28,7 @@ import type { ReactElement } from "react";
 import { QueuedNotice } from "./QueuedNotice.tsx";
 import { ToolStatusLine } from "./ToolStatusLine.tsx";
 import type { StreamedTurn } from "../lib/thread-state.ts";
+import { MessageText } from "./MessageText.tsx";
 
 export function StreamedMessage({ turn }: { readonly turn: StreamedTurn }): ReactElement {
   if (turn.queuePosition !== null) {
@@ -39,10 +40,15 @@ export function StreamedMessage({ turn }: { readonly turn: StreamedTurn }): Reac
   }
   return (
     <div className="message message-engine">
+      {/*
+        THE SAME RENDERER AS A FINISHED MESSAGE, so the words do not change shape when
+        the turn ends. A half arrived `**` simply does not match and shows as typed
+        until its pair lands, which is what it did before this anyway.
+      */}
       {turn.text === "" ? null : (
-        <p className="message-text" aria-live="polite">
-          {turn.text}
-        </p>
+        <div aria-live="polite">
+          <MessageText text={turn.text} />
+        </div>
       )}
       <ToolStatusLine text={turn.status} />
     </div>

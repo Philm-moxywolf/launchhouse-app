@@ -55,6 +55,7 @@ import { mayOpenRoute } from "../lib/track.ts";
 import { hrefFor } from "../lib/nav.ts";
 import { plainFileName } from "../lib/format.ts";
 import { Composer } from "../components/Composer.tsx";
+import { MessageText } from "../components/MessageText.tsx";
 import { Notice } from "../components/Notice.tsx";
 import { StopButton } from "../components/StopButton.tsx";
 import { StreamedMessage } from "../components/StreamedMessage.tsx";
@@ -233,7 +234,7 @@ export function Thread({ founder, routeId }: { readonly founder: Founder; readon
       <div className="transcript">
         {view.messages.map((message) => (
           <div key={message.id} className={`message message-${message.role}`}>
-            <p className="message-text">{message.text}</p>
+            <MessageText text={message.text} />
             {message.state === "sending" ? <span className="message-state">Sending</span> : null}
             {message.state === "failed" ? <span className="message-state">Not sent</span> : null}
             {message.state === "stopped" ? <span className="message-state">Stopped here</span> : null}

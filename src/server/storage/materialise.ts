@@ -31,6 +31,7 @@
  * people folder is the normal first state on all 130 machines.
  */
 
+import { existsSync } from 'node:fs';
 import { mkdir, readFile, rm, stat, utimes, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { eq } from 'drizzle-orm';
@@ -190,6 +191,26 @@ async function rebuild(
   }
 
   return { founderId, version, paths, rebuilt: true };
+}
+
+/**
+ * Does this folder still need `ge init` run over it?
+ *
+ * THE BUG THIS ANSWERS. On a founder's first turn there are no stored files, so
+ * `materialise` above leaves a bare empty directory: no `.state`, no `memory.md`,
+ * nothing `ge` recognises as its own. Every `ge remember` in that turn then failed.
+ * The founder's Brain still wrote, because that goes through a different path, so
+ * the failure was invisible except as five refusals inside one answer.
+ *
+ * It happened on the FIRST TURN OF EVERY FOUNDER, which is 130 people, and the
+ * model, asked to explain a refusal it could not see the cause of, invented one and
+ * told the founder to run a shell command they have no way to run.
+ *
+ * `.state` IS THE TEST, not the folder existing. A folder is created by materialise
+ * whatever happens; `.state` is created by `ge init` and by nothing else here.
+ */
+export async function needsInit(founderId: string): Promise<boolean> {
+  return !existsSync(join(geHome(founderId), '.state'));
 }
 
 /**

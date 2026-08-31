@@ -71,6 +71,8 @@ import { getDb, setFounderScope, type Db, type Queryable } from '../db/client.ts
 import { founders, messages, threads } from '../db/schema.ts';
 import { RulesRefused } from '../rules/harvest-gate.ts';
 import type { Violation } from '../rules/types.ts';
+import { init as geInit } from '../ge/verbs.ts';
+import { needsInit } from '../storage/materialise.ts';
 import { geHome } from '../storage/paths.ts';
 import { runTurn as storageRunTurn, TurnRefused } from '../storage/turn.ts';
 import { skillKeyFor, type ContentRouteCatalogue } from './agent-content.ts';
@@ -191,6 +193,25 @@ export function createRunTurn(deps: RunTurnDeps): RunTurn {
           ...(deps.db === undefined ? {} : { db: deps.db }),
         },
         async (turn): Promise<RunSummary> => {
+          // BUILD THE FOLDER BEFORE THE MODEL TOUCHES IT, and only when it has not
+          // been built. `materialise` writes the founder's stored files and nothing
+          // else, so on a first turn it leaves a bare empty directory: no `.state`,
+          // no `memory.md`, nothing `ge` recognises as a folder of its own.
+          //
+          // THAT COST EVERY FOUNDER THEIR FIRST TURN'S MEMORIES. `ge remember` was
+          // refused five times inside one answer while the Brain itself wrote fine,
+          // because the Brain goes through a different path. The model, asked to
+          // explain refusals whose cause it could not see, invented one and told the
+          // founder to run a shell command. They have no shell. That is the whole
+          // premise of this app.
+          //
+          // `ge init` is idempotent, so the test is a cheap guard rather than a
+          // correctness requirement: it keeps a spawn off every later turn.
+          if (await needsInit(job.founderId)) {
+            await geInit({ founderId: job.founderId, timezone: turn.timezone });
+            deps.log.info({ founderId: job.founderId }, 'the founder folder was built by ge init on its first turn');
+          }
+
           // The folder now matches the record, so this is the first moment the
           // Brain on disk can be trusted. Read here, not before.
           const track = await deps.facts.trackOf(job.founderId);

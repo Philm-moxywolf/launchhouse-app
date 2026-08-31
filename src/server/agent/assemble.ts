@@ -179,8 +179,50 @@ export function buildSystemPromptAppend(
   track: Track | null,
 ): string {
   const body = bodies.get(route.skill);
-  return `${stripOtherTrack(body, track)}${trackStrip(track)}\n`;
+  return `${stripOtherTrack(body, track)}${trackStrip(track)}\n${WHO_IS_READING}`;
 }
+
+/**
+ * WHO IS READING THIS, appended to every skill on every route.
+ *
+ * WHY IT EXISTS. `ge` ends its errors with a recovery line: "→ run: " and a command
+ * that pastes into a terminal. That is right where ge was born, in a plugin somebody
+ * runs from a shell. It is wrong here, and the difference is not a detail: a founder
+ * in this app HAS no shell, and the folder those commands name is scratch space that
+ * is deleted before they finish reading the sentence.
+ *
+ * WHAT HAPPENED WITHOUT IT. On a first turn the folder had not been built, `ge
+ * remember` was refused five times, and ge said what it always says: run this command.
+ * The model relayed it faithfully, so a founder was told to open a terminal, change
+ * to a temporary directory that no longer existed, and run a program they do not
+ * have. That reads as a solution and is not one, which is worse than the original
+ * failure.
+ *
+ * The folder bug is fixed. This is here because it is not the only way ge can refuse,
+ * and the next one must not reach a founder in the same shape.
+ *
+ * IT IS APPENDED RATHER THAN WRITTEN INTO EACH SKILL because it is true of all nine
+ * and a rule repeated nine times is a rule that will be right in eight places.
+ */
+export const WHO_IS_READING = [
+  '',
+  '# Who is reading this',
+  '',
+  'A founder, in a web app, on a laptop or a phone. They have no terminal, no shell',
+  'and no command line, and they never will: that is the whole point of this app.',
+  '',
+  'So NEVER tell them to run a command. Not `ge` anything, not `cd`, not `npm`,',
+  'nothing. The `ge` tool ends its errors with a line beginning "run:" and a command.',
+  'That line is written for a server and it is for you, not for them. Never repeat it,',
+  'quote it, or rephrase it as an instruction.',
+  '',
+  'When a tool refuses and you cannot fix it yourself, say plainly what did not happen',
+  'and what it costs them, tell them nothing they have made is affected if that is',
+  'true, and say somebody will sort it out. Do not invent a cause you cannot see. A',
+  'wrong explanation that sounds confident sends a founder chasing something that was',
+  'never the problem.',
+  '',
+].join('\n');
 
 /**
  * The volatile half. Everything in here changes per founder or per hour, which
