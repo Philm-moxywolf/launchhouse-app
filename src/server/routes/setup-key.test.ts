@@ -321,3 +321,31 @@ test('the guess about the other box changes the sentence and never blocks the pa
   // somewhere in the middle of it must not be read as somebody else's token.
   assert.equal(startsLikeAGhlToken('sk-ant-api03-xxpit-xx'), false);
 });
+
+test('THE SCREEN AND THE ROUTE CANNOT DISAGREE ABOUT WHETHER A TOKEN CAN BE CHECKED', async () => {
+  // The bug this binds shut: step 5 showed a token box, a Connect button and, above
+  // them, a notice saying there was no point pasting one in. A founder pasted, pressed
+  // Connect, and got that same sentence back as an error.
+  //
+  // The box is now hidden by GHL_TOKEN_CHECK_IS_BUILT. If somebody flips that constant
+  // without writing the call, the box comes back on a screen whose button still 501s,
+  // which is the same bug with an extra step. So the two are asserted to agree here.
+  const walk = await import('../../../app/content/ghl-walk.ts');
+  const setup = await import('./setup.ts');
+  const notBuilt = setup.SETUP_ERRORS.ghlCheckNotBuilt.status === 501;
+  assert.equal(
+    walk.GHL_TOKEN_CHECK_IS_BUILT,
+    !notBuilt,
+    walk.GHL_TOKEN_CHECK_IS_BUILT
+      ? 'the walk shows a token box but the route still answers 501. Write the call, or set GHL_VERIFY_CALL_IS_WRITTEN back to false.'
+      : 'the route can check a token but the walk still hides the box. Set GHL_VERIFY_CALL_IS_WRITTEN to true.',
+  );
+});
+
+test('while the check is not built, the screen says so without blaming the founder', async () => {
+  const walk = await import('../../../app/content/ghl-walk.ts');
+  const text = walk.GHL_WALK_CANNOT_CHECK_YET.join(' ');
+  assert.match(text, /not done anything wrong/i, 'a dead end reads as the founder having broken something');
+  assert.match(text, /token you just created is the one you will use/i, 'their work must not look wasted');
+  assert.doesNotMatch(text, /[—–]/, 'founder facing, so the house style applies');
+});

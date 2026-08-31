@@ -41,6 +41,8 @@
  * cannot break.
  */
 
+import { GHL } from "../../src/server/integrations/contracts/ghl.ts";
+import { isPending } from "../../src/server/integrations/contracts/pending.ts";
 import { GHL_SCOPES, GHL_SCOPE_LABELS, GHL_SCOPE_REASONS, SCOPE_FOR_VERIFY_CALL } from "./scopes.ts";
 import type { GhlScope } from "./scopes.ts";
 import {
@@ -225,6 +227,68 @@ export const GHL_WALK_SCOPE_ROWS: readonly { scope: GhlScope; label: string; rea
  * Founders otherwise believe the checkbox on our page did something. It did
  * not. It keeps their place while they tick the real ones in GoHighLevel.
  */
+/**
+ * CAN THIS APP CHECK A TOKEN AT ALL YET, asked of the contract rather than answered
+ * by a flag somebody has to remember to flip.
+ *
+ * WHY THIS EXISTS. Step 5 rendered a token box, a Connect button, and above them a
+ * notice saying there was no point pasting one in. A founder did exactly what anybody
+ * would do: pasted, pressed Connect, and got that same sentence back as an error. A
+ * form for something that cannot happen is worse than no form, because it costs the
+ * founder the paste and then tells them off for it.
+ *
+ * IT IS DERIVED, NOT DECLARED. `isPending` asks the contract entries this check would
+ * need. So the box disappears while they are holes and comes back on its own the day
+ * they are filled in, with nobody having to notice. A boolean maintained by hand here
+ * would be a fourth place that has to agree with the other three.
+ *
+ * WHAT A CHECK NEEDS, and it is deliberately not everything `ghlConnect` needs: an
+ * address, the header names, and one call to make. Reading a location back is a
+ * separate thing that step 6 wants, and a token can be proved without it: asking for
+ * the founder's own social accounts answers both "is this token real" and "whose is
+ * it" in one call.
+ */
+export const GHL_CONTRACT_HAS_WHAT_A_CHECK_NEEDS =
+  isPending(GHL.baseUrl) === null &&
+  isPending(GHL.headerNames) === null &&
+  isPending(GHL.listSocialAccounts) === null;
+
+/**
+ * IS THE CODE WRITTEN. Facts and code are two different things and this is the second.
+ *
+ * `GHL_CONTRACT_HAS_WHAT_A_CHECK_NEEDS` went true on 31 August, when the address, the
+ * headers and the accounts call were read off a workflow that runs. Nothing followed
+ * it: `routes/setup.ts` still answers both GoHighLevel endpoints with a 501, because
+ * no code makes the call. Having the facts is not having the feature, and a flag that
+ * conflated them would have put the token box back on a screen whose Connect button
+ * still fails.
+ *
+ * WHAT WOULD MAKE THIS TRUE. One thing, and it is small: what
+ * `GET /social-media-posting/{locationId}/accounts` actually returns. The workflow
+ * proves the call is right; it reads the ids out by hand, so it says nothing about
+ * the shape of a row, and step 6 has to read a founder their own account names back
+ * from it. Run the call once with a real token, write the response into the contract,
+ * and this becomes true along with the route.
+ *
+ * `routes/setup.test.ts` asserts the route and this constant agree, so flipping one
+ * without the other fails the build rather than lying to a founder.
+ */
+export const GHL_VERIFY_CALL_IS_WRITTEN = false;
+
+/** Both halves. The token box on step 5 appears when this is true and not before. */
+export const GHL_TOKEN_CHECK_IS_BUILT =
+  GHL_CONTRACT_HAS_WHAT_A_CHECK_NEEDS && GHL_VERIFY_CALL_IS_WRITTEN;
+
+/**
+ * What step 5 says instead of a box, while there is nothing to press it against.
+ * It is not an error and it is not the founder's fault, so it does not read as one.
+ */
+export const GHL_WALK_CANNOT_CHECK_YET = [
+  "Keep the token somewhere safe and come back to this screen. There is nothing to paste it into yet, because the part of this app that checks a token with GoHighLevel is still being built.",
+  "You have not done anything wrong and nothing you made is wasted. The token you just created is the one you will use.",
+  "If it is still not here by the setup clinic on 23 September, bring the token and a mentor will connect it with you in a couple of minutes.",
+] as const;
+
 export const GHL_WALK_SCOPE_NOTE =
   "Ticking these here just keeps your place. We check the real permissions in a moment.";
 

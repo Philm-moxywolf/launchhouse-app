@@ -47,6 +47,8 @@ import {
   GHL_WALK_RETRY,
   GHL_WALK_REVOKE,
   GHL_WALK_SCOPE_NOTE,
+  GHL_TOKEN_CHECK_IS_BUILT,
+  GHL_WALK_CANNOT_CHECK_YET,
   GHL_WALK_SCOPE_ROWS,
   GHL_WALK_TOKEN_SHAPE_WARNING,
 } from "../../../app/content/ghl-walk.ts";
@@ -424,22 +426,43 @@ function PasteToken({
           else setFailure(null);
         }} />
       )}
-      <label className="field">
-        <span className="field-label">Your token</span>
-        <input
-          className="field-input field-mono"
-          type="password"
-          value={token}
-          spellCheck={false}
-          autoCapitalize="off"
-          autoComplete="off"
-          onChange={(event) => setToken(event.target.value)}
-        />
-      </label>
-      {shapeIsOff ? <p className="warn">{GHL_WALK_TOKEN_SHAPE_WARNING}</p> : null}
-      <button type="button" className="button" onClick={connect} disabled={token.trim() === ""}>
-        {step.buttons[0]?.label ?? "Connect"}
-      </button>
+      {/*
+        NO BOX WHEN THERE IS NOTHING TO PRESS IT AGAINST. This screen used to render a
+        token box and a Connect button underneath a notice saying there was no point
+        pasting one in. A founder did the obvious thing: pasted, pressed Connect, and
+        got that same sentence back as an error. A form for something that cannot
+        happen costs somebody the paste and then tells them off for it.
+
+        Everything above stays, because the explanation of what happens to a token is
+        the reason this screen exists and it is true either way.
+      */}
+      {GHL_TOKEN_CHECK_IS_BUILT ? (
+        <>
+          <label className="field">
+            <span className="field-label">Your token</span>
+            <input
+              className="field-input field-mono"
+              type="password"
+              value={token}
+              spellCheck={false}
+              autoCapitalize="off"
+              autoComplete="off"
+              onChange={(event) => setToken(event.target.value)}
+            />
+          </label>
+          {shapeIsOff ? <p className="warn">{GHL_WALK_TOKEN_SHAPE_WARNING}</p> : null}
+          <button type="button" className="button" onClick={connect} disabled={token.trim() === ""}>
+            {step.buttons[0]?.label ?? "Connect"}
+          </button>
+        </>
+      ) : (
+        <>
+          <Notice tone="plain" lines={[...GHL_WALK_CANNOT_CHECK_YET]} />
+          <button type="button" className="button" onClick={() => { onGo("verify"); }}>
+            Got it, carry on
+          </button>
+        </>
+      )}
     </>
   );
 }
