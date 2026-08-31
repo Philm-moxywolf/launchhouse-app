@@ -92,7 +92,7 @@ waitForPort = 5000
 outputType = "webview"
 
 [deployment]
-deploymentTarget = "autoscale"
+deploymentTarget = "vm"
 run = ["npm", "run", "start"]
 build = ["bash", "-c", "npm ci && npm run build"]
 
