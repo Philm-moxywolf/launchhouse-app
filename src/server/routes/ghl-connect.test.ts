@@ -103,3 +103,36 @@ test('THE SETUP STATE READS BACK THE ACCOUNTS THE LAST CHECK SAW', async (t) => 
     'the connected screen would say "posting to: nothing yet" with their accounts sitting in GoHighLevel',
   );
 });
+
+test('A PENDING MIGRATION MUST NOT TAKE DOWN THE SETUP SCREEN', async (t) => {
+  // THE BUG, and it reached a live deployment. The accounts column arrived in migration
+  // 0002 and `findConnection` was changed to select it. Any process running the new code
+  // against a database that had not run the migration answered every setup request with
+  // a 500. The founder saw "We could not open your setup" and an incident id, and their
+  // Anthropic key and GoHighLevel connection looked lost. Nothing was lost: nothing
+  // could be read at all.
+  //
+  // A COLUMN ADDED FOR A NEW FEATURE MUST NOT BE ABLE TO BREAK AN OLD SCREEN. The
+  // accounts read is asked separately and is not allowed to throw, so the worst case is
+  // a founder seeing no accounts until the migration lands.
+  const h = await buildHarness();
+  t.after(async () => { await h.app.close(); });
+  const cookie = await signedIn(h);
+
+  // A store whose accounts column does not exist yet, which is what a pending migration
+  // looks like from the route's side.
+  const realAccounts = h.store.connectionAccountsFor.bind(h.store);
+  h.store.connectionAccountsFor = () =>
+    Promise.reject(new Error('column "accounts" does not exist'));
+  t.after(() => {
+    h.store.connectionAccountsFor = realAccounts;
+  });
+
+  await h.store.saveLocationId(FOUNDER_A, GHL, LOCATION, new Date());
+
+  const res = await h.app.inject({ method: 'GET', url: '/api/setup', headers: { cookie } });
+  assert.equal(res.statusCode, 200, 'the setup screen must open even while a migration is pending');
+  const state = res.json<{ ghl: { locationId: string | null; accounts: unknown[] } }>();
+  assert.equal(state.ghl.locationId, LOCATION, 'everything that does not need the new column still reads');
+  assert.deepEqual(state.ghl.accounts, [], 'no accounts is the honest answer, and it is not a 500');
+});

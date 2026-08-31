@@ -521,12 +521,40 @@ export class PgAppStore implements AppStore {
         createdAt: connections.createdAt,
         verifiedAt: connections.verifiedAt,
         purgedAt: connections.purgedAt,
-        accounts: connections.accounts,
       })
       .from(connections)
       .where(and(eq(connections.founderId, founderId), eq(connections.vendor, vendor)))
       .limit(1);
-    return rows[0] ?? null;
+    const row = rows[0];
+    return row === undefined ? null : { ...row, accounts: null };
+  }
+
+  /**
+   * The accounts column, on its own, and it swallows its own failure.
+   *
+   * WHY IT IS NOT PART OF `findConnection`. It was, for about an hour, and that hour is
+   * the reason this comment exists. `findConnection` feeds the setup screen, the column
+   * arrived in migration 0002, and any deployment reading the new code against a
+   * database that had not run it yet answered every setup request with a 500. A founder
+   * saw "We could not open your setup" and an incident id, and their key and their
+   * GoHighLevel connection looked lost. They were not: nothing could be read at all.
+   *
+   * A COLUMN ADDED FOR A NEW FEATURE MUST NOT BE ABLE TO BREAK AN OLD SCREEN. So this
+   * asks separately and, if the answer is an error, reports no accounts. The worst case
+   * is a founder seeing "posting to: nothing yet" until the migration lands, which is
+   * the previous behaviour rather than a broken app.
+   */
+  async connectionAccountsFor(founderId: string, vendor: string): Promise<string | null> {
+    try {
+      const rows = await this.db
+        .select({ accounts: connections.accounts })
+        .from(connections)
+        .where(and(eq(connections.founderId, founderId), eq(connections.vendor, vendor)))
+        .limit(1);
+      return rows[0]?.accounts ?? null;
+    } catch {
+      return null;
+    }
   }
 
   /**

@@ -316,6 +316,10 @@ export class MemoryAppStore implements AppStore {
     return Promise.resolve(this.connections.get(`${founderId}\u0000${vendor}`) ?? null);
   }
 
+  connectionAccountsFor(founderId: string, vendor: string): Promise<string | null> {
+    return Promise.resolve(this.connections.get(`${founderId}\u0000${vendor}`)?.accounts ?? null);
+  }
+
   connectionSecretFor(
     founderId: string,
     vendor: string,

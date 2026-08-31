@@ -274,6 +274,18 @@ export async function registerSetupRoutes(app: FastifyInstance, deps: RouteDeps)
     const steps: Record<string, { state: SetupStepState; evidence: string | null }> = {};
     for (const row of rows) steps[row.stepId] = { state: row.state, evidence: row.detail };
 
+    // Asked on its own, and never allowed to stop the screen loading. See the note
+    // beside `accounts` below.
+    let ghlAccountsRaw: string | null = null;
+    try {
+      ghlAccountsRaw = await deps.store.connectionAccountsFor(founder.id, GHL);
+    } catch (err: unknown) {
+      deps.log.warn(
+        { founderId: founder.id, why: err instanceof Error ? err.message : String(err) },
+        'the stored GoHighLevel accounts could not be read, so the setup screen shows none',
+      );
+    }
+
     const apollo =
       trackOf(founder) === 'b2b'
         ? { apollo: { connected: (await deps.store.findConnection(founder.id, APOLLO))?.status === 'connected' } }
@@ -301,7 +313,13 @@ export async function registerSetupRoutes(app: FastifyInstance, deps: RouteDeps)
         // WHAT THE LAST CHECK SAW, not an empty list. This read `accounts: []`
         // unconditionally, so a connected founder was told "posting to: nothing yet"
         // on every page load while their two accounts sat in GoHighLevel.
-        accounts: readStoredAccounts(ghl?.accounts ?? null).map((a) => ({
+        // GUARDED HERE AS WELL AS IN THE STORE, and the belt and braces is deliberate.
+        // The interface says this read never throws. A promise made by an interface is
+        // kept by every implementation or it is not kept at all, and the cost of one
+        // being wrong is the whole setup screen answering 500 with a founder's key and
+        // connection looking lost. That happened, on a live deployment, with an
+        // incident id. The guard is one line; the rule was not enforceable.
+        accounts: readStoredAccounts(ghlAccountsRaw).map((a) => ({
           platform: a.platform,
           name: a.name,
         })),

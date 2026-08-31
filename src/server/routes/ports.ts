@@ -282,6 +282,15 @@ export interface AppStore {
   locationIdFor(founderId: string, vendor: string): Promise<string | null>;
 
   /**
+   * What the last check saw, as raw JSON, or null.
+   *
+   * Asked on its own and never allowed to throw, because the column it reads arrived in
+   * a migration and a deployment running ahead of its database must still be able to
+   * open a setup screen. See the note on the implementation.
+   */
+  connectionAccountsFor(founderId: string, vendor: string): Promise<string | null>;
+
+  /**
    * The sealed credential for one vendor, or null when there is none to open.
    *
    * THE CIPHERTEXT, NOT THE TOKEN. Opening it needs the master key and belongs with the
