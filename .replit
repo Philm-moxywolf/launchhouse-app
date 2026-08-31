@@ -50,18 +50,10 @@
 # changes what a founder gets.
 run = "npm run start"
 entrypoint = "src/server/index.ts"
-
-# Node 22. Not a preference. The Agent SDK's reference implementation is the npm package, it
-# declares engines node >= 18, and it ships the Linux CLI binary the agent loop spawns as a
-# per platform optional dependency. An install that skipped optional dependencies fails at
-# the first query, not at install time. src/server/boot/platform-cli.ts now resolves that
-# binary at boot AND runs it, and refuses to report ready when it cannot. It used to be
-# checked only by scripts/probe-deployment.ts, which nothing runs unless a person changes the
-# run command below, and no founder ever will.
-modules = ["nodejs-22"]
+modules = ["nodejs-20", "web", "nix"]
 
 [nix]
-channel = "stable-24_05"
+channel = "stable-25_05"
 
 [env]
 # The server process runs in UTC and converts at exactly two edges: rendering a time to a
