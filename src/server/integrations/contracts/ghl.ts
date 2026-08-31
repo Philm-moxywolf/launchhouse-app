@@ -164,6 +164,16 @@ export const GHL_SCOPES_ARE_VERIFIED = true;
  */
 export const GHL_SCOPE_REFUSAL_STILL_UNKNOWN = true;
 
+/**
+ * A token was called for real on 31 August 2026 and GoHighLevel answered 200.
+ *
+ * It was a Private Integration token from a SUB ACCOUNT, on the 97 dollar Starter
+ * plan, which is exactly what a founder will hold. Every earlier note in this file
+ * that says nothing has ever called GoHighLevel is out of date from here down.
+ */
+export const GHL_HAS_ANSWERED_A_REAL_CALL = true;
+export const GHL_TOKEN_WORKS_FROM_A_SUBACCOUNT = true;
+
 export const GHL_SCOPES_SOURCE =
   'planning/delivery/00-scope.md:33-34. Never compared against the GoHighLevel UI. Spike S-01 settles it.';
 
@@ -411,10 +421,32 @@ export const GHL = {
     'the call that reads a location back, and the field in the response that carries its name. Step 6 of the token walk reads the founder their own page name, and a page name a bug cannot fake is the whole proof.',
   ),
   /**
-   * EVIDENCED for the call. NOT for the response: a workflow that reads account ids
-   * out by hand does not tell us what a row is shaped like, and step 6 of the token
-   * walk reads a founder their own account names back. So the request is settled and
-   * the row shape is still S-02.
+   * CALLED FOR REAL, 31 August 2026, and it answered. This is the first time anything
+   * in this project reached GoHighLevel.
+   *
+   * WHAT THE CALL PROVED, and each of these was an open question this morning:
+   *
+   *   A Private Integration token made in a SUB ACCOUNT works. Not an agency token.
+   *   That is the shape every founder will have.
+   *
+   *   It works on the 97 dollar Starter plan, with the permissions granted from the
+   *   list in that account's own screen.
+   *
+   *   The path, the two headers and the version value are all correct as written.
+   *
+   *   It returns 200 with real connected accounts on it, which means this one call
+   *   answers both halves of what the token walk needs: is the token real, and whose
+   *   is it.
+   *
+   * THE ENVELOPE, seen: `success: true`, `statusCode: 200`, `message: 'Fetched
+   * Accounts'`, and the accounts beside them.
+   *
+   * STILL NOT WRITTEN DOWN: the key the accounts sit under, and the field names on a
+   * row. What came back was described rather than pasted, so the shape is known in
+   * English and not in JSON: each account carried a name, whether it is a page or a
+   * personal profile, an expiry, and whether it has statistics permission. Step 6
+   * reads a founder their own account names off exactly those fields, so it needs the
+   * real keys and not a good guess at them.
    */
   listSocialAccounts: { method: 'GET', path: '/social-media-posting/{locationId}/accounts' },
   /**
