@@ -793,6 +793,29 @@ th {
   word-break: break-all;
 }
 
+/*
+ * A scope row that leads with the name GoHighLevel puts beside the box, with the
+ * exact wording under it. The name is what a founder finds by eye among 150 rows;
+ * the wording is what proves they found the right one. Stacked rather than side by
+ * side because the strings are long and a founder is often on a laptop with the
+ * vendor's screen open next to this one.
+ */
+.copy-row-named {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.copy-row-label {
+  font-weight: 600;
+}
+
+.copy-row-named .copy-row-value {
+  font-size: 0.85rem;
+  color: var(--ink-quiet);
+}
+
 .copy-row-note {
   grid-column: 1 / -1;
   margin: 0;

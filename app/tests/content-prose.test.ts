@@ -328,3 +328,38 @@ test("every skill a route names exists on disk", () => {
   const used = new Set(ROUTES.map((r) => r.skill));
   assert.deepEqual([...dirs].filter((d) => !used.has(d)), []);
 });
+
+test("EVERY SCOPE ROW GIVES THE NAME BEFORE THE STRING, because 150 rows is what a founder is scanning", () => {
+  // The vendor screen lists well over a hundred permissions, each written as a
+  // plain name and then the string. Sending somebody to find
+  // `socialplanner/post.readonly` by eye in that is sending them to fail. The name
+  // is the half a person can use.
+  for (const row of walk.GHL_WALK_SCOPE_ROWS) {
+    assert.ok(row.label.length > 0, `${row.scope} reaches the screen with no name`);
+    assert.doesNotMatch(row.label, /[/.]/, `"${row.label}" looks like a scope string, not the name shown`);
+    assert.notEqual(row.label, row.scope);
+  }
+});
+
+test("THE WALK NO LONGER TELLS A FOUNDER THEIR PLAN MIGHT BE WRONG, because we checked", () => {
+  // Starter carries Private Integrations. It was confirmed on a real account on 31
+  // August 2026, and Starter is the plan the pre work tells every founder to buy.
+  // Leading with "your plan may not have this" sends somebody towards an upgrade
+  // they do not need, which costs them money and fixes nothing.
+  const planStep = walk.GHL_WALK_STEPS.find((s) => s.slug === "plan");
+  assert.ok(planStep, "the plan step has to exist");
+  const text = [planStep.doubt, ...planStep.body].join(" ");
+  assert.doesNotMatch(
+    text,
+    /not all of them carry/i,
+    "the old wording implied the founder's own plan is the likely problem",
+  );
+  assert.match(text, /Starter/, "the step has to name the plan they were told to buy");
+});
+
+test("the hard stop steers away from buying an upgrade, and says why", () => {
+  const text = walk.GHL_WALK_NO_PRIVATE_INTEGRATIONS.body.join(" ");
+  assert.match(text, /Do not buy an upgrade/i);
+  assert.match(text, /Starter/, "it has to say the plan they have is enough");
+  assert.match(text, /moved/i, "a moved menu is now the likelier cause and has to lead");
+});

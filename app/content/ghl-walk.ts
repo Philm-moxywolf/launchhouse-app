@@ -41,7 +41,7 @@
  * cannot break.
  */
 
-import { GHL_SCOPES, GHL_SCOPE_REASONS, SCOPE_FOR_VERIFY_CALL } from "./scopes.ts";
+import { GHL_SCOPES, GHL_SCOPE_LABELS, GHL_SCOPE_REASONS, SCOPE_FOR_VERIFY_CALL } from "./scopes.ts";
 import type { GhlScope } from "./scopes.ts";
 import {
   GHL_MENU_PATHS_UNVERIFIED,
@@ -129,7 +129,7 @@ export const GHL_WALK_STEPS: readonly WalkStep[] = [
     number: 2,
     title: "Check your plan can do this",
     doubt:
-      "GoHighLevel sells several plans and not all of them carry the screen we need. Better to find that out now than at the clinic with 65 people in the room.",
+      "The Starter plan you were told to buy does carry this screen. We made a key on one to be sure. So this step is quick, and if you cannot find it the answer is almost never your plan.",
     body: [
       "Log in to GoHighLevel. You are looking for a screen called Private Integrations. It is the one that makes the key.",
       `${GHL_MENU_PATH_HEDGE}, the route was ${GHL_MENU_PATHS_UNVERIFIED.privateIntegrations}, down the left hand menu.`,
@@ -168,7 +168,8 @@ export const GHL_WALK_STEPS: readonly WalkStep[] = [
       "Go back to the Private Integrations screen you found on step 2.",
       `If you have closed it since, ${GHL_MENU_PATH_HEDGE.toLowerCase()} the route was ${GHL_MENU_PATHS_UNVERIFIED.privateIntegrations}.`,
       "On that screen, choose Create new integration and name it Launchhouse.",
-      "Then tick the seven boxes below. Use the copy button on each row. A box typed by hand at 10pm comes out slightly wrong and then you are hunting for something that does not exist.",
+      "That screen lists well over a hundred permissions. You need seven of them. Each one below shows the name to look for first, then the exact wording underneath it, so you can find the right row by eye and check you have it before you tick.",
+      "Use the copy button if you would rather search the page than scroll it. Do not type any of the seven by hand: one typed at 10pm comes out slightly wrong and then you are hunting for something that does not exist.",
       "Do this inside your sub account, not at agency level. A token made at agency level does not reach your business.",
       "GoHighLevel shows you the token once and never again. Keep that tab open until the next screen says it worked.",
     ],
@@ -214,8 +215,8 @@ export const GHL_WALK_STEPS: readonly WalkStep[] = [
  * copy and the docs cannot end up naming different scopes. That is the drift
  * that already happened once between `00-scope.md` and `spike-findings.md`.
  */
-export const GHL_WALK_SCOPE_ROWS: readonly { scope: GhlScope; reason: string }[] = GHL_SCOPES.map(
-  (scope) => ({ scope, reason: GHL_SCOPE_REASONS[scope] }),
+export const GHL_WALK_SCOPE_ROWS: readonly { scope: GhlScope; label: string; reason: string }[] = GHL_SCOPES.map(
+  (scope) => ({ scope, label: GHL_SCOPE_LABELS[scope], reason: GHL_SCOPE_REASONS[scope] }),
 );
 
 /**
@@ -238,8 +239,8 @@ export const GHL_WALK_SCOPE_NOTE =
 export const GHL_WALK_NO_PRIVATE_INTEGRATIONS = {
   title: "We cannot find the screen that makes the key",
   body: [
-    "Two things cause this. Your plan may not carry Private Integrations, or GoHighLevel may have moved the screen since we wrote this.",
-    "It is not something you can fix by guessing. Do not buy an upgrade yet. If your plan turns out to be the problem, we will tell you which one to buy, and buying the wrong one is the expensive version of this.",
+    "Most likely GoHighLevel has moved the screen since we wrote this, which they do. The other possibility is that you are on a different plan from the Starter one in the pre work, because Starter definitely carries it: we made a key on one.",
+    "It is not something you can fix by guessing. Do not buy an upgrade. Starter is the plan this programme runs on and it is enough, so an upgrade would cost you money and fix nothing. Tell a mentor and we will find where the screen went.",
     "Post in the Slack channel. Say you cannot find Private Integrations, and say what your Settings menu does list. Someone will sort it with you today.",
   ],
   action: "I have posted in Slack",

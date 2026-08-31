@@ -30,11 +30,20 @@ import type { ReactElement } from "react";
 
 export function CopyRow({
   value,
+  label,
   note,
   checked,
   onCheck,
 }: {
   readonly value: string;
+  /**
+   * The name the founder is actually hunting for on the vendor's own screen, when
+   * the vendor shows one. GoHighLevel lists around 150 permissions as a plain name
+   * and then the string, so the name is what a person finds by eye and the string
+   * is what proves they found the right one. When this is absent the row behaves
+   * exactly as it did before and shows only the value.
+   */
+  readonly label?: string;
   readonly note: string;
   readonly checked: boolean;
   readonly onCheck: (next: boolean) => void;
@@ -52,7 +61,14 @@ export function CopyRow({
     <li className="copy-row">
       <label className="copy-row-check">
         <input type="checkbox" checked={checked} onChange={(event) => onCheck(event.target.checked)} />
-        <code className="copy-row-value">{value}</code>
+        {label === undefined ? (
+          <code className="copy-row-value">{value}</code>
+        ) : (
+          <span className="copy-row-named">
+            <span className="copy-row-label">{label}</span>
+            <code className="copy-row-value">{value}</code>
+          </span>
+        )}
       </label>
       <div className="copy-row-side">
         <button type="button" className="button button-small" onClick={copy}>

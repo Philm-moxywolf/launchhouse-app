@@ -70,6 +70,17 @@ export type { GhlScope };
 export const GHL_SCOPES: readonly GhlScope[] = GHL_SCOPE_STRINGS_UNVERIFIED;
 
 /**
+ * The name GoHighLevel puts beside each box, keyed by the scope string.
+ *
+ * Their screen reads "View Social Media Posts - socialplanner/post.readonly", and
+ * there are around 150 rows of it. The name is what a founder finds by eye. Read
+ * off a real Starter account on 31 August 2026, same source as the strings.
+ */
+export const GHL_SCOPE_LABELS = Object.fromEntries(
+  GHL_SCOPES_UNVERIFIED.map((row) => [row.scope, row.label] as const),
+) as Readonly<Record<GhlScope, string>>;
+
+/**
  * Why each one is asked for, in the founder's own terms.
  *
  * Not decoration. A founder who does not know why a box exists ticks all of

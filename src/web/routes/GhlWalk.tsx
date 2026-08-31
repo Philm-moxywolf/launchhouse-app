@@ -350,6 +350,7 @@ function MakeToken({ step, onGo }: { readonly step: WalkStep; readonly onGo: (sl
           <CopyRow
             key={row.scope}
             value={row.scope}
+            label={row.label}
             note={row.reason}
             checked={ticked.includes(row.scope)}
             onCheck={(on) => toggle(row.scope, on)}
