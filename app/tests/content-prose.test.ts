@@ -400,3 +400,45 @@ test("the engines that read the Brain say so, so nobody repeats themselves into 
     );
   }
 });
+
+test("THE CONTENT ENGINE ASKS WHAT THEY HAVE, AND FLAGS RATHER THAN REFUSES", () => {
+  // THE BUG: a founder ran this and got 30 pieces they could not publish. The engine
+  // writes words and cannot film a workshop, so every piece needing a picture became
+  // homework. Their media library was empty and nothing had ever asked them to fill it.
+  const body = readFileSync(
+    join(APP_ROOT, "content", "skills", "content-engine", "SKILL.md"),
+    "utf8",
+  );
+
+  assert.match(body, /Media Library/i, "it has to name where the pictures live");
+  assert.match(body, /Ask before you write/i, "asking after writing is too late");
+
+  // FLAG, NOT REFUSE. A short file looks finished and hides the missing month.
+  assert.match(body, /Write all 30 either way/i);
+  assert.match(body, /Do not refuse to write a piece/i);
+  assert.match(body, /count (at the top|on the top)/i, "the founder needs the number, not just marks");
+
+  // And the two ways an engine could make its own output look tidier at their expense.
+  assert.match(body, /quietly turn a video into a text post/i);
+  assert.match(body, /stock/i, "a stock photo in a founder's feed reads as a stock photo");
+});
+
+test("PRE-WORK ASKS THE TWO TRACKS FOR DIFFERENT THINGS, because they post differently", () => {
+  // B2C is 15 video scripts, 8 carousels and 7 images. B2B is 26 posts made of words.
+  // Asking a B2B founder for twelve clips is the same mistake as asking a B2C founder
+  // for none, and it is the mistake that gets a whole track ignoring the list.
+  const preWork = readFileSync(join(APP_ROOT, "..", "vendor", "growth-engine", "docs", "PRE-WORK.md"), "utf8");
+
+  assert.match(preWork, /If you sell to consumers/i);
+  assert.match(preWork, /If you sell to businesses/i);
+  assert.match(preWork, /Media Library/i, "one place, and it is the one posts publish from");
+
+  const consumers = preWork.slice(preWork.indexOf("### If you sell to consumers"), preWork.indexOf("### If you sell to businesses"));
+  const businesses = preWork.slice(preWork.indexOf("### If you sell to businesses"));
+  assert.match(consumers, /12/, "the visual track has the bigger ask");
+  assert.match(businesses, /lighter/i, "the words track has to be told it is lighter, or nobody does it");
+
+  // The deadline is the whole point. Collected from session 1, done before Atlanta.
+  assert.match(preWork, /before Atlanta/i);
+  assert.doesNotMatch(preWork, /[—–]/, "founder facing, so the house style applies");
+});

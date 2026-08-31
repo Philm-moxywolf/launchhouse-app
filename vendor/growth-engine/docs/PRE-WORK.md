@@ -91,6 +91,54 @@ Convert your Instagram to a Business or Creator account and link it to a Faceboo
 
 Two minutes. Nothing publishes or captures inbound without it.
 
+## 7. Collect your pictures and clips. Start now, finish before Atlanta
+
+This is the one people leave and then cannot fix on the day.
+
+The engine writes you 30 pieces of content. It writes the words. **It cannot film your workshop or photograph your product.** If you turn up with nothing, you get 30 posts you cannot publish, and no amount of writing fixes that on the Friday.
+
+Start collecting from session 1. Have it done before you travel.
+
+### Where it goes
+
+**Your GoHighLevel Media Library.** Not your phone, not a folder on your laptop, not a Google Drive.
+
+That is where posts are published from, so a picture anywhere else has to be moved before it can be used. Put it in once and it is ready. The app can see what is in there, so it will write posts around the clips you actually have rather than inventing a shot list you never asked for.
+
+Upload as you go. Twenty minutes a week beats an evening in September.
+
+### If you sell to consumers
+
+Your track is the visual one, so this is the bigger ask. Roughly:
+
+| What | How many | Notes |
+|---|---|---|
+| Short clips | 12 | 20 to 40 seconds each. Filmed upright, on your phone. Good light, no editing needed |
+| Photos | 20 | A mix of upright and landscape. Your work, your product, your place, you |
+| Your logo | 1 | PNG with a transparent background if you have one |
+
+Twelve clips is one afternoon. Talk to the camera about one thing at a time: a question you get asked a lot, something you fixed, how you do a thing differently. You are not performing. You are explaining.
+
+Twenty photos, most people already have. If you do not, take them in one go.
+
+### If you sell to businesses
+
+Much lighter, because your posts are mostly words and LinkedIn does not need a picture to work.
+
+| What | How many | Notes |
+|---|---|---|
+| A photo of you | 1 | A decent one. It goes on the profile people check before replying |
+| Your logo | 1 | PNG with a transparent background if you have one |
+| Screenshots or photos of the work | 5 to 10 | Optional, and useful for the longer posts. A dashboard, a result, a before and after |
+
+If you only do the first one, you are fine. The other two make a handful of posts better.
+
+### Also worth keeping, both tracks
+
+Anything you have already written and published. Old posts, a newsletter, a page of your website, an email you were pleased with.
+
+This is the one thing the engine cannot generate and cannot do without: **it is how it learns to sound like you rather than like a machine.** Founders who arrive with nothing they have written get content that reads like everybody else's.
+
 ## Costs, so nothing surprises you
 
 | What | When | Cost |

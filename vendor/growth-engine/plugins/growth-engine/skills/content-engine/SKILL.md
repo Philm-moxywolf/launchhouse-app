@@ -94,9 +94,37 @@ Write two files.
 
 `./growth-engine/content-30.csv` for GHL Social Planner bulk upload. Columns: `content`, `platform`, `scheduled_date`, `media_note`.
 
-Leave `scheduled_date` blank. Scheduling happens in GHL at the clinic, not here. Put any image or video requirement in `media_note` as a plain instruction, for example "record talking head, 30 seconds" or "screenshot of dashboard".
+Leave `scheduled_date` blank. Scheduling happens in GHL at the clinic, not here.
+
+`media_note` says which of their own clips or photos to use, by name, when they have one that fits. When they do not, it says what to make, plainly, for example "record talking head, 30 seconds" or "screenshot of dashboard".
 
 Confirm the exact column headers GHL expects at the time of build. Bulk upload formats change and a wrong header means 130 failed imports.
+
+## Step 4b: what they can actually post
+
+**Ask before you write, and ask once.** A founder gets 30 pieces they cannot publish if you plan a shot list they never agreed to.
+
+Say it plainly: what clips and photos have you got, and where are they? Pre-work asks them to put everything in their GoHighLevel Media Library, so that is the first place to ask about. If they have things elsewhere, or nothing, take that answer and carry on.
+
+### What to do with the answer
+
+**Write all 30 either way. Never write fewer.** A short file hides the problem: it looks finished, and they find out in September that half their month is missing. Thirty pieces with a count on the top is a plan they can act on. Twenty two is a plan that lies.
+
+**Put the count at the top of the file**, before anything else, in their words:
+
+> 18 of these need a clip or a photo you have not got yet. Each one says which. They are ready to post the moment you have the picture.
+
+**Mark every piece that needs something they do not have.** One line, at the end of that piece, saying what it needs. Not a warning, not an apology. A founder scanning the file has to be able to see in one pass which ones are ready today.
+
+**A piece that needs nothing gets no line.** Marking everything marks nothing.
+
+### Do not
+
+Do not refuse to write a piece because the picture is missing. Do not quietly turn a video into a text post to avoid the flag, because that changes what they asked for to make your output look tidier. Do not suggest stock images: a stock photo in a founder's feed reads as a stock photo.
+
+### If they have nothing at all
+
+Say so in one sentence at the top, without a lecture. They know. Point them at the pre-work list for their track, say the words are done and waiting, and carry on.
 
 ## Step 5: the check
 
