@@ -252,11 +252,40 @@ export const GHL_TOKEN_PREFIX_IS_A_GUESS = true;
  * the part that is a claim.
  */
 export const GHL_MENU_PATHS_UNVERIFIED = {
-  /** The screen that makes the token, on steps 2 and 4 and in the revoke notice. */
+  /**
+   * CONFIRMED 31 August 2026 on a real Starter account: it is under Settings. The
+   * screen that makes the token, on steps 2 and 4 and in the revoke notice.
+   */
   privateIntegrations: 'Settings, then Private Integrations',
-  /** The screen carrying the Location ID, on step 3. */
+  /**
+   * STILL UNVERIFIED. Nobody has said where the Location ID lives. Step 3 sends a
+   * founder to Business Profile on our own note and nothing else.
+   */
   businessProfile: 'Settings, then Business Profile',
 } as const;
+
+/**
+ * WHERE A USER ID COMES FROM, and the shape of one.
+ *
+ * `createPost` carries a userId and nothing in the walk collected one, which the
+ * n8n workflow is what exposed. Found 31 August 2026 under Settings, then Team.
+ *
+ * THE SHAPE, from one real example: twenty characters, letters and digits, mixed
+ * case, no punctuation. That is enough to catch a founder pasting the wrong field,
+ * which is the failure worth catching, and it is deliberately not a strict test: a
+ * shape from one example is a guess about the next one.
+ *
+ * A CAVEAT THAT MATTERS AND IS NOT SETTLED. The example came from an AGENCY view.
+ * Founders work in a sub account. Whether the same screen exists there, and whether
+ * the id it shows is the one the post body wants, has not been checked.
+ *
+ * `users.readonly` is on the permission list, so the app may be able to read this
+ * rather than ask for it. That needs one real call to confirm the response shape.
+ */
+export const GHL_USER_ID_LOCATION = 'Settings, then Team';
+export const GHL_USER_ID_SHAPE_FROM_ONE_EXAMPLE = /^[A-Za-z0-9]{15,30}$/;
+export const GHL_USER_ID_SHAPE_IS_FROM_ONE_EXAMPLE = true;
+export const GHL_USER_ID_SUBACCOUNT_UNVERIFIED = true;
 
 export const GHL_MENU_PATHS_ARE_A_GUESS = true;
 
