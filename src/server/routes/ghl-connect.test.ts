@@ -159,7 +159,7 @@ test('AN UNOPENABLE STORED TOKEN ASKS FOR A NEW PASTE, not an incident id', asyn
   assert.doesNotMatch(body.message ?? '', /[—–]/, 'founder facing, so the house style applies');
 });
 
-test('A FAILED SAVE DOES NOT TELL A FOUNDER THEIR GOOD TOKEN IS BAD', async (t) => {
+test('A FAILED SAVE DOES NOT TELL A FOUNDER THEIR GOOD TOKEN IS BAD', async () => {
   // The check passed, so the token works. Reporting a write failure as a connection
   // failure sends somebody back to GoHighLevel to make another token for no reason.
   const setup = await import('./setup.ts');
