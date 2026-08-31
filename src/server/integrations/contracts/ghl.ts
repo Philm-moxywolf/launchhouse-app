@@ -172,7 +172,21 @@ export const GHL_TOKEN_PREFIX_IS_A_GUESS = true;
  * `REPLIT-BUILD.md:991` and `:1003`, which are our own notes, and spike A1 has not
  * been run, so nobody on this project has opened that menu.
  *
- * WHAT WOULD SETTLE IT: spike A1. Buy one Starter seat and read the menu.
+ * SPIKE A1 IS HALF RUN, 31 August 2026, AND IT ANSWERED THE EXISTENTIAL HALF.
+ * Private Integrations EXISTS on the 97 dollar Starter plan, a token was created on
+ * it, and the scopes were available to grant. That was the question that could have
+ * ended the GoHighLevel half of this product for every founder on that tier, and
+ * the answer is yes.
+ *
+ * WHAT IS STILL UNVERIFIED, and it is the part that cannot be repaired afterwards:
+ * the exact SPELLING of the seven scope strings as GoHighLevel writes them in that
+ * screen. A token was made with everything granted, which does not compare our list
+ * against theirs. A founder ticking a list of seven from our screen, with one string
+ * wrong, gets a token short a permission, and there is no way to add a permission to
+ * a token that already exists. So GHL_SCOPES_UNVERIFIED above stays unverified.
+ *
+ * ALSO STILL UNVERIFIED: whether the Location ID really sits under Business Profile.
+ * Nobody has said so, and only the Private Integrations route has been walked.
  *
  * WHY IT IS A STRING AND NOT A HOLE. A founder has to be sent somewhere. A hole
  * would leave the hardest screen in the programme with no instruction on it, which
@@ -229,8 +243,9 @@ export const GHL_MENU_PATH_HEDGE = 'When we last looked';
  *   The token may not be the same kind. That workflow's Authorization header could
  *   be carrying an agency token where a founder will carry a sub account Private
  *   Integration token. The header SHAPE is proven either way. Whether our seven
- *   scopes are grantable on the 97 dollar tier is untouched by this and is still
- *   spike S-01.
+ *   scopes are grantable on the 97 dollar tier is untouched by this. That question
+ *   has since been answered separately and the answer is yes: see the A1 note above.
+ *   Their spelling is still S-01.
  *
  *   Nothing here proves a response shape. The calls are proven; the fields that
  *   come back are not, because a workflow that posts does not have to read.
