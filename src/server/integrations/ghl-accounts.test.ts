@@ -180,3 +180,34 @@ test('a column that cannot be read means none seen, never a page that will not l
     assert.deepEqual(store.readStoredAccounts(bad), [], `${String(bad)} should read as none seen`);
   }
 });
+
+test('THE MISSING COLUMN CHECK LOOKS UNDERNEATH THE WRAPPER, which is where the code lives', async () => {
+  // THE BUG: the retry was written to check `err.code` and never fired, because drizzle
+  // wraps every driver failure in an error whose own message is "Failed query: ..." and
+  // whose code is undefined. The Postgres error, carrying 42703, is in `cause`. So a
+  // deployment ahead of its migration told a founder their working token could not be
+  // written down, and the retry that existed to prevent exactly that sat unused.
+  const store = await import('./ghl-token-store.ts');
+  const check = (store as unknown as { isMissingAccountsColumn?: (e: unknown) => boolean })
+    .isMissingAccountsColumn;
+  assert.ok(check !== undefined, 'the check has to be exported to be tested at all');
+
+  // Shaped exactly as drizzle throws it.
+  const pg = Object.assign(new Error('column "accounts" of relation "connections" does not exist'), {
+    code: '42703',
+  });
+  const wrapped = Object.assign(new Error('Failed query: insert into "connections" ...'), { cause: pg });
+  assert.equal(check(wrapped), true, 'the wrapped form is the only form this ever arrives in');
+  assert.equal(check(pg), true, 'and the bare driver error still matches');
+
+  // Anything else is a real failure and must not be retried into silence.
+  assert.equal(check(new Error('connection terminated unexpectedly')), false);
+  assert.equal(check(Object.assign(new Error('nope'), { code: '23505' })), false, 'a unique violation is not this');
+  assert.equal(check(null), false);
+
+  // A circular chain must not hang a failure path.
+  const a: { cause?: unknown; message: string } = { message: 'a' };
+  const b = { message: 'b', cause: a };
+  a.cause = b;
+  assert.equal(check(a), false);
+});

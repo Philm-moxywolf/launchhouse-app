@@ -185,12 +185,23 @@ export async function saveGhlToken(
  * catch that swallowed everything would turn a broken credential into a silent
  * half write, which is worse than the bug it was added for.
  */
-function isMissingAccountsColumn(err: unknown): boolean {
-  if (err === null || typeof err !== 'object') return false;
-  const e = err as { code?: unknown; message?: unknown };
-  const code = typeof e.code === 'string' ? e.code : '';
-  const message = typeof e.message === 'string' ? e.message : '';
-  return code === '42703' || /column .*accounts.* does not exist/i.test(message);
+export function isMissingAccountsColumn(err: unknown): boolean {
+  // IT WALKS THE CAUSE CHAIN, and the first version did not, which is why it never
+  // fired. Drizzle wraps every driver failure in a DrizzleQueryError whose own message
+  // is "Failed query: insert into ..." and whose `code` is undefined. The Postgres
+  // error, with 42703 on it, is underneath in `cause`. Checking only the top threw the
+  // retry away and a founder was told their good token could not be written down.
+  //
+  // Bounded, because a cause chain can be circular and this runs on a failure path
+  // where a hang is worse than a missed retry.
+  let current: unknown = err;
+  for (let depth = 0; depth < 5 && current !== null && typeof current === 'object'; depth++) {
+    const e = current as { code?: unknown; message?: unknown; cause?: unknown };
+    if (e.code === '42703') return true;
+    if (typeof e.message === 'string' && /column .*accounts.* does not exist/i.test(e.message)) return true;
+    current = e.cause;
+  }
+  return false;
 }
 
 /** The stored token and location, or null when there is no usable row. */

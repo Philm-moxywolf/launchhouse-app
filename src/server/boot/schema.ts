@@ -45,7 +45,7 @@
  * WHAT IT READS. The database, through db/migrate.ts. WHAT IT WRITES. The database schema.
  */
 
-import { runMigrations } from '../db/migrate.ts';
+import { assertSchemaCurrent, runMigrations } from '../db/migrate.ts';
 
 export interface SchemaReady {
   readonly ok: true;
@@ -92,6 +92,16 @@ const FOUNDER_MESSAGE =
 export async function ensureSchema(): Promise<SchemaOutcome> {
   try {
     const run = await runMigrations();
+    // THEN CHECK IT ACTUALLY LANDED, and this call is the point of the change.
+    // `assertSchemaCurrent` was written for exactly this and nothing called it, so a
+    // migration that did not apply was invisible: the app booted, said the database was
+    // up to date, and then failed on any query touching the new column. That is how a
+    // founder came to be told their working GoHighLevel token could not be written
+    // down, with the migration that would have fixed it sitting unapplied.
+    //
+    // Running migrations and believing they ran are two different things, and only one
+    // of them was happening.
+    await assertSchemaCurrent();
     return { ok: true, applied: run.applied, newlyApplied: run.newlyApplied };
   } catch (err) {
     return {
