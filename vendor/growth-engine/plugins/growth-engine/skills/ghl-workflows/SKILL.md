@@ -38,21 +38,23 @@ One only. Two half-finished workflows are worse than one running.
 
 ### B2B library
 
-| Snapshot | Use when |
-|---|---|
-| Lead follow-up | Inbound leads are not chased consistently |
-| Discovery booking | Booking a call takes too many messages |
-| Proposal chase | Proposals go quiet and nobody follows up |
+| Snapshot | Runs on | Use when |
+|---|---|---|
+| Lead follow-up | Email | Inbound leads are not chased consistently |
+| Discovery booking | Email | Booking a call takes too many messages |
+| Proposal chase | Email | Proposals go quiet and nobody follows up |
 
 ### B2C library
 
-| Snapshot | Use when |
-|---|---|
-| Comment-to-DM capture | Content gets engagement but no conversation |
-| DM qualify and book | DMs arrive but conversion is manual and slow |
-| Review request | Reviews are never asked for |
+| Snapshot | Runs on | Use when |
+|---|---|---|
+| Comment-to-DM capture | Instagram | Content gets engagement but no conversation |
+| DM qualify and book | Instagram | DMs arrive but conversion is manual and slow |
+| Review request | Email and SMS | Reviews are never asked for |
 
 The library is deliberately small. If the founder's bottleneck falls outside these six, for example onboarding, reactivation, abandoned checkout or win-back, pick the nearest snapshot and adapt the message copy to it, and note the gap in the output file so a mentor can help individually. Do not invent a snapshot that does not exist and do not attempt a bespoke build.
+
+**Name the platform from the table, never from memory.** A B2C snapshot runs on Instagram. Saying one runs on LinkedIn puts the other track's platform in front of a founder who is not on it, and it sends them to the wrong place on the day.
 
 Recommend one and explain why against their stated bottleneck. Let them override.
 

@@ -47,6 +47,47 @@ It will check everything, tell you which folder your work will live in, and tell
 
 If anything still does not work, type `/growth-engine:doctor` (or say "something is broken") and it will walk you through it. If that does not fix it, post in the Slack channel.
 
+## The words that work
+
+You never have to remember a command. Every step answers to plain English, and both columns below do the same thing.
+
+| What you want | Say this | Or type this |
+|---|---|---|
+| Check you are set up | "check my setup" | `/growth-engine:setup` |
+| Start or reopen your Founder Brain | "build my founder brain" | `/growth-engine:brain` |
+| See where you are up to | "where am I up to" | `/growth-engine:status` |
+| Write your 30 pieces | "build my content engine" | `/growth-engine:content` |
+| Build your outreach engine, B2B | "build my outreach" | `/growth-engine:engine2` |
+| Build your audience engine, B2C | "build my audience engine" | `/growth-engine:engine2` |
+| Choose your GoHighLevel workflow | "build my ops engine" | `/growth-engine:ops` |
+| Write your 90 day plan | "build my 90 day plan" | `/growth-engine:plan` |
+| Make your playbook insert | "generate my playbook" | `/growth-engine:playbook` |
+| Something is wrong | "something is broken" | `/growth-engine:doctor` |
+
+Two habits worth having from the first session.
+
+**Say what you want, not how to do it.** "Write my content" is enough. You do not need to know which part of the toolkit that is.
+
+**If nothing happens, say it again in different words.** That costs ten seconds. It is not a failure and it is not you doing it wrong.
+
+## If you pick the wrong track
+
+You choose B2B or B2C once, in the Founder Brain, and every step after it is built for that side. Most people know which they are. A few change their mind once they see what each side actually produces.
+
+It is fixable. Say:
+
+> change my track
+
+That reopens your Founder Brain on that one line and nothing else. Answer it, and everything after it switches side.
+
+Two things to know before you do.
+
+**Your old work is not deleted.** It stays in your folder. It stops showing in your list, because your list only shows the track you are on. Switch back and it returns.
+
+**The new track starts from nothing.** The two tracks produce different files, so what you already have does not carry across.
+
+If you are unsure which you are, ask in the Slack channel before Session 1 rather than guessing and switching later.
+
 ## Which one should I use, Cowork or Claude Code?
 
 They share the same setup, so installing once covers both.

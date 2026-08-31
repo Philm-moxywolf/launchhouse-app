@@ -21,6 +21,22 @@ Check whether `./growth-engine/founder-brain.md` already exists. If it is not in
 
 Create the `./growth-engine/` folder if it is not there.
 
+### If they ask to change the track
+
+"change my track" is a trigger on this skill, so a founder asking has reached the right place. It is allowed. Do not tell them it cannot be done, and do not send them to a mentor. There is no escalation path and inventing one leaves them stuck.
+
+It is the one change that costs a founder work, so it takes one honest exchange first. That is not the same as refusing.
+
+**Say what it costs, using their own file names.** Everything built off the track was written for the other side. Their Brain stays, their voice profile stays, and the rest is rebuilt.
+
+**Ask what changed.** Not to talk them out of it. "I picked wrong in session 1" is answered differently from "I want to serve schools as well as parents". The second one usually wants `hybrid: true` and the same track, and that distinction is worth thirty seconds of asking.
+
+**If they confirm, do it.** Rewrite the Track line in the file that is already there. Then reopen only the parts that fork on it: the audience capture, which is an ICP on B2B and a persona on B2C, and the channel question. Everything else in the file is still true, so do not re-ask it and do not re-run the full intake.
+
+**Then say what to expect.** Their old track's files stay where they are and stop appearing in their list, because the list only shows the track they are on. The new track's gates start empty. Name which files they now need and which session covers each.
+
+If they are hesitating, leave it where it is. They can come back to it, and a track changed twice costs more than a track changed once.
+
 ## Intake
 
 Ask these in small groups, not all at once. Three or four questions per turn. Reflect back what you heard before moving on. This should feel like a conversation with a sharp consultant, not a form.
@@ -181,7 +197,7 @@ The Flags section is what the mentor team reads before the session. Be honest in
 ## After writing
 
 1. Show the founder a short summary and confirm it is right.
-2. Tell them the Brain is now locked and every other engine reads from it.
+2. Tell them the Brain is now locked and every other engine reads from it. Locked means nothing rewrites it behind their back. It does not mean it can never change, and if they ask later they are not being difficult.
 3. Give them their gate submission line: track, business name, the thesis, and confirmation the file exists.
 4. Tell them what happens next, based on track:
    - **B2B**: if the domain is fresh, set up SPF, DKIM and DMARC today and start sending ten to twenty real messages a day. Correct setup beats long warmup at 25-message volume, but it needs the weeks between now and Atlanta, not the last one.
