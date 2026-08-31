@@ -57,9 +57,10 @@ import {
   FORBIDDEN_GHL_SCOPES_UNVERIFIED,
   GHL_MENU_PATHS_ARE_A_GUESS,
   GHL_MENU_PATHS_UNVERIFIED,
-  GHL_SCOPES_ARE_UNVERIFIED,
+  GHL_SCOPES_ARE_VERIFIED,
   GHL_SCOPES_UNVERIFIED,
   GHL_SCOPE_BY_ID,
+  GHL_SCOPE_LABEL_BY_ID,
   GHL_SCOPE_STRINGS_UNVERIFIED,
   GHL_TOKEN_PREFIX_IS_A_GUESS,
   GHL_PATH_PROVENANCE,
@@ -231,7 +232,7 @@ test('no cut scope is asked for, or shown, or nameable in the failure copy', () 
 test('what nobody has verified is still marked unverified', () => {
   // Three flags. If one flips to false without a spike result landing, the app has
   // started claiming something it cannot prove.
-  assert.equal(GHL_SCOPES_ARE_UNVERIFIED, true);
+  assert.equal(GHL_SCOPES_ARE_VERIFIED, true);
   assert.equal(GHL_TOKEN_PREFIX_IS_A_GUESS, true);
   assert.equal(GHL_MENU_PATHS_ARE_A_GUESS, true);
   assert.equal(walk.GHL_WALK_TOKEN_SHAPE_WARNING_IS_A_GUESS, GHL_TOKEN_PREFIX_IS_A_GUESS);
@@ -343,4 +344,37 @@ test('every recorded provenance names a real source, not a shrug', () => {
       `${path} does not say where it came from: "${source}"`,
     );
   }
+});
+
+test('EVERY SCOPE CARRIES THE NAME A FOUNDER READS, not only the string', () => {
+  // The screen a founder ticks these on lists around 150 permissions, each written
+  // as a plain name and then the string. Nobody finds `socialplanner/post.readonly`
+  // by eye in that list. They find "View Social Media Posts". A scope that reaches
+  // the walk without its name is a scope somebody hunts for.
+  for (const row of GHL_SCOPES_UNVERIFIED) {
+    assert.ok(row.label.length > 0, `${row.scope} has no name beside it`);
+    assert.doesNotMatch(row.label, /[/.]/, `${row.label} looks like a scope string rather than the name shown`);
+    assert.equal(GHL_SCOPE_LABEL_BY_ID[row.id], row.label, 'the map and the tuple have to agree');
+  }
+  assert.equal(Object.keys(GHL_SCOPE_LABEL_BY_ID).length, GHL_SCOPES_UNVERIFIED.length);
+});
+
+test('the seven are the seven that were read off a real account', () => {
+  // Pinned character for character against the list copied out of a live 97 dollar
+  // Starter account on 31 August 2026. This test is the reason a later edit to the
+  // tuple has to be deliberate: changing a string here fails until somebody has
+  // been back to the screen and changed it here too.
+  assert.deepEqual(
+    GHL_SCOPES_UNVERIFIED.map((r) => `${r.label} - ${r.scope}`),
+    [
+      'View Social Media Posts - socialplanner/post.readonly',
+      'Edit Social Media Posts - socialplanner/post.write',
+      'View Social Media Accounts - socialplanner/account.readonly',
+      'View Social Media Statistics - socialplanner/statistics.readonly',
+      'View Contacts - contacts.readonly',
+      'Edit Contacts - contacts.write',
+      'View Locations - locations.readonly',
+    ],
+    'these are written exactly as GoHighLevel writes them on the token screen',
+  );
 });

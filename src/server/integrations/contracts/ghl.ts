@@ -80,14 +80,35 @@ import { pending } from './pending.ts';
  * between them and a scope that is never shown is a token short a permission.
  */
 export const GHL_SCOPES_UNVERIFIED = [
-  { id: 'postRead', scope: 'socialplanner/post.readonly' },
-  { id: 'postWrite', scope: 'socialplanner/post.write' },
-  { id: 'accountRead', scope: 'socialplanner/account.readonly' },
-  { id: 'statsRead', scope: 'socialplanner/statistics.readonly' },
-  { id: 'contactRead', scope: 'contacts.readonly' },
-  { id: 'contactWrite', scope: 'contacts.write' },
-  { id: 'locationRead', scope: 'locations.readonly' },
+  { id: 'postRead', scope: 'socialplanner/post.readonly', label: 'View Social Media Posts' },
+  { id: 'postWrite', scope: 'socialplanner/post.write', label: 'Edit Social Media Posts' },
+  { id: 'accountRead', scope: 'socialplanner/account.readonly', label: 'View Social Media Accounts' },
+  { id: 'statsRead', scope: 'socialplanner/statistics.readonly', label: 'View Social Media Statistics' },
+  { id: 'contactRead', scope: 'contacts.readonly', label: 'View Contacts' },
+  { id: 'contactWrite', scope: 'contacts.write', label: 'Edit Contacts' },
+  { id: 'locationRead', scope: 'locations.readonly', label: 'View Locations' },
 ] as const;
+
+/**
+ * THE LABEL IS THE HALF A FOUNDER CAN ACTUALLY USE, and it did not exist here until
+ * the full list was read off a real account on 31 August 2026.
+ *
+ * GoHighLevel writes each permission as a plain name and then the string, like
+ * "View Social Media Posts - socialplanner/post.readonly". There are around a
+ * hundred and fifty of them on one screen. Telling somebody to find
+ * `socialplanner/post.readonly` in that list is telling them to scan a hundred and
+ * fifty lines of near identical punctuation at 10pm. The name is what a person
+ * finds. The string is what proves they found the right one.
+ *
+ * So the walk should read a founder the NAME and let the string confirm it, and
+ * both come from this one tuple.
+ */
+export type GhlScopeLabel = (typeof GHL_SCOPES_UNVERIFIED)[number]['label'];
+
+/** The name beside each box, keyed by our own id. */
+export const GHL_SCOPE_LABEL_BY_ID = Object.fromEntries(
+  GHL_SCOPES_UNVERIFIED.map((row) => [row.id, row.label] as const),
+) as Readonly<Record<GhlScopeId, GhlScopeLabel>>;
 
 /** Our own name for a scope. Never sent anywhere, and it survives a respelling. */
 export type GhlScopeId = (typeof GHL_SCOPES_UNVERIFIED)[number]['id'];
@@ -116,8 +137,32 @@ export const GHL_SCOPE_BY_ID = Object.fromEntries(
   GHL_SCOPES_UNVERIFIED.map((row) => [row.id, row.scope] as const),
 ) as Readonly<Record<GhlScopeId, GhlScope>>;
 
-/** True, and it stays true until spike S-01 has been run against a real account. */
-export const GHL_SCOPES_ARE_UNVERIFIED = true;
+/**
+ * VERIFIED, 31 August 2026, and this is the entry that changed most today.
+ *
+ * The full permission list was read off a real 97 dollar Starter account and all
+ * seven of ours appear in it, spelled exactly as written above, character for
+ * character. Nothing had to change. That was not the expected outcome: the comment
+ * on the tuple says "the expected outcome of spike S-01 is that a spelling changes".
+ *
+ * WHY THIS MATTERED MORE THAN ITS SIZE. A founder ticks these seven boxes by hand,
+ * three weeks before the event, from a screen we wrote. One wrong string and the
+ * token comes out short a permission, and GoHighLevel has no way to add a
+ * permission to a token that already exists. The failure would have surfaced in
+ * session 3 with the founder mid task.
+ *
+ * THE NAME OF THIS CONSTANT CHANGED WITH ITS VALUE. A constant called
+ * GHL_SCOPES_ARE_UNVERIFIED set to false is a sentence that has to be read twice
+ * and can be misread once, and this is not the file to have one of those in.
+ */
+export const GHL_SCOPES_ARE_VERIFIED = true;
+
+/**
+ * What is still open on S-01, so closing part of it does not read as closing it.
+ * `scopeRefusalStatus` below: what a refusal looks like when a scope is missing.
+ * Granting all seven does not show you that.
+ */
+export const GHL_SCOPE_REFUSAL_STILL_UNKNOWN = true;
 
 export const GHL_SCOPES_SOURCE =
   'planning/delivery/00-scope.md:33-34. Never compared against the GoHighLevel UI. Spike S-01 settles it.';
@@ -436,5 +481,16 @@ export const GHL = {
  * No API creates a GoHighLevel workflow. The engine writes copy the founder pastes
  * at the clinic, so a whole engine has no integration work in it. The app's only
  * job there is to render the key to copy table with a Copy button per row.
+ *
+ * CONFIRMED BY THE VENDOR'S OWN LIST, 31 August 2026, which is a better source than
+ * the published specs this used to rest on. The permission list on a real account
+ * offers `workflows.readonly` and offers no write and no create beside it. A vendor
+ * that does not sell you the permission does not have the endpoint.
+ *
+ * WORTH KNOWING, AND IT IS NOT THE SAME ANSWER: pipelines DO have write and create
+ * permissions on that list, `pipelines.write` and `pipelines.create`. So the reason
+ * this product uses a snapshot is workflows, and only workflows. If pipeline setup
+ * ever becomes the expensive part of the clinic, that door is open. It is not open
+ * today and nothing here should be built on it without running the call.
  */
 export const GHL_WORKFLOWS_HAVE_NO_API = true;
