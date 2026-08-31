@@ -93,6 +93,25 @@ const TERMS: readonly TrackTerm[] = [
   },
   { pattern: /\bcold emails?\b/gi, label: 'cold email', track: 'b2b', severity: 'block' },
   {
+    // LINKEDIN IS TWO THINGS, the same shape of problem as SPF above. The B2B
+    // track is LinkedIn and email, so "connect with them on LinkedIn" is the
+    // other track's material arriving on an audience founder's screen. But a
+    // B2C founder can perfectly well have a LinkedIn profile, and saying so in
+    // their own Brain is not a leak. So the bare word is a note, and it is only
+    // refused when the line it sits on is about working the platform.
+    //
+    // IT WAS NOT ON THIS LIST AT ALL until 1 September, which is how an audience
+    // founder was asked for LinkedIn URLs for six people. Apollo, ICP and
+    // firmographics were all here. The most identifiable B2B word in the
+    // programme was not.
+    pattern: /\bLinkedIn\b/gi,
+    label: 'LinkedIn',
+    track: 'b2b',
+    severity: 'block',
+    nearby: /\b(url|urls|connect\w*|invite|inmail|outreach|prospect|sequence|search|export|scrape)\w*\b/i,
+  },
+  { pattern: /\bLinkedIn\b/gi, label: 'LinkedIn', track: 'b2b', severity: 'warn' },
+  {
     pattern: /\bsequences?\b/gi,
     label: 'sequence',
     track: 'b2b',

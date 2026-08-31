@@ -172,3 +172,29 @@ test('the founder\'s own words are not scanned', () => {
   assert.deepEqual(result.violations, []);
   assert.match(result.notes.join(' '), /the founder wrote them/);
 });
+
+test('asking an audience founder for LinkedIn URLs is refused', () => {
+  // THE REGRESSION, 31 August 2026. A B2C founder finished the audience engine
+  // and was asked for "LinkedIn URLs for the six". Apollo, ICP and firmographics
+  // were all on the term list. LinkedIn was not, so nothing caught it.
+  const text = 'Send me the LinkedIn URLs for the six and I will write batch 2.';
+  const result = checkTrack(art('dm-openers.md', text), ctx('b2c'));
+  assert.equal(result.ok, false);
+  assert.equal(result.violations[0]?.found?.toLowerCase(), 'linkedin');
+});
+
+test('an audience founder who simply has a LinkedIn is not held', () => {
+  // The other half. Plenty of B2C founders have a LinkedIn and saying so is not
+  // the other track's material. Blocking this would be the rule getting in the
+  // way of a founder for no gain.
+  const text = 'She has a LinkedIn but everything that works for her is on Instagram.';
+  const result = checkTrack(art('content-30.md', text), ctx('b2c'));
+  assert.equal(result.ok, true, 'a note must not stop the founder getting their work');
+  assert.equal(result.violations[0]?.severity, 'warn');
+});
+
+test('LinkedIn on the outreach track is ordinary', () => {
+  const text = 'Send the LinkedIn URLs through and the sequence will pick them up.';
+  const result = checkTrack(art('outreach-sequence.md', text), ctx('b2b'));
+  assert.deepEqual(result.violations, []);
+});
