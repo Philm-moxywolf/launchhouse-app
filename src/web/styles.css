@@ -907,3 +907,28 @@ th {
   color: var(--ink-quiet);
   margin: 0;
 }
+
+/*
+ * The opener on an empty conversation. Quiet: it is an invitation, not an instruction,
+ * and a founder who types something else is not wrong.
+ */
+.opener {
+  margin: 0 0 1.5rem;
+  padding: 1rem 1.1rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.opener-heading {
+  font-size: 1.05rem;
+  margin: 0 0 0.5rem;
+}
+
+.opener-line {
+  margin: 0 0 0.6rem;
+  color: var(--ink-quiet);
+}
+
+.opener-line:last-child {
+  margin-bottom: 0;
+}

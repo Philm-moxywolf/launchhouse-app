@@ -363,3 +363,40 @@ test("the hard stop steers away from buying an upgrade, and says why", () => {
   assert.match(text, /Starter/, "it has to say the plan they have is enough");
   assert.match(text, /moved/i, "a moved menu is now the likelier cause and has to lead");
 });
+
+test("EVERY ENGINE SAYS WHAT TO SAY FIRST, because a blank screen asking for an answer has no question on it", () => {
+  // THE BUG: Founder Brain opened on an empty page with a box reading "Type your
+  // answer". Nothing had been asked. A founder reasonably read it as a question that
+  // had failed to load, which is where they stop rather than type.
+  const engines = routes.ROUTES.filter((r) => !r.hidden && r.skill !== "");
+  assert.ok(engines.length >= 8, "the engine list looks wrong, so this test is not checking what it says");
+
+  for (const row of engines) {
+    assert.ok(row.opener !== undefined, `${row.id} opens on a blank screen with nothing to go on`);
+    assert.ok(row.opener.heading.length > 0, `${row.id} has an empty opener heading`);
+    assert.ok(row.opener.lines.length >= 1, `${row.id} has an opener with nothing in it`);
+
+    const text = [row.opener.heading, ...row.opener.lines].join(" ");
+    assert.doesNotMatch(text, /[—–]/, `${row.id} opener breaks the house style`);
+    // IT HAS TO SUGGEST SOMETHING TO TYPE. A heading and two sentences of encouragement
+    // leave the founder exactly where they started, staring at the box.
+    assert.match(
+      text,
+      /first message|say|tell it|ask it/i,
+      `${row.id} does not tell a founder what to actually type`,
+    );
+  }
+});
+
+test("the engines that read the Brain say so, so nobody repeats themselves into an empty box", () => {
+  // A founder who has just spent twenty minutes on the Founder Brain must not be asked
+  // for the same thing again by the next engine. The ones that require it say they have
+  // read it.
+  for (const row of routes.ROUTES.filter((r) => r.requires.includes("founder-brain.md") && r.opener !== undefined)) {
+    assert.match(
+      row.opener.lines.join(" "),
+      /read your Founder Brain|read everything/i,
+      `${row.id} does not tell the founder it already knows their business`,
+    );
+  }
+});

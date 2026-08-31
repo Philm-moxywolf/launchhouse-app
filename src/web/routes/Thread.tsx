@@ -209,6 +209,27 @@ export function Thread({ founder, routeId }: { readonly founder: Founder; readon
         </Notice>
       )}
 
+      {/*
+        AN EMPTY CONVERSATION SAYS WHAT TO SAY, rather than nothing at all.
+        A founder opened this screen, saw a blank page and a box reading "Type your
+        answer", and reasonably asked what the question was. There was none. Nothing had
+        been asked and nothing was on the screen to answer, so the only sensible reading
+        was that something had failed to load.
+        It is copy, not a model call. Having the engine open the conversation would cost
+        30 to 180 seconds and a spinner before a founder could type a word, every time
+        they opened any engine.
+      */}
+      {view.messages.length === 0 && view.turn === null && !opening && row?.opener !== undefined ? (
+        <section className="opener">
+          <h2 className="opener-heading">{row.opener.heading}</h2>
+          {row.opener.lines.map((line) => (
+            <p key={line} className="opener-line">
+              {line}
+            </p>
+          ))}
+        </section>
+      ) : null}
+
       <div className="transcript">
         {view.messages.map((message) => (
           <div key={message.id} className={`message message-${message.role}`}>
@@ -297,7 +318,16 @@ export function Thread({ founder, routeId }: { readonly founder: Founder; readon
         {view.turn === null ? null : <StopButton stopping={view.stopping} onStop={stop} />}
         <Composer
           disabled={view.threadId === null || view.turn !== null}
-          placeholder={view.turn === null ? "Type your answer" : "Waiting for this answer to finish"}
+          placeholder={
+            view.turn !== null
+              ? "Waiting for this answer to finish"
+              : view.messages.length === 0
+                ? // NOTHING HAS BEEN ASKED YET, so this must not say "answer". It said
+                  // that, on a blank screen, and it read as a question that had failed
+                  // to load.
+                  "Type your first message"
+                : "Type your answer"
+          }
           onSend={send}
           onSaveAsFile={saveAsFile}
         />

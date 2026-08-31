@@ -72,6 +72,25 @@ export interface RouteRow {
   readonly hiddenBecause?: string;
   /** Plain language a founder might type. Matched before any model call. */
   readonly phrases: readonly string[];
+  /**
+   * WHAT TO SAY FIRST, on a conversation with nothing in it yet.
+   *
+   * WHY THIS EXISTS. A founder opened Founder Brain and got a blank screen with a box
+   * saying "Type your answer". There was no question. Nothing had been asked and there
+   * was nothing on the screen to answer, so the only honest reading of it was that
+   * something had failed to load.
+   *
+   * WHY NOT HAVE THE ENGINE OPEN THE CONVERSATION. It would cost a model call and 30 to
+   * 180 seconds before a founder can type a word, on every visit to every engine, and
+   * the first thing they would see is a spinner. Two sentences of copy do the same job
+   * instantly and for nothing.
+   *
+   * IT IS AN INVITATION, NOT A SCRIPT. A founder who types something else is not wrong,
+   * and the engine reads whatever arrives. This is here so that nobody stares at an
+   * empty box wondering what the machine wants, which is the difference between typing
+   * and closing the tab.
+   */
+  readonly opener: { readonly heading: string; readonly lines: readonly string[] };
 }
 
 /**
@@ -84,6 +103,13 @@ export interface RouteRow {
 export const ROUTES: readonly RouteRow[] = [
   {
     id: "founder-brain",
+    opener: {
+      heading: "Start wherever you like",
+      lines: [
+        "This is the one that everything else reads, so it is worth doing properly and it takes about twenty minutes.",
+        "A good first message is simply what your business does and who buys from you, in your own words. Do not tidy it up. The way you actually talk about it is the part that matters.",
+      ],
+    },
     label: "Founder Brain",
     subtitle: "Build or update your Founder Brain, the foundation for everything else",
     skill: "founder-brain",
@@ -103,6 +129,13 @@ export const ROUTES: readonly RouteRow[] = [
   },
   {
     id: "content-engine",
+    opener: {
+      heading: "Tell it what you want to talk about",
+      lines: [
+        "It has already read your Founder Brain, so it knows your business and how you write.",
+        "A good first message is the subject you want the next set of posts to cover. Or just say go, if you would rather see what it comes back with.",
+      ],
+    },
     label: "Content Engine",
     subtitle: "Define your content pillars and generate your 30 posts or scripts",
     skill: "content-engine",
@@ -127,6 +160,13 @@ export const ROUTES: readonly RouteRow[] = [
     // it goes here and half goes to the row below, so neither founder ever
     // reads the other track's name.
     id: "outreach-engine",
+    opener: {
+      heading: "Tell it who you want to reach",
+      lines: [
+        "It has read your Founder Brain, so it knows what you sell and who to.",
+        "A good first message is the kind of company or person you want to talk to. Twenty five messages is the number, and it is deliberately low.",
+      ],
+    },
     label: "Outreach Engine",
     subtitle: "Build your outreach engine",
     skill: "outreach-b2b",
@@ -146,6 +186,13 @@ export const ROUTES: readonly RouteRow[] = [
   },
   {
     id: "audience-engine",
+    opener: {
+      heading: "Tell it where your people are",
+      lines: [
+        "It has read your Founder Brain, so it knows your voice and what you offer.",
+        "A good first message is which account you post from and what you want more of: comments, saves, people asking about the offer.",
+      ],
+    },
     label: "Audience Engine",
     subtitle: "Build your audience engine",
     skill: "audience-b2c",
@@ -165,6 +212,13 @@ export const ROUTES: readonly RouteRow[] = [
   },
   {
     id: "ops-engine",
+    opener: {
+      heading: "Tell it what happens after somebody replies",
+      lines: [
+        "It has read your Founder Brain, so it knows the offer and the words you use.",
+        "A good first message is what you want to happen when somebody gets in touch, in your own words. Booked call, quote, a conversation.",
+      ],
+    },
     label: "Operations Engine",
     subtitle: "Find your bottleneck, choose a GoHighLevel snapshot, and write the copy",
     skill: "ghl-workflows",
@@ -184,6 +238,13 @@ export const ROUTES: readonly RouteRow[] = [
   },
   {
     id: "growth-plan",
+    opener: {
+      heading: "Ask it for the plan",
+      lines: [
+        "It has read everything you have built so far.",
+        "A good first message is to ask for your 90 day plan, or to say the one thing you most want the next three months to change.",
+      ],
+    },
     label: "90 Day Plan",
     subtitle: "Build your 90-day growth plan (Sunday in Atlanta)",
     skill: "growth-plan",
@@ -197,6 +258,13 @@ export const ROUTES: readonly RouteRow[] = [
   },
   {
     id: "status",
+    opener: {
+      heading: "Ask it where you are",
+      lines: [
+        "This one reads your folder and tells you what is done and what is next. It writes nothing.",
+        "A good first message is to ask where you are up to.",
+      ],
+    },
     label: "Progress",
     subtitle: "Check where you are up to and what is outstanding",
     skill: "status",
@@ -217,6 +285,13 @@ export const ROUTES: readonly RouteRow[] = [
   },
   {
     id: "help",
+    opener: {
+      heading: "Say what you are stuck on",
+      lines: [
+        "In your own words, however rough. There is no wrong way to ask.",
+        "If something looks broken, say what you were doing and what you saw.",
+      ],
+    },
     label: "Help",
     // Not the `commands/setup.md` subtitle. That one said "find your working
     // folder", which is the app's job now, and section 3 group D deletes every
@@ -240,6 +315,13 @@ export const ROUTES: readonly RouteRow[] = [
   },
   {
     id: "playbook-export",
+    opener: {
+      heading: "Ask it for your playbook",
+      lines: [
+        "It has read your Founder Brain and everything built on it, and gathers the lot into one document you can print or take with you.",
+        "A good first message is to ask it to make your playbook.",
+      ],
+    },
     label: "Playbook Insert",
     subtitle: "Generate your personalised playbook insert",
     skill: "playbook-export",
