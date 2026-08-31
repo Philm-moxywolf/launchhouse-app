@@ -76,11 +76,57 @@ describe('the deployment section of .replit', () => {
     assert.match(problems[0] ?? '', /optional/, 'the reason is the optional binary, and the message has to say so');
   });
 
-  it('the failure tells a non developer what to paste, and says it changed nothing', () => {
+  describe('the message a founder reads when it fires', () => {
     const text = failureMessage(checkReplitConfig(REAL.replace('deploymentTarget = "vm"', '')));
-    assert.match(text, /WHAT TO DO/);
-    assert.match(text, /deploymentTarget = "vm"/, 'the fix has to be in the message, not a link to it');
-    assert.match(text, /only ever reads/, 'somebody staring at a failed build needs to know nothing was altered');
-    assert.doesNotMatch(text, /[—–]/, 'a founder may read this, so the house style applies');
+
+    it('OPENS BY SAYING THEY HAVE NOT BROKEN ANYTHING, before anything technical', () => {
+      // A build that goes red on somebody who did not write the code reads as their
+      // fault. The first sentence has to take that off the table, and it has to be
+      // near the top rather than at the bottom under the detail.
+      const opening = text.split('MISSING:')[0] ?? '';
+      assert.match(opening, /not done anything wrong/);
+    });
+
+    it('carries the exact block to paste, not a link to it', () => {
+      assert.match(text, /deploymentTarget = "vm"/);
+      assert.match(text, /npm ci && npm run build/);
+    });
+
+    it('OFFERS THE ROLLBACK, because clicking a checkpoint beats editing a config file', () => {
+      assert.match(text, /checkpoint/i, 'Replit can go back to a checkpoint and most founders would rather do that');
+      assert.match(text, /assistant/i, 'the likeliest cause is the assistant having just edited the file');
+    });
+
+    it('WARNS THAT A ROLLBACK TAKES OTHER WORK WITH IT', () => {
+      // The whole reason pasting is offered first. A founder who rolls back an
+      // afternoon of work to fix four lines has been badly advised.
+      assert.match(text, /undoes EVERYTHING since that checkpoint/);
+    });
+
+    it('puts the safe option first, because an anxious reader takes the first one', () => {
+      assert.ok(
+        text.indexOf('OPTION 1') < text.indexOf('OPTION 2'),
+        'the option that loses nothing has to come first',
+      );
+      assert.match(text, /OPTION 1[^\n]*Loses nothing/);
+    });
+
+    it('DOES NOT CLAIM TO KNOW A SCREEN NOBODY HERE HAS SEEN', () => {
+      // The same rule as the run sheet stamps. Confident directions to a button
+      // that might be labelled something else send somebody looking for a thing
+      // that is not there and then doubting the rest of the message.
+      assert.match(text, /trust the labels you\s+actually see/, 'the hedge has to survive a relabelled UI');
+      assert.match(text, /not something we have tested/, 'what rollback does beyond files is genuinely unknown');
+    });
+
+    it('says nothing was altered, and ends on where to go if both fail', () => {
+      assert.match(text, /only ever reads/);
+      assert.match(text, /Slack/, 'a founder who is stuck needs somewhere to go, not another attempt');
+    });
+
+    it('follows the house style, because a founder may read every word of it', () => {
+      assert.doesNotMatch(text, /[—–]/, 'no em or en dashes');
+      assert.doesNotMatch(text, /supercharge|unlock|seamless|effortless|leverage/i, 'no marketing words');
+    });
   });
 });
