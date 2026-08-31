@@ -457,56 +457,89 @@ describe('a file that fails a rule is held, and its neighbours are saved', () =>
   });
 });
 
-describe('what still costs the whole turn', () => {
-  it('REFUSES AN OFFER TO AUTOMATE DMs, AND ATTEMPTS NO WRITE', async () => {
-    // Rule 2. If the fake's sentence comes back instead, the gate let the file past
-    // and the turn was already writing when it spoke.
-    await assert.rejects(
-      () =>
-        runTurn({ founderId: FOUNDER, actor: 'model', verb: 'agent-run', db: refusingDb() }, async (ctx) => {
-          await writeFile(join(ctx.home, 'founder-brain.md'), CLEAN_BRAIN, 'utf8');
-          await writeFile(join(ctx.home, '90-day-plan.md'), '# The plan\n\nWeek one: write it.\n', 'utf8');
-          await writeFile(
-            join(ctx.home, 'ops-workflow.md'),
-            '# Ops\n\nWe can automate DMs for you overnight.\n',
-            'utf8',
-          );
-          return null;
-        }),
-      (err: unknown) => {
-        assert.ok(
-          err instanceof RulesRefused,
-          `expected the turn to be refused by the rules gate, got: ${String(err)}`,
-        );
-        assert.equal(err.code, 'rules_refused');
-        assert.ok(err.answer.blocked.some((v) => v.code === 'dm.offered'));
-        return true;
-      },
-    );
-  });
+describe('AN OFFER TO AUTOMATE DMs IS HELD, AND ITS NEIGHBOURS ARE SAVED', () => {
+  /*
+    THIS SUITE USED TO ASSERT THE OPPOSITE, and the change is the point of it.
 
-  it('THE ROLLBACK STILL WORKS: nothing is left on disk for the next turn to read', async () => {
+    `dm.offered` was the one violation that cost a whole turn. The argument was
+    contamination: a run that offered to automate cold DMs once had written every
+    other file of that turn in the same state.
+
+    ONE NIGHT OF REAL USE KILLED THAT ARGUMENT. Every file in a turn is checked by
+    the same rule. If the neighbours do not trip it, they are not contaminated by
+    the definition the gate itself uses, and throwing them away asserts a
+    contamination the gate just looked for and did not find.
+
+    What it cost: a founder ran the audience engine four times, three files each
+    time, and lost all twelve to one heading, "Auto-DM, on the comment:", in the
+    file about the inbound automation rule 2 exists to permit.
+
+    THE PROTECTION IS UNCHANGED AND IS ASSERTED BELOW. The offending file is still
+    never written. What stops is the collateral.
+  */
+  it('THE OFFENDING FILE NEVER REACHES ge_file', async () => {
     const { db, written } = recordingDb();
-    await assert.rejects(
-      () =>
-        runTurn({ founderId: FOUNDER, actor: 'model', verb: 'agent-run', db }, async (ctx) => {
-          await writeFile(join(ctx.home, 'founder-brain.md'), CLEAN_BRAIN, 'utf8');
-          await writeFile(join(ctx.home, '90-day-plan.md'), '# The plan\n\nWeek one: write it.\n', 'utf8');
-          await writeFile(
-            join(ctx.home, 'ops-workflow.md'),
-            '# Ops\n\nWe can automate DMs for you overnight.\n',
-            'utf8',
-          );
-          return null;
-        }),
-      RulesRefused,
+    await runTurn({ founderId: FOUNDER, actor: 'model', verb: 'agent-run', db }, async (ctx) => {
+      await writeFile(join(ctx.home, 'founder-brain.md'), CLEAN_BRAIN, 'utf8');
+      await writeFile(join(ctx.home, '90-day-plan.md'), '# The plan\n\nWeek one: write it.\n', 'utf8');
+      await writeFile(
+        join(ctx.home, 'ops-workflow.md'),
+        '# Ops\n\nWe can automate DMs for you overnight.\n',
+        'utf8',
+      );
+      return null;
+    });
+    assert.equal(
+      written.includes('ops-workflow.md'),
+      false,
+      'the file offering DM automation was saved, which is the one thing rule 2 exists to stop',
     );
-    // A handle that would have accepted every write, so an empty list is the gate's
-    // doing rather than the fake's.
-    assert.deepEqual(written, [], 'a refused turn writes nothing, not even the clean files');
-    assert.equal(await exists(founderRoot(FOUNDER)), false, 'the refused turn left its folder behind');
   });
 
+  it('AND THE FILES THAT PASSED ARE KEPT, which is what changed', async () => {
+    const { db, written } = recordingDb();
+    await runTurn({ founderId: FOUNDER, actor: 'model', verb: 'agent-run', db }, async (ctx) => {
+      await writeFile(join(ctx.home, 'founder-brain.md'), CLEAN_BRAIN, 'utf8');
+      await writeFile(join(ctx.home, '90-day-plan.md'), '# The plan\n\nWeek one: write it.\n', 'utf8');
+      await writeFile(
+        join(ctx.home, 'ops-workflow.md'),
+        '# Ops\n\nWe can automate DMs for you overnight.\n',
+        'utf8',
+      );
+      return null;
+    });
+    assert.ok(written.includes('90-day-plan.md'), 'a clean file was destroyed by its neighbour');
+    assert.ok(written.includes('founder-brain.md'), 'the Brain was destroyed by its neighbour');
+  });
+
+  it('the founder is told which file, and why, in words about DMs', async () => {
+    const { db } = recordingDb();
+    const outcome = await runTurn({ founderId: FOUNDER, actor: 'model', verb: 'agent-run', db }, async (ctx) => {
+      await writeFile(join(ctx.home, 'founder-brain.md'), CLEAN_BRAIN, 'utf8');
+      await writeFile(
+        join(ctx.home, 'ops-workflow.md'),
+        '# Ops\n\nWe can automate DMs for you overnight.\n',
+        'utf8',
+      );
+      return null;
+    });
+    const said = outcome.gate.notes.map((n) => n.message).join(' ');
+    assert.match(said, /ops-workflow\.md/, 'they have to be told which file');
+    assert.match(said, /Instagram/i, 'and why, in the terms that make it matter');
+    assert.doesNotMatch(said, /dm\.offered/, 'never a rule code');
+  });
+
+  it('NOTHING ELSE CLAIMS THE WHOLE TURN EITHER, so this cannot come back by accident', async () => {
+    const { WORTH_THE_WHOLE_TURN } = await import('../rules/harvest-gate.ts');
+    assert.deepEqual(
+      [...WORTH_THE_WHOLE_TURN],
+      [],
+      'a code was added back to the whole turn table. That costs a founder every file in a turn, including the ones the gate approved, so it needs a harm a hold genuinely cannot contain.',
+    );
+  });
+});
+
+describe('the rules gate still refuses a turn it cannot check at all', () => {
   it('RULES THAT CANNOT LOAD REFUSE THE TURN, and nothing reaches ge_file', async () => {
     // THE THIRD VOLUME, AND THE ONE THAT IS NOT A RULE. Every rule in this
     // folder reads its list off disk. A list that will not load is a rule that
@@ -551,32 +584,21 @@ describe('what still costs the whole turn', () => {
     }
   });
 
-  it('tells the founder nothing was saved, and gives them something to act on', async () => {
-    // Not a rule name and not a stack trace. What happened, then the reason, then a
-    // way out. Test case 21 in the content repo holds the whole toolkit to this.
-    const err = await runTurn(
-      { founderId: FOUNDER, actor: 'model', verb: 'agent-run', db: refusingDb() },
-      async (ctx) => {
-        await writeFile(join(ctx.home, 'founder-brain.md'), CLEAN_BRAIN, 'utf8');
-        await writeFile(
-          join(ctx.home, 'ops-workflow.md'),
-          '# Ops\n\nWe can automate DMs for you overnight.\n',
-          'utf8',
-        );
-        return null;
-      },
-    ).then(
-      () => null,
-      (e: unknown) => e,
-    );
-
-    assert.ok(err instanceof RulesRefused);
-    assert.match(err.message, /Nothing from that request was saved\./);
-    assert.doesNotMatch(err.message, /—|–/, 'the refusal itself follows the house style it enforces');
-    for (const violation of err.answer.blocked) {
-      assert.ok(violation.recovery.label.length > 0, 'every refusal ends on a way out');
-      assert.ok(violation.why.length > 0);
-    }
+  it('AND THE FOUNDER IS TOLD, in words about their folder rather than about a rule', async () => {
+    // The whole turn refusal survives for exactly one thing now: rules that cannot
+    // load. `dm.offered` used to end up here too and holds its file instead.
+    //
+    // A gate that cannot check is worse than no gate, because everybody believes it
+    // is on. So the turn is refused, and the sentence has to be one a founder can act
+    // on rather than the name of a file they have never heard of.
+    const { RulesRefused: Refused } = await import('../rules/harvest-gate.ts');
+    const message = new Refused(
+      { ok: false, results: [], blocked: [], notes: [] },
+      ['content-30.md'],
+    ).message;
+    assert.match(message, /Nothing from that request was saved\./);
+    assert.match(message, /exactly as it was before you asked/);
+    assert.doesNotMatch(message, /[\u2014\u2013]/, 'the refusal follows the house style it enforces');
   });
 });
 

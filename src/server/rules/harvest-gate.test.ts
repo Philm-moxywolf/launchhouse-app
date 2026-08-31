@@ -115,129 +115,37 @@ describe('what a blocking violation costs', () => {
     }
   });
 
-  it('REFUSES THE WHOLE TURN for an offer to automate DMs', async () => {
-    // Rule 2. The offer itself is the harm, and a run that made it once wrote every
-    // other file of that turn in the same state.
-    await assert.rejects(
-      () =>
-        gateHarvest(
-          input([
-            file('content-30.md', '## Post 1\n\nWhat we learned last week.\n'),
-            file('ops-workflow.md', 'We can automate DMs for you overnight.\n'),
-          ]),
-        ),
-      (err: unknown) => {
-        assert.ok(err instanceof RulesRefused, `expected RulesRefused, got ${String(err)}`);
-        assert.equal(err.code, 'rules_refused');
-        assert.ok(err.answer.blocked.some((v) => v.code === 'dm.offered'));
-        // The refusing violation leads, so the founder is not told about something
-        // else while the run is being thrown away.
-        assert.equal(err.answer.blocked[0]?.rule, 'no-dm-automation');
-        return true;
-      },
-    );
-  });
-
-  it('HOLDS A RESULT NOBODY GAVE IT, so the figure is never stored', async () => {
-    // Rule 5 at its confident reading, and it still costs the file rather than the
-    // run. The note under WORTH_THE_WHOLE_TURN has the measurement that decided
-    // that, and the test below keeps the measurement runnable.
-    const report = await gateHarvest(
+  it('HOLDS THE FILE that offers to automate DMs, and saves the one beside it', async () => {
+    // THIS USED TO REFUSE THE WHOLE TURN. The argument was contamination: a run that
+    // made the offer once had written every other file in the same state. One night
+    // of real use killed it. Every file is checked by the same rule, so a neighbour
+    // that does not trip it is not contaminated by the gate's own definition, and
+    // destroying it asserts something the gate just looked for and did not find.
+    //
+    // A founder lost twelve files over four runs to one heading before this changed.
+    const out = await gateHarvest(
       input([
-        file('90-day-plan.md', '## Week one\n\nWrite the plan.\n'),
-        file('content-30.md', '## Post 1\n\nWe took one client from 71 days to 38 days.\n'),
+        file('content-30.md', '## Post 1\n\nWhat we learned last week.\n'),
+        file('ops-workflow.md', 'We can automate DMs for you overnight.\n'),
       ]),
     );
-    assert.deepEqual(report.held.map((h) => h.path), ['content-30.md']);
-    assert.ok(report.held[0]?.violations.some((v) => v.code === 'proof.invented-result'));
-    assert.deepEqual(report.saved, ['90-day-plan.md'], 'the plan beside it survives');
-  });
-
-  it('A COUNT OF CUSTOMERS IS HELD, and never reaches the founder', async () => {
-    // THE SHAPE RULE 5 IS NAMED FOR. CLAUDE.md says it in four words: no fake
-    // numbers, customers, results or testimonials. A customer count is the one a
-    // buyer asks about, and in a small industry somebody always asks.
-    //
-    // This test and the one below are a pair, and they have to be read together.
-    // For one round the wide count was demoted and this shape went with it,
-    // because the measurement that demoted it was taken on reach counts. The
-    // pair is here so the next person who moves the line sees both halves.
-    const report = await gateHarvest(
-      input([file('content-30.md', '## Post 1\n\nWe have 214 customers on the platform today.\n')]),
-    );
-    assert.deepEqual(report.held.map((h) => h.path), ['content-30.md']);
-    assert.deepEqual(report.saved, []);
-    assert.ok(report.held[0]?.violations.some((v) => v.code === 'proof.invented-result'));
-    assert.ok(report.held[0]?.message.includes('214'), report.held[0]?.message);
-  });
-
-  it('A COUNT OF FOLLOWERS IS A NOTE, and the file is saved with it', async () => {
-    // THE OTHER HALF, and the reason the split exists. Measured, the reach count
-    // fires on five of twenty ordinary founder sentences: "there are 25 people on
-    // my list", "I have 1,200 followers". A founder telling the truth about their
-    // own audience was losing work for it.
-    //
-    // The claim is still not silent. The founder gets the figure named, beside
-    // the file, with one click to say it is right.
-    const report = await gateHarvest(
-      input([file('content-30.md', '## Post 1\n\nI have 1,200 followers and most of them are local.\n')]),
-    );
-    assert.deepEqual(report.held, []);
-    assert.deepEqual(report.saved, ['content-30.md']);
-    const note = report.notes.find((n) => n.code === 'proof.unbacked-figure');
-    assert.ok(note !== undefined, 'the figure still reaches the founder');
-    assert.ok(note.message.includes('1,200'), note.message);
-  });
-
-  it('ORDINARY FOUNDER SENTENCES NEVER COST A TURN', async () => {
-    // THE MEASUREMENT, KEPT RUNNABLE. Every line here is something a founder could
-    // reasonably write, and three of them are what CLAUDE.md asks for when proof is
-    // thin: point of view and observation. Any of them may cost its own file, which
-    // is recoverable in one ask. None of them may cost the turn.
-    //
-    // This is also the gate on the next addition to WORTH_THE_WHOLE_TURN. A code
-    // that breaks this test is a code that would have taken a founder's afternoon.
-    const ordinary = [
-      'Last week I spoke to 6 operations leads.',
-      'I read 12 job posts this morning looking for the same role.',
-      'There are 25 people on my list.',
-      'I have written 30 posts this quarter.',
-      'The average reply rate people quote is 3 percent.',
-      'Onboarding took 3 weeks before we changed it.',
-      'A logistics firm I know runs 9 depots.',
-      'It took me 18 months to work out what we sell.',
-      'Send each of the 25 DMs yourself, spread over the week.',
-      'The email sequence is automated. The DMs are not.',
-      'Write the DM opener, then paste it in yourself.',
-      'When somebody replies to your story, the workflow sends the booking link.',
-    ];
-
-    for (const line of ordinary) {
-      const report = await gateHarvest(input([file('content-30.md', `## Post 1\n\n${line}\n`)])).catch(
-        (err: unknown) => err,
-      );
-      assert.ok(
-        !(report instanceof Error),
-        `"${line}" cost the whole turn: ${String(report)}`,
-      );
-    }
-  });
-
-  it('REFUSES A FILE THE PLAN NAMED WITH NO BYTES, rather than skipping it quietly', async () => {
-    // Fail closed, and this one still costs the turn. It is the plan contradicting
-    // itself rather than a rule reading a sentence, so no heuristic can fire it.
-    await assert.rejects(
-      () => gateHarvest(input([{ path: 'content-30.md', kind: 'new' }])),
-      /cannot be checked/,
+    assert.deepEqual(out.held.map((h) => h.path), ['ops-workflow.md'], 'the offer must never be saved');
+    assert.deepEqual([...out.saved], ['content-30.md'], 'and its neighbour must survive');
+    assert.ok(
+      out.answer?.blocked.some((v) => v.code === 'dm.offered'),
+      'the violation is still raised, it just costs one file rather than the run',
     );
   });
-});
 
-describe('where the line sits, as a function', () => {
-  it('THE LIST WORTH A WHOLE TURN IS EXACTLY ONE ENTRY, and it carries its argument', () => {
-    // One entry, because one rule was measured against ordinary founder writing and
-    // did not fire on it. Adding a second means running that measurement again.
-    assert.deepEqual(WORTH_THE_WHOLE_TURN.map((e) => e.code), ['dm.offered']);
+  it('NOTHING IS WORTH A WHOLE TURN, and putting something back is a real decision', () => {
+    // Empty since 1 September 2026. A row here costs a founder every file in a turn,
+    // including the ones the gate approved, so it needs a harm a hold cannot contain.
+    // `dm.offered` was the last entry and it did not meet that bar in practice: it
+    // destroyed twelve good files over four runs, all over one heading in a file
+    // about the inbound automation rule 2 exists to permit.
+    assert.deepEqual([...WORTH_THE_WHOLE_TURN], []);
+    // If somebody does add one back, the argument has to be in the row rather than
+    // in a commit message nobody reads at the event.
     for (const entry of WORTH_THE_WHOLE_TURN) {
       assert.ok(entry.why.length > 200, `${entry.code} needs the argument, not a label`);
     }
@@ -259,12 +167,13 @@ describe('where the line sits, as a function', () => {
     assert.equal(outcomeFor(violation({ code: 'proof.nothing-to-check-against' })), 'hold-the-file');
   });
 
-  it('splits rule 2 on the evidence, which is the one place a turn is worth it', () => {
-    // Same again for the two quiet rule 2 codes. Only `dm.offered` can cost a
-    // turn, and only it ever could.
+  it('EVERY RULE 2 CODE HOLDS ITS FILE NOW, including the loudest one', () => {
+    // `dm.offered` was the exception and is not any more. The file it is found in is
+    // still never saved; what changed is that the founder keeps everything else the
+    // same turn produced.
     assert.equal(outcomeFor(violation({ code: 'dm.possible-offer' })), 'hold-the-file');
     assert.equal(outcomeFor(violation({ code: 'dm.mentioned-while-refusing' })), 'hold-the-file');
-    assert.equal(outcomeFor(violation({ code: 'dm.offered' })), 'refuse-the-turn');
+    assert.equal(outcomeFor(violation({ code: 'dm.offered' })), 'hold-the-file');
   });
 });
 
@@ -386,17 +295,24 @@ describe('what the founder reads about a file they did not get', () => {
     );
   });
 
-  it('tells the founder nothing was saved when the turn itself is refused', async () => {
-    const err = await gateHarvest(
-      input([file('ops-workflow.md', 'We can automate DMs for you overnight.\n')]),
-    ).then(
-      () => null,
-      (e: unknown) => e,
+  it('TELLS THE FOUNDER WHICH FILE WAS HELD AND WHY, in the terms that make it matter', async () => {
+    // This used to assert the whole turn refusal message, because `dm.offered` was
+    // the one code that threw a run away. It holds its file now, so what a founder
+    // reads is the hold, and the hold has to carry the same weight the refusal did:
+    // a restricted Instagram account is not recoverable by asking again.
+    const out = await gateHarvest(
+      input([
+        file('content-30.md', '## Post 1\n\nWhat we learned last week.\n'),
+        file('ops-workflow.md', 'We can automate DMs for you overnight.\n'),
+      ]),
     );
-    assert.ok(err instanceof RulesRefused);
-    assert.match(err.message, /Nothing from that request was saved\./);
-    assert.match(err.message, /exactly as it was before you asked/);
-    assert.doesNotMatch(err.message, /—|–/, 'the refusal follows the house style it enforces');
+    const said = out.notes.map((n) => n.message).join(' ');
+    assert.match(said, /ops-workflow\.md/, 'they have to be told which file');
+    assert.match(said, /Instagram/i, 'and why it matters, not just that a rule fired');
+    assert.doesNotMatch(said, /dm\.offered|no-dm-automation/, 'never a rule code');
+    assert.doesNotMatch(said, /—|–/, 'the hold follows the house style it enforces');
+    // AND IT MUST NOT SAY NOTHING WAS SAVED, because something was.
+    assert.doesNotMatch(said, /Nothing from that request was saved/);
   });
 });
 

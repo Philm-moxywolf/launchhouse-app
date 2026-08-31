@@ -252,11 +252,34 @@ export type GateOutcome = 'refuse-the-turn' | 'hold-the-file';
  * sentence a model could write, so a rename breaks a test rather than the event.
  */
 export const WORTH_THE_WHOLE_TURN: ReadonlyArray<{ code: string; why: string }> = [
-  {
-    code: 'dm.offered',
-    why:
-      'Rule 2, and the one rule where the offer itself is the harm. It fires only when a channel and a hand off verb sit in the same sentence, the sentence is not refusing, and the contact is cold, so it is not one word off a list. Measured against twelve sentences about DMs, it fired on the three that were genuine offers and on none of the nine that were not, including "send each of the 25 DMs yourself" and "the email sequence is automated, the DMs are not". A run that offered to automate cold DMs once wrote every other file of that turn in the same state, and this gate only catches the phrasings somebody thought of. A restricted Instagram account is not recoverable by asking again.',
-  },
+  // EMPTY, SINCE 1 SEPTEMBER 2026, AND THE ARGUMENT THAT EMPTIED IT IS WORTH KEEPING.
+  //
+  // `dm.offered` was here. The case for it was contamination: "a run that offered to
+  // automate cold DMs once wrote every other file of that turn in the same state".
+  //
+  // THAT DOES NOT HOLD, AND ONE NIGHT OF USE SHOWED IT. Every file in a turn is
+  // checked by the same rule. If the other files do not trip it, they are not
+  // contaminated by the definition the gate itself uses. Throwing them away asserts a
+  // contamination the gate just looked for and did not find. And it does not protect
+  // against what the gate MISSES either, because a phrasing nobody thought of passes
+  // whether one file is held or three are.
+  //
+  // WHAT IT COST. A founder ran the audience engine four times. Each run wrote three
+  // files. Each time, one heading in one of them tripped rule 2, and all three were
+  // destroyed along with the conversation. The heading was "Auto-DM, on the comment:",
+  // in the file about the inbound automation rule 2 exists to permit, directly under
+  // a line reading "Started by: they commented your keyword on your post."
+  //
+  // Twelve files of good work, thrown away over one label, by a rule protecting
+  // against a thing that was not happening.
+  //
+  // THE PROTECTION IS UNCHANGED. A file that trips rule 2 is still never saved. The
+  // founder still gets the whole explanation. What stops is the collateral: the files
+  // that passed are kept, and the conversation survives.
+  //
+  // ADDING A ROW BACK IS A REAL DECISION. It costs a founder every file in a turn,
+  // including the ones the gate approved, so it needs a harm that a hold genuinely
+  // cannot contain. Neither entry that used to be here met that bar in practice.
 ];
 
 /*
