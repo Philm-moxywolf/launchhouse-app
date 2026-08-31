@@ -198,3 +198,27 @@ test('LinkedIn on the outreach track is ordinary', () => {
   const result = checkTrack(art('outreach-sequence.md', text), ctx('b2b'));
   assert.deepEqual(result.violations, []);
 });
+
+test('a founder changing their track in the Brain is not blocked', () => {
+  // THE DEADLOCK, 1 September 2026. This was a block, so the Brain carrying the
+  // new track was held, and the record only updates from a Brain that committed.
+  // The track could never change, and "change my track" is the documented fix
+  // for a founder who picked the wrong one in session 1.
+  const brain = '# Founder Brain\n\nTrack: b2b\nModel: service\n';
+  const result = checkTrack(art('founder-brain.md', brain), ctx('b2c'));
+  assert.equal(result.ok, true, 'the Brain is where the track is decided, so it must be able to say so');
+  assert.equal(result.violations[0]?.code, 'track.brain-disagrees');
+  assert.equal(result.violations[0]?.severity, 'warn');
+});
+
+test('changing the track does not open the door to the other track\'s files', () => {
+  // The guard that matters. Only the Brain may disagree with the record.
+  const result = checkTrack(art('dm-openers.md', '# Openers\n'), ctx('b2b'));
+  assert.equal(result.ok, false);
+});
+
+test('a Brain with no Track line at all is still refused', () => {
+  const result = checkTrack(art('founder-brain.md', '# Founder Brain\n\nModel: service\n'), ctx('b2c'));
+  assert.equal(result.ok, false);
+  assert.equal(result.violations[0]?.code, 'track.missing-from-brain');
+});

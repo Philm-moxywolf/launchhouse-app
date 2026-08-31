@@ -396,6 +396,36 @@ describe('a file that fails a rule is held, and its neighbours are saved', () =>
   it('DOES NOT MOVE THE TRACK CACHE FROM A BRAIN IT HELD', async () => {
     // founder.track is a cache of the Track line in the file. If a held Brain could
     // still move it, rule 1 would be anchored to a file nobody has.
+    //
+    // THE VEHICLE CHANGED ON 1 SEPTEMBER, THE PROPERTY DID NOT. This used to hold
+    // the Brain by changing its Track line, because a Brain disagreeing with the
+    // record was a block. That made the track unchangeable, so it is a note now,
+    // and this test needed a Brain held for some other reason to still ask its
+    // question. An invented customer count does it: rule 5 holds the file, and the
+    // cache must not follow a file that was never stored.
+    const { db, written } = recordingDb();
+    const outcome = await runTurn(
+      { founderId: FOUNDER, actor: 'model', verb: 'agent-run', db },
+      async (ctx) => {
+        await writeFile(
+          join(ctx.home, 'founder-brain.md'),
+          CLEAN_BRAIN.replace('- **Track:** b2b', '- **Track:** b2c') +
+            '\n\nWe can automate DMs for you overnight.\n',
+          'utf8',
+        );
+        return null;
+      },
+    );
+    assert.deepEqual(outcome.gate.held.map((h) => h.path), ['founder-brain.md']);
+    assert.deepEqual(written, [], 'a held Brain is not stored');
+    assert.equal(outcome.trackAfter, 'b2b', 'the cache still describes the Brain that is stored');
+  });
+
+  it('MOVES THE TRACK CACHE FROM A BRAIN THAT COMMITTED, which is how a founder changes track', async () => {
+    // The other half, and the reason the block above became a note. A founder who
+    // picked the wrong track in session 1 says "change my track", the Brain is
+    // rewritten with the other word, and it has to be storable or the cache can
+    // never move and they are stuck on the wrong track for the whole programme.
     const { db, written } = recordingDb();
     const outcome = await runTurn(
       { founderId: FOUNDER, actor: 'model', verb: 'agent-run', db },
@@ -408,9 +438,11 @@ describe('a file that fails a rule is held, and its neighbours are saved', () =>
         return null;
       },
     );
-    assert.deepEqual(outcome.gate.held.map((h) => h.path), ['founder-brain.md']);
-    assert.deepEqual(written, [], 'a held Brain is not stored');
-    assert.equal(outcome.trackAfter, 'b2b', 'the cache still describes the Brain that is stored');
+    assert.deepEqual(outcome.gate.held, [], 'the Brain is where the track is decided');
+    assert.deepEqual(written, ['founder-brain.md'], 'the new Brain is stored');
+    assert.equal(outcome.trackAfter, 'b2c', 'and the cache follows it');
+    // Told, not silent. The founder should know their next answer changes side.
+    assert.ok(outcome.gate.notes.some((n) => n.code === 'track.brain-disagrees'));
   });
 
   it('A CUSTOMER COUNT NOBODY GAVE IT NEVER REACHES ge_file', async () => {

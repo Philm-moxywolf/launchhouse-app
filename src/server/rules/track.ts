@@ -243,14 +243,32 @@ function checkBrainTrackLine(artifact: Artifact, ctx: FounderContext, out: Viola
   }
 
   if (ctx.track !== null && declared !== ctx.track) {
+    // A NOTE, NOT A REFUSAL, AND ONLY HERE. This is the Brain, and the Brain is
+    // where the track is decided. `founder.track` is a cache of this exact line,
+    // written from it at the end of every turn, so a Brain that disagrees with
+    // the record is not a conflict. It is this line being changed, and the cache
+    // has not caught up yet.
+    //
+    // IT WAS A BLOCK UNTIL 1 SEPTEMBER, AND THAT MADE THE TRACK UNCHANGEABLE.
+    // The founder edits the Track line, this rule sees the Brain disagreeing with
+    // the record and holds the file, the record only ever updates from a Brain
+    // that committed, so the record never moves. The recovery line told them to
+    // open the Brain and check the Track line, which is what they had just done.
+    // The help skill documents "change my track" as the fix for a founder who
+    // picked wrong in session 1. That fix could not work.
+    //
+    // The guard that matters is untouched: every OTHER file is still refused when
+    // it belongs to the track the founder is not on. Only the Brain may say
+    // something the record has not caught up with, and only for the one turn it
+    // takes the record to follow.
     out.push({
       rule: RULE,
       code: 'track.brain-disagrees',
-      severity: 'block',
+      severity: 'warn',
       where: locate(artifact.path, artifact.text, artifact.text.toLowerCase().indexOf('track')),
       found: declared,
-      message: `Your Brain says ${declared} and this session is running on ${ctx.track}. They need to agree.`,
-      why: 'One of them picks the steps you are shown and the other picks what gets written into them. While they disagree, half your work would come out built for the other track.',
+      message: `Your Brain now says ${declared}, and this session is still running on ${ctx.track}. Your next answer will be on the ${declared} track.`,
+      why: 'The Track line in your Brain is what decides this, and it has just changed. Anything already written for the other track stays in your folder and is no longer part of your steps.',
       recovery: { label: 'Open your Founder Brain and check the Track line', action: { kind: 'edit', path: artifact.path } },
     });
   }
