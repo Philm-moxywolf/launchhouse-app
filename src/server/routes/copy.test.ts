@@ -28,6 +28,9 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { checkProseText } from '../rules/prose.ts';
 import { FILE_ERRORS } from './files.ts';
@@ -94,4 +97,30 @@ test('THE PARTS THAT ARE NOT BUILT SAY WHEN THE FOUNDER CAN DO IT INSTEAD', () =
 test('THE TOKEN GUARD TELLS THE FOUNDER NOTHING WAS SAVED', () => {
   assert.match(SETUP_ERRORS.looksLikeAToken.message, /Nothing was saved/);
   assert.match(SETUP_ERRORS.looksLikeAToken.message, /Location ID/);
+});
+
+test('PRESTART REBUILDS THE SCREENS EVERY START, so the server and the browser cannot disagree', () => {
+  // THE BUG THIS PINS, and it cost hours of looking at the wrong half. prestart used to
+  // build only when dist/web/index.html was MISSING. dist/ survives a git pull, so
+  // pulling new code and pressing Run gave a new server serving old screens: the browser
+  // loaded a bundle from several commits back while the API answered from the new code.
+  // Every screen fix looked like it had not been applied, and the obvious conclusion,
+  // that the fix was wrong, was the wrong one.
+  //
+  // The build takes about 400ms. That is not worth a class of bug where the two halves
+  // of the app disagree and nothing says so.
+  const pkg = JSON.parse(
+    readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'package.json'), 'utf8'),
+  ) as { scripts: Record<string, string> };
+  const prestart = pkg.scripts['prestart'] ?? '';
+
+  assert.match(prestart, /build:web/, 'prestart has to build the browser bundle');
+  assert.doesNotMatch(
+    prestart,
+    /-f\s+dist/,
+    'prestart must not skip the build when dist already exists, which is exactly what a pull leaves behind',
+  );
+  // AND IT STILL MUST NOT FAIL THE START. A build that dies for want of memory must not
+  // leave a founder behind an address that never answers.
+  assert.match(prestart, /\|\|/, 'a failed build has to fall through to starting the server anyway');
 });

@@ -11,7 +11,7 @@
   "scripts": {
     "dev": "TZ=UTC tsx watch src/server/index.ts",
     "dev:web": "vite",
-    "prestart": "[ -f dist/web/index.html ] && echo 'The screens are already built. Starting.' || npm run build:web || echo 'The screens did not build. Starting anyway, so you get a page that says what to do rather than an address that never answers.'",
+    "prestart": "npm run build:web || echo 'The screens did not build. Starting anyway, so you get a page that says what to do rather than an address that never answers.'",
     "start": "TZ=UTC tsx src/server/index.ts",
     "build": "npm run typecheck && npm run build:web",
     "build:web": "vite build",

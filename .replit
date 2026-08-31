@@ -38,10 +38,18 @@
 # Chaining `npm run build:web &&` here would cover the workspace and leave the deployment
 # uncovered, which is the mistake the migration note above is about.
 #
-# IT BUILDS ONLY WHEN THERE IS NOTHING TO SERVE, so a restart does not wait for a build it
-# does not need, and it NEVER FAILS THE START. A build that dies for want of memory must not
-# leave a founder with a container that restarts for ever behind an address that never
-# answers. It prints a line and the server comes up anyway.
+# IT BUILDS EVERY START, AND IT USED TO BUILD ONLY WHEN dist WAS MISSING. That was wrong
+# and it cost hours. `dist/` survives a git pull, so pulling new code and pressing Run
+# gave a NEW SERVER SERVING OLD SCREENS: the browser loaded a bundle from several commits
+# back while the API answered from the new code. Every screen fix looked like it had not
+# been applied, and the obvious conclusion, that the fix was wrong, was the wrong one.
+#
+# The build takes about 400ms. That is not worth a class of bug where the two halves of
+# the app disagree and nothing says so.
+#
+# IT STILL NEVER FAILS THE START. A build that dies for want of memory must not leave a
+# founder with a container that restarts for ever behind an address that never answers.
+# It prints a line and the server comes up anyway.
 #
 # THE CAVEAT THAT CANNOT BE CLOSED FROM HERE, and the design works either way: nobody here
 # has run a spike to find out whether pressing Run in a Replit workspace triggers a build of
