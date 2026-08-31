@@ -320,6 +320,33 @@ export function createRunTurn(deps: RunTurnDeps): RunTurn {
       // founder needs to know what was refused and what to do about it. So the
       // real sentence goes out first, as a status frame rather than a second
       // error, and then the throw carries on.
+      // WHAT ACTUALLY TRIPPED IT, IN THE LOG, and it was not there before.
+      //
+      // A refusal told the founder what to do and told nobody which sentence caused
+      // it. Diagnosing one meant querying the transcript for the model's own Write
+      // call and reading the file it had tried to save, which is the only copy left
+      // once the turn rolls back. That is a database query per incident, at an event
+      // with 130 founders and a fix window of one day.
+      //
+      // The founder's sentence deliberately carries no rule codes. This is the other
+      // audience: whoever is on the mentor board at 9pm on the 24th.
+      if (err instanceof RulesRefused) {
+        deps.log.error(
+          {
+            founderId: job.founderId,
+            turnId: job.turnId,
+            checked: err.paths,
+            blocked: err.answer.blocked.map((v) => ({
+              code: v.code,
+              path: v.where.path,
+              line: v.where.line,
+              excerpt: v.where.excerpt,
+            })),
+          },
+          'a turn was refused by the rules gate, and this is what tripped it',
+        );
+      }
+
       const explained = explain(err);
       if (explained !== null) {
         // ON SCREEN NOW, so the founder is not left watching a spinner stop.
