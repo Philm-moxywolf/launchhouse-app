@@ -521,6 +521,7 @@ export class PgAppStore implements AppStore {
         createdAt: connections.createdAt,
         verifiedAt: connections.verifiedAt,
         purgedAt: connections.purgedAt,
+        accounts: connections.accounts,
       })
       .from(connections)
       .where(and(eq(connections.founderId, founderId), eq(connections.vendor, vendor)))
@@ -535,6 +536,21 @@ export class PgAppStore implements AppStore {
    * the vendor, so saying anything else here would be a claim we have not
    * earned.
    */
+  async connectionSecretFor(
+    founderId: string,
+    vendor: string,
+  ): Promise<{ ciphertext: Uint8Array; nonce: Uint8Array } | null> {
+    const rows = await this.db
+      .select({ ciphertext: connections.ciphertext, nonce: connections.nonce, purgedAt: connections.purgedAt })
+      .from(connections)
+      .where(and(eq(connections.founderId, founderId), eq(connections.vendor, vendor)));
+    const row = rows[0];
+    if (row === undefined || row.ciphertext === null || row.nonce === null) return null;
+    // A purged row keeps its history and must never hand a credential back.
+    if (row.purgedAt !== null) return null;
+    return { ciphertext: row.ciphertext, nonce: row.nonce };
+  }
+
   async locationIdFor(founderId: string, vendor: string): Promise<string | null> {
     const rows = await this.db
       .select({ locationId: connections.locationId })

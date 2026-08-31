@@ -101,10 +101,18 @@ export function openGhlToken(founderId: string, ciphertext: Uint8Array, nonce: U
  * failed its check is not stored at all: a row that says unverified is a credential
  * nobody is watching, and the founder has the token in front of them to paste again.
  */
+export interface StoredAccount {
+  readonly id: string;
+  readonly name: string;
+  readonly platform: string;
+  readonly type: string;
+}
+
 export async function saveGhlToken(
   founderId: string,
   token: string,
   locationId: string,
+  accounts: readonly StoredAccount[],
   verifiedAt: Date,
 ): Promise<void> {
   const sealed = sealGhlToken(founderId, token);
@@ -118,6 +126,7 @@ export async function saveGhlToken(
       ciphertext: sealed.ciphertext,
       nonce: sealed.nonce,
       locationId,
+      accounts: JSON.stringify(accounts),
       status: 'connected',
       tokenPrefix: PREFIX_CLASSIFICATION,
       tokenLength: token.length,
@@ -131,6 +140,7 @@ export async function saveGhlToken(
         ciphertext: sealed.ciphertext,
         nonce: sealed.nonce,
         locationId,
+        accounts: JSON.stringify(accounts),
         status: 'connected',
         tokenPrefix: PREFIX_CLASSIFICATION,
         tokenLength: token.length,
@@ -172,4 +182,26 @@ export async function readGhlLocationId(founderId: string): Promise<string | nul
     .from(connections)
     .where(and(eq(connections.founderId, founderId), eq(connections.vendor, GHL_VENDOR)));
   return rows[0]?.locationId ?? null;
+}
+
+/**
+ * The accounts the last check saw. Never throws on a bad column.
+ *
+ * A row somebody hand edited, or written by a version that stored a different shape,
+ * reads as "none seen" rather than crashing the setup screen. The founder then presses
+ * Check the connection and it fills in again, which is a better end to that story than
+ * a page that will not load.
+ */
+export function readStoredAccounts(raw: string | null): readonly StoredAccount[] {
+  if (raw === null || raw === '') return [];
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      (a): a is StoredAccount =>
+        a !== null && typeof a === 'object' && typeof (a as StoredAccount).name === 'string',
+    );
+  } catch {
+    return [];
+  }
 }

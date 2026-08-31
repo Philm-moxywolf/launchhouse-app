@@ -111,6 +111,8 @@ export class MemoryAppStore implements AppStore {
   readonly threads = new Map<string, ThreadRow>();
   readonly steps = new Map<string, SetupStepRow>();
   readonly connections = new Map<string, ConnectionRow>();
+  /** Sealed credentials, kept apart from the row exactly as the columns are. */
+  readonly secrets = new Map<string, { ciphertext: Uint8Array; nonce: Uint8Array }>();
   readonly messages: MessageRow[] = [];
   readonly turns = new Map<string, TurnRow>();
   readonly events: TurnEventRow[] = [];
@@ -314,8 +316,34 @@ export class MemoryAppStore implements AppStore {
     return Promise.resolve(this.connections.get(`${founderId}\u0000${vendor}`) ?? null);
   }
 
+  connectionSecretFor(
+    founderId: string,
+    vendor: string,
+  ): Promise<{ ciphertext: Uint8Array; nonce: Uint8Array } | null> {
+    return Promise.resolve(this.secrets.get(`${founderId}\u0000${vendor}`) ?? null);
+  }
+
+  /** Seed a sealed credential, for a test about reading one back. */
+  setConnectionSecret(founderId: string, vendor: string, ciphertext: Uint8Array, nonce: Uint8Array): void {
+    this.secrets.set(`${founderId}\u0000${vendor}`, { ciphertext, nonce });
+  }
+
   locationIdFor(founderId: string, vendor: string): Promise<string | null> {
     return Promise.resolve(this.connections.get(`${founderId}\u0000${vendor}`)?.locationId ?? null);
+  }
+
+  /**
+   * Seed what a successful check would have written, without running one.
+   *
+   * The real write goes through `saveGhlToken`, which encrypts and needs a master key.
+   * A route test about reading accounts back should not have to stand that up, and a
+   * fixture that could only be filled by the thing under test would be circular.
+   */
+  setConnectionAccounts(founderId: string, vendor: string, accounts: string): void {
+    const key = `${founderId}\u0000${vendor}`;
+    const existing = this.connections.get(key);
+    if (existing === undefined) throw new Error('seed a connection before its accounts');
+    this.connections.set(key, { ...existing, accounts, status: 'connected' });
   }
 
   saveLocationId(founderId: string, vendor: string, locationId: string, at: Date): Promise<void> {
@@ -328,6 +356,7 @@ export class MemoryAppStore implements AppStore {
       createdAt: existing?.createdAt ?? at,
       verifiedAt: existing?.verifiedAt ?? null,
       purgedAt: existing?.purgedAt ?? null,
+      accounts: existing?.accounts ?? null,
     });
     return Promise.resolve();
   }

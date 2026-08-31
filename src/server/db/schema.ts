@@ -691,6 +691,19 @@ export const connections = pgTable(
      */
     tokenPrefix: text('token_prefix'),
     tokenLength: integer('token_length'),
+    /**
+     * What the last successful check saw, as JSON: `[{ id, name, platform, type }]`.
+     *
+     * NOT A DISPLAY CONVENIENCE. `createPost` takes accountIds, so a founder whose
+     * accounts live only in the response of a call nobody re ran has nothing to post
+     * to. Before this column existed the connected screen said "posting to: nothing
+     * yet" on every page load, which was true and was the bug.
+     *
+     * A snapshot, not a source of truth. GoHighLevel is that, and a founder who
+     * connects a new page sees it after the next check rather than immediately. The
+     * screen says when it was last looked at for exactly that reason.
+     */
+    accounts: text('accounts'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     verifiedAt: timestamp('verified_at', { withTimezone: true }),
     purgedAt: timestamp('purged_at', { withTimezone: true }),

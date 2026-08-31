@@ -136,3 +136,47 @@ test('THE TOKEN NEVER COMES BACK OUT, in a value or in an error', async () => {
   const out2 = await fetchSocialAccounts(TOKEN, 'somewhere', refused);
   assert.equal(JSON.stringify(out2).includes(TOKEN), false, 'the token reached an error');
 });
+
+/* -------------------------------------------------------------------------- */
+/* The two bugs that reached a founder's screen                               */
+/* -------------------------------------------------------------------------- */
+
+test('CHECK THE CONNECTION SENDS NO TOKEN, so the route must not demand one in the body', async () => {
+  // THE BUG: /token and /verify were pointed at one handler that read the token out of
+  // the request body. `verifyGhl()` deliberately sends no body, because a founder must
+  // never be asked to paste a credential again just because a Facebook Page was not
+  // connected yet. So Check the connection always answered "that did not arrive as a
+  // token we can read" about a token that was perfectly good.
+  const api = await import('../../web/lib/api.ts');
+  const src = api.verifyGhl.toString();
+  assert.doesNotMatch(src, /token/, 'verifyGhl must not send a token, it re-uses the stored one');
+
+  const setup = await import('../routes/setup.ts');
+  assert.ok('noTokenYet' in setup.SETUP_ERRORS, 'verify needs its own refusal for having nothing stored');
+  assert.doesNotMatch(
+    setup.SETUP_ERRORS.noTokenYet.message,
+    /did not arrive/,
+    'a founder with nothing stored must not be told their paste was unreadable',
+  );
+});
+
+test('ACCOUNTS SURVIVE A PAGE LOAD, because createPost needs them and a screen showed nothing', async () => {
+  // THE BUG: accounts were returned in the connect response and never written down, and
+  // the setup state hardcoded an empty list. So a connected founder was told "posting
+  // to: nothing yet" on every load, and the ids createPost needs did not exist anywhere.
+  const store = await import('./ghl-token-store.ts');
+  const saved = [
+    { id: 'a_loc_1_page', name: 'Elevate AI Consulting LTD', platform: 'linkedin', type: 'page' },
+    { id: 'a_loc_2_profile', name: 'Philip Mudhir', platform: 'linkedin', type: 'profile' },
+  ];
+  const back = store.readStoredAccounts(JSON.stringify(saved));
+  assert.deepEqual(back.map((a) => a.name), ['Elevate AI Consulting LTD', 'Philip Mudhir']);
+  assert.equal(back[0]?.id, 'a_loc_1_page', 'the id is what createPost posts to, so it has to survive');
+});
+
+test('a column that cannot be read means none seen, never a page that will not load', async () => {
+  const store = await import('./ghl-token-store.ts');
+  for (const bad of [null, '', 'not json', '{"not":"a list"}', '[1,2,3]']) {
+    assert.deepEqual(store.readStoredAccounts(bad), [], `${String(bad)} should read as none seen`);
+  }
+});

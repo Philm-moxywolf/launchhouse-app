@@ -73,7 +73,7 @@ import type { FastifyInstance, RouteHandlerMethod } from 'fastify';
 import { GHL_WALK_STEPS } from '../../../app/content/ghl-walk.ts';
 import { GHL_TOKEN_PREFIX_GUESS } from '../integrations/contracts/ghl.ts';
 import { fetchSocialAccounts } from '../integrations/ghl-accounts.ts';
-import { saveGhlToken } from '../integrations/ghl-token-store.ts';
+import { openGhlToken, readStoredAccounts, saveGhlToken } from '../integrations/ghl-token-store.ts';
 import { checkAnthropicKey, problemOf, readPastedKey, type KeyProblem } from '../agent/anthropic-check.ts';
 import { anthropicKeyFor, describeAnthropicKey } from '../agent/anthropic-key.ts';
 import { forgetStoredAnthropicKey, saveAnthropicKey } from '../agent/anthropic-key-store.ts';
@@ -181,6 +181,11 @@ export const SETUP_ERRORS = {
     status: 400,
     code: 'bad_token',
     message: 'That did not arrive as a token we can read. Copy it again from Private Integrations and paste it in.',
+  },
+  noTokenYet: {
+    status: 400,
+    code: 'no_token_yet',
+    message: 'There is no token saved to check. Go to the token walk and paste yours in first.',
   },
   noLocationYet: {
     status: 400,
@@ -293,7 +298,13 @@ export async function registerSetupRoutes(app: FastifyInstance, deps: RouteDeps)
         connected: ghl?.status === 'connected',
         locationId: ghl?.locationId ?? null,
         locationName: null,
-        accounts: [],
+        // WHAT THE LAST CHECK SAW, not an empty list. This read `accounts: []`
+        // unconditionally, so a connected founder was told "posting to: nothing yet"
+        // on every page load while their two accounts sat in GoHighLevel.
+        accounts: readStoredAccounts(ghl?.accounts ?? null).map((a) => ({
+          platform: a.platform,
+          name: a.name,
+        })),
         contacts: 'not_checked',
         tokenMadeAt: ghl?.verifiedAt?.toISOString() ?? null,
       },
@@ -529,18 +540,44 @@ export async function registerSetupRoutes(app: FastifyInstance, deps: RouteDeps)
    * to, so a token from a different sub account than the one the founder typed is
    * caught here rather than at the first post three weeks later.
    */
-  const connectToken: RouteHandlerMethod = async (request, reply) => {
+  const runGhlCheck = (wantsPastedToken: boolean): RouteHandlerMethod => async (request, reply) => {
     if (!(await deps.auth.requireFounder(request, reply))) return reply;
     const founder = deps.auth.founderOf(request);
 
-    const token = readString(request.body, 'token', MAX_TOKEN_CHARACTERS);
-    if (token === null) {
-      return reply.code(SETUP_ERRORS.badToken.status).send(errorBody(SETUP_ERRORS.badToken));
-    }
-
+    // TWO WAYS IN, AND ONLY ONE OF THEM CARRIES A TOKEN.
+    //
+    // `/token` is the paste on step 5. `/verify` is the Check the connection button on
+    // the rail, which sends no body on purpose: a founder must never be asked to paste
+    // a credential a second time because a Facebook Page was not connected yet. It
+    // re-runs the same check against the token already stored.
+    //
+    // THIS WAS A REAL BUG AND IT SHIPPED. Both addresses were pointed at one handler
+    // that read the token out of the body, so Check the connection always answered
+    // "that did not arrive as a token we can read" against a token that was fine.
+    // THE LOCATION IS ASKED FOR FIRST, ON BOTH PATHS, and the order is load bearing
+    // twice over. The call cannot be made without it, so a founder missing one gets
+    // the step they are missing rather than a failure further in. And it goes through
+    // `deps.store`, which every harness provides, so no test can reach a database
+    // handle or a vendor before that answer. The first version read the token first,
+    // through `getDb()`, and a route test got a 500 where a founder should have got a
+    // sentence. That is the second time in this route.
     const stored = await deps.store.locationIdFor(founder.id, GHL);
     if (stored === null) {
       return reply.code(SETUP_ERRORS.noLocationYet.status).send(errorBody(SETUP_ERRORS.noLocationYet));
+    }
+
+    let token: string | null;
+    if (wantsPastedToken) {
+      token = readString(request.body, 'token', MAX_TOKEN_CHARACTERS);
+      if (token === null) {
+        return reply.code(SETUP_ERRORS.badToken.status).send(errorBody(SETUP_ERRORS.badToken));
+      }
+    } else {
+      const sealed = await deps.store.connectionSecretFor(founder.id, GHL);
+      if (sealed === null) {
+        return reply.code(SETUP_ERRORS.noTokenYet.status).send(errorBody(SETUP_ERRORS.noTokenYet));
+      }
+      token = openGhlToken(founder.id, sealed.ciphertext, sealed.nonce);
     }
 
     const outcome = await fetchSocialAccounts(token, stored);
@@ -566,7 +603,13 @@ export async function registerSetupRoutes(app: FastifyInstance, deps: RouteDeps)
     }
 
     const now = deps.clock.now();
-    await saveGhlToken(founder.id, token, stored, now);
+    await saveGhlToken(
+      founder.id,
+      token,
+      stored,
+      outcome.accounts.map((a) => ({ id: a.id, name: a.name, platform: a.platform, type: a.type })),
+      now,
+    );
 
     return reply.code(200).send({
       ok: true,
@@ -585,8 +628,8 @@ export async function registerSetupRoutes(app: FastifyInstance, deps: RouteDeps)
     });
   };
 
-  app.post('/api/setup/ghl/token', connectToken);
-  app.post('/api/setup/ghl/verify', connectToken);
+  app.post('/api/setup/ghl/token', runGhlCheck(true));
+  app.post('/api/setup/ghl/verify', runGhlCheck(false));
 
   /**
    * Disconnect.

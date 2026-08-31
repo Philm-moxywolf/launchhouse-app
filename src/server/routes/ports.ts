@@ -163,6 +163,14 @@ export interface ConnectionRow {
   readonly createdAt: Date;
   readonly verifiedAt: Date | null;
   readonly purgedAt: Date | null;
+  /**
+   * What the last successful check saw, as the JSON in the column, or null.
+   *
+   * A string rather than a parsed list, because parsing belongs with the code that
+   * knows what a bad value should do, and here that is "none seen" rather than a
+   * setup screen that will not load.
+   */
+  readonly accounts: string | null;
 }
 
 export interface AppStore {
@@ -272,6 +280,22 @@ export interface AppStore {
    * answering a founder with a server error instead of a sentence.
    */
   locationIdFor(founderId: string, vendor: string): Promise<string | null>;
+
+  /**
+   * The sealed credential for one vendor, or null when there is none to open.
+   *
+   * THE CIPHERTEXT, NOT THE TOKEN. Opening it needs the master key and belongs with the
+   * code that knows the envelope layout, so this hands back bytes and nothing here can
+   * leak a credential by being called.
+   *
+   * It is on the store for the same reason `locationIdFor` is: a route that reaches for
+   * `getDb()` cannot run in a harness without one, and this route answered a founder
+   * with a 500 twice before that lesson stuck.
+   */
+  connectionSecretFor(
+    founderId: string,
+    vendor: string,
+  ): Promise<{ ciphertext: Uint8Array; nonce: Uint8Array } | null>;
 
   /**
    * Delete our copy of a credential. IT DOES NOT SWITCH THE TOKEN OFF at the
