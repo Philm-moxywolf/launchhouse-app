@@ -715,6 +715,32 @@ const STARTED_BY_THEM: readonly RegExp[] = [
   /\bopt(?:ed|s)?[\s-]?in\b/i,
   /\bmessaging window\b/i,
   /\b24[\s-]?hour window\b/i,
+  /**
+   * "on the comment", and the shapes beside it.
+   *
+   * THIS IS THE ONE THAT COST A NIGHT. The audience engine wrote a heading,
+   * "Auto-DM, on the comment:", in a file whose whole subject is the inbound
+   * automation this rule explicitly permits. `auto[\s-]?dm` matched, nothing here
+   * matched back, and the turn was refused. Four times, on four rebuilds, taking
+   * the founder's other work with it each time.
+   *
+   * "On the comment" is not a hedge. It names the trigger: the message goes out
+   * BECAUSE they commented, which is the window Instagram actually opens. A model
+   * writing a label for a piece of copy reaches for this shape before it reaches
+   * for "when someone comments", which the list already had.
+   *
+   * Kept narrow. It needs a determiner and one of the four things a person can
+   * actually do, so "on the comment" qualifies and "on comment sections" does not.
+   */
+  /\bon\s+(?:the|their|a|each|every|any)\s+(?:comment|comments|repl(?:y|ies)|messages?|dms?)\b/i,
+  /**
+   * "Started by: they commented your keyword."
+   *
+   * The engine writes this line at the top of every flow, because the skill tells
+   * it to name the trigger first. The list could match "they messaged you" and not
+   * "they commented", which is the same claim about the same window.
+   */
+  /\bstarted\s+by\b[^.\n]{0,40}\bthey\s+(?:comment|commented|messaged|replied|wrote|asked|sent)\b/i,
 ];
 
 /**

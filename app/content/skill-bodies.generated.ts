@@ -128,6 +128,14 @@ export const SKILL_BODIES: Readonly<Record<string, string>> = {
     "",
     "Write the copy for each. The workflow itself is a GHL snapshot loaded at the clinic, so do not attempt to build automation here. Copy only.",
     "",
+    "**Name the trigger in every label, not just the first one.**",
+    "",
+    "Write \"Reply, sent when they comment:\" above each piece of copy, every time. Do not use a bare label that says only that a machine sends it.",
+    "",
+    "Two reasons, and the first is the one that matters to the founder. Every message in this file only goes out because somebody did something first, and a label that says so is the difference between a flow they can check and a flow they have to take on trust. A reader scanning the file should be able to see, at each step, what opened the window.",
+    "",
+    "The second is practical. A label that does not name the trigger is read as the thing rule 2 refuses, and the refusal costs the whole run, including the two files that had nothing to do with it. Naming the trigger is not a workaround. It is the sentence being accurate about what it describes.",
+    "",
     "Output to `./growth-engine/inbound-scripts.md`.",
     "",
     "## Gate",
@@ -1159,7 +1167,7 @@ export const SKILL_BODIES: Readonly<Record<string, string>> = {
  * and if they do not, the prompt cache is not being shared and the bill says so.
  */
 export const SKILL_BODY_SHA256: Readonly<Record<string, string>> = {
-  "audience-b2c": "b5fdde22135cf70fd9c90d0deff6e849b1c137f15eb0d3ecc79477d491596092",
+  "audience-b2c": "4e6f8857b4da0e3109ce374e87512d43dbc9a2e1481e9883ad54acdeff722581",
   "content-engine": "92ce4f944b9c4347b9f67b8a0869f4c1c6803820c14fad6ab39198e61a406a51",
   "content-engine#unforked": "6798db02e6f615460af6c703d6ff29a8e26585974a76833c0ff23cd09d75c9b3",
   "founder-brain": "f64f7455453d1b6107aee4280745562b58bea58da60597a76054f723100a98cd",

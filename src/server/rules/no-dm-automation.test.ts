@@ -1225,3 +1225,41 @@ test('every refusal names a real line and ends on a way out', () => {
     assert.equal(v.recovery.action.kind, 'route');
   }
 });
+
+test('THE PRODUCT\'S OWN INBOUND SCRIPTS ARE NOT REFUSED, which cost four turns', () => {
+  // THE NIGHT THIS CAME FROM. The audience engine wrote inbound-scripts.md and rule
+  // 2 refused it on a heading: "Auto-DM, on the comment:". A refusal costs the whole
+  // turn, so dm-openers.md and hook-bank.md went with it, four rebuilds running.
+  //
+  // Every message in that file goes out only because somebody commented first, which
+  // is the inbound automation this rule exists to permit. "On the comment" names
+  // that window, and the list of inbound triggers had no shape for it.
+  const labelled = checkNoDmAutomation({
+    path: 'inbound-scripts.md',
+    authored: 'model',
+    text: '**Auto-DM, on the comment:**\nHere they are, as promised.',
+  });
+  assert.deepEqual(labelled.violations ?? [], [], 'the trigger is named, so the window is named');
+});
+
+test('"started by: they commented" is an inbound trigger, because the engine writes it', () => {
+  const started = checkNoDmAutomation({
+    path: 'inbound-scripts.md',
+    authored: 'model',
+    text: 'Started by: they commented your keyword on your post.\nAuto-DM goes out.',
+  });
+  assert.deepEqual(started.violations ?? [], []);
+});
+
+test('AND NEITHER SHAPE RESCUES AN AUTOMATION WITH NO TRIGGER AT ALL', () => {
+  // The two additions above name a window. They must not licence a sentence that
+  // names none, which is the thing rule 2 is actually for.
+  for (const text of [
+    'Send this to every new follower automatically, in bulk, while you sleep.',
+    'Use a bot to DM everyone on the list for you.',
+    'Auto-DM every new follower the moment they follow.',
+  ]) {
+    const res = checkNoDmAutomation({ path: 'outreach.md', authored: 'model', text });
+    assert.ok((res.violations ?? []).length > 0, `this must still be refused: ${text}`);
+  }
+});
