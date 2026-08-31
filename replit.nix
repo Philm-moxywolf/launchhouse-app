@@ -20,8 +20,9 @@
     # which is what makes America/New_York resolve. Verified at boot, not assumed.
     pkgs.nodejs_22
 
-    # The content repo is a pinned git submodule. Without git, `git submodule update --init`
-    # cannot run and ge is simply absent.
+    # Not for the content repo any more. That was a pinned submodule and it is now vendored
+    # into vendor/, so a remix into a founder's own account needs no GitHub credential and no
+    # submodule step. git stays because ge and the deployment probe both shell out to it.
     pkgs.git
 
     # psql, for reading the record by hand during the fix window on 24 September. A recovery

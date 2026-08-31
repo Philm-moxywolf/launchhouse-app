@@ -5,8 +5,12 @@ and the nine engines run server side. No terminal, no plugin, no install.
 
 **This repository is private and stays private.** It holds an API key funding 130 people, 130
 GoHighLevel tokens, Apollo credentials, and 130 founders' real business data including named
-prospects with email addresses. The engine content lives in the public repo and is consumed
-from here as a pinned submodule. Prose is edited there. The app never edits it.
+prospects with email addresses. The engine content lives in the public repo and is
+vendored into `vendor/`, pinned by commit in `vendor/content-pin.json`. It was a submodule
+and is not any more: a founder remixing this into their own Replit account has no GitHub
+credential, and a submodule they cannot fetch is an app that does not start. Prose is edited
+in the content repo and moved here with `npm run engine:bump -- --to <ref>`. The app never
+edits it.
 
 The full specification is `planning/REPLIT-BUILD.md` in the Launchhouse working folder. This
 file is how to run what is in this repository. Where the two disagree, the build document
