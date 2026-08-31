@@ -50,7 +50,7 @@
 # changes what a founder gets.
 run = "npm run start"
 entrypoint = "src/server/index.ts"
-modules = ["nodejs-20", "web", "nix"]
+modules = ["web", "nix", "nodejs-22"]
 
 [nix]
 channel = "stable-25_05"
@@ -63,14 +63,33 @@ channel = "stable-25_05"
 # is not.
 TZ = "UTC"
 
-# Nothing else is set here on purpose. A slim Node build would not know America/New_York,
-# and every scheduled post depends on that zone resolving, but the answer to that is a boot
-# assertion rather than an environment variable: env.ts constructs a formatter for New York
-# inside a try and refuses to start if it throws. An assertion cannot be silently wrong.
-
 [[ports]]
 localPort = 5000
 externalPort = 80
+
+[workflows]
+runButton = "Project"
+
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Start application"
+
+[[workflows.workflow]]
+name = "Start application"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "npm run start"
+waitForPort = 5000
+
+[workflows.workflow.metadata]
+outputType = "webview"
 
 # =========================================================================================
 # Deployment: configure it in the Deployments pane, not here.
