@@ -117,39 +117,80 @@ export async function saveGhlToken(
 ): Promise<void> {
   const sealed = sealGhlToken(founderId, token);
   const db = getDb();
-  await db
-    .insert(connections)
-    .values({
-      founderId,
-      vendor: GHL_VENDOR,
-      keyVersion: sealed.keyVersion,
-      ciphertext: sealed.ciphertext,
-      nonce: sealed.nonce,
-      locationId,
-      accounts: JSON.stringify(accounts),
-      status: 'connected',
-      tokenPrefix: PREFIX_CLASSIFICATION,
-      tokenLength: token.length,
-      createdAt: verifiedAt,
-      verifiedAt,
-    })
-    .onConflictDoUpdate({
-      target: [connections.founderId, connections.vendor],
-      set: {
+
+  // THE SAME RULE AS THE READ, AND FOR THE SAME REASON. The accounts column arrived in
+  // migration 0002. A deployment running this code against a database that has not run
+  // it yet fails the whole write, so a founder pressing Check the connection gets an
+  // incident id and their token is never saved. That happened.
+  //
+  // A COLUMN ADDED FOR A NEW FEATURE MUST NOT BE ABLE TO BREAK A WRITE THAT WORKED
+  // YESTERDAY. The token, the location and the status are what a connection IS, and
+  // they go in whether or not the new column is there. The accounts are a snapshot of
+  // what was seen, so losing them costs a founder one press of Check the connection
+  // after the migration lands, rather than the connection itself.
+  //
+  // It is tried WITH the column first, so the normal path is one statement and the
+  // fallback is the exception. Only a missing column is retried: any other failure is
+  // a real one and has to surface.
+  const write = async (withAccounts: boolean): Promise<void> => {
+    const extra = withAccounts ? { accounts: JSON.stringify(accounts) } : {};
+    await db
+      .insert(connections)
+      .values({
+        founderId,
+        vendor: GHL_VENDOR,
         keyVersion: sealed.keyVersion,
         ciphertext: sealed.ciphertext,
         nonce: sealed.nonce,
         locationId,
-        accounts: JSON.stringify(accounts),
         status: 'connected',
         tokenPrefix: PREFIX_CLASSIFICATION,
         tokenLength: token.length,
+        createdAt: verifiedAt,
         verifiedAt,
-        // Cleared, because this row is connected again. A purgedAt left behind would
-        // read as a credential that had been taken away and is somehow still working.
-        purgedAt: null,
-      },
-    });
+        ...extra,
+      })
+      .onConflictDoUpdate({
+        target: [connections.founderId, connections.vendor],
+        set: {
+          keyVersion: sealed.keyVersion,
+          ciphertext: sealed.ciphertext,
+          nonce: sealed.nonce,
+          locationId,
+          status: 'connected',
+          tokenPrefix: PREFIX_CLASSIFICATION,
+          tokenLength: token.length,
+          verifiedAt,
+          // Cleared, because this row is connected again. A purgedAt left behind would
+          // read as a credential that had been taken away and is somehow still working.
+          purgedAt: null,
+          ...extra,
+        },
+      });
+  };
+
+  try {
+    await write(true);
+  } catch (err: unknown) {
+    if (!isMissingAccountsColumn(err)) throw err;
+    await write(false);
+  }
+}
+
+/**
+ * Is this the one failure worth retrying without the new column?
+ *
+ * Narrow on purpose. Postgres answers 42703 for an undefined column, and the message
+ * names it. Anything else is a real failure and has to reach the founder as one: a
+ * catch that swallowed everything would turn a broken credential into a silent
+ * half write, which is worse than the bug it was added for.
+ */
+function isMissingAccountsColumn(err: unknown): boolean {
+  if (err === null || typeof err !== 'object') return false;
+  const e = err as { code?: unknown; message?: unknown };
+  const code = typeof e.code === 'string' ? e.code : '';
+  const message = typeof e.message === 'string' ? e.message : '';
+  return code === '42703' || /column .*accounts.* does not exist/i.test(message);
 }
 
 /** The stored token and location, or null when there is no usable row. */

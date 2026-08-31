@@ -182,6 +182,16 @@ export const SETUP_ERRORS = {
     code: 'bad_token',
     message: 'That did not arrive as a token we can read. Copy it again from Private Integrations and paste it in.',
   },
+  tokenUnreadable: {
+    status: 400,
+    code: 'token_unreadable',
+    message: 'We could not open the token we had stored, so it cannot be checked. Nothing else is affected. Go to the token walk and paste yours in again.',
+  },
+  couldNotSave: {
+    status: 500,
+    code: 'could_not_save',
+    message: 'Your token works. We could not write the connection down, which is our problem and not yours. Press Check the connection again in a moment, and tell a mentor if it happens twice.',
+  },
   noTokenYet: {
     status: 400,
     code: 'no_token_yet',
@@ -595,7 +605,19 @@ export async function registerSetupRoutes(app: FastifyInstance, deps: RouteDeps)
       if (sealed === null) {
         return reply.code(SETUP_ERRORS.noTokenYet.status).send(errorBody(SETUP_ERRORS.noTokenYet));
       }
-      token = openGhlToken(founder.id, sealed.ciphertext, sealed.nonce);
+      // OPENING A STORED TOKEN CAN FAIL, and a founder must not meet that as an
+      // incident id. A row written under a different master key, or by an older
+      // envelope, cannot be decrypted and never will be. The only way out is to paste
+      // the token again, so that is what the sentence says.
+      try {
+        token = openGhlToken(founder.id, sealed.ciphertext, sealed.nonce);
+      } catch (err: unknown) {
+        deps.log.error(
+          { founderId: founder.id, why: err instanceof Error ? err.message : String(err) },
+          'a stored GoHighLevel token could not be opened, so the founder is asked to paste it again',
+        );
+        return reply.code(SETUP_ERRORS.tokenUnreadable.status).send(errorBody(SETUP_ERRORS.tokenUnreadable));
+      }
     }
 
     const outcome = await fetchSocialAccounts(token, stored);
@@ -620,14 +642,25 @@ export async function registerSetupRoutes(app: FastifyInstance, deps: RouteDeps)
       return reply.code(200).send({ ok: false, kind: 'no_accounts', call: 'accounts' });
     }
 
+    // THE CHECK PASSED. Saving is what makes it stick, and a failure to save must not
+    // be reported as a failure to connect: the founder's token is good and telling them
+    // otherwise sends them back to GoHighLevel to make another one for no reason.
     const now = deps.clock.now();
-    await saveGhlToken(
-      founder.id,
-      token,
-      stored,
-      outcome.accounts.map((a) => ({ id: a.id, name: a.name, platform: a.platform, type: a.type })),
-      now,
-    );
+    try {
+      await saveGhlToken(
+        founder.id,
+        token,
+        stored,
+        outcome.accounts.map((a) => ({ id: a.id, name: a.name, platform: a.platform, type: a.type })),
+        now,
+      );
+    } catch (err: unknown) {
+      deps.log.error(
+        { founderId: founder.id, why: err instanceof Error ? err.message : String(err) },
+        'the GoHighLevel check passed but the connection could not be written down',
+      );
+      return reply.code(SETUP_ERRORS.couldNotSave.status).send(errorBody(SETUP_ERRORS.couldNotSave));
+    }
 
     return reply.code(200).send({
       ok: true,

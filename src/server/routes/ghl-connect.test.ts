@@ -136,3 +136,35 @@ test('A PENDING MIGRATION MUST NOT TAKE DOWN THE SETUP SCREEN', async (t) => {
   assert.equal(state.ghl.locationId, LOCATION, 'everything that does not need the new column still reads');
   assert.deepEqual(state.ghl.accounts, [], 'no accounts is the honest answer, and it is not a 500');
 });
+
+test('AN UNOPENABLE STORED TOKEN ASKS FOR A NEW PASTE, not an incident id', async (t) => {
+  // A row written under a different master key, or by an older envelope, cannot be
+  // decrypted and never will be. Answering that with "something on our side went wrong,
+  // quote LHG13NRZ" leaves a founder pressing the same button forever. The only way out
+  // is to paste the token again, so the sentence says so.
+  const h = await buildHarness();
+  t.after(async () => { await h.app.close(); });
+  const cookie = await signedIn(h);
+
+  await h.store.saveLocationId(FOUNDER_A, GHL, LOCATION, new Date());
+  // Bytes that are the right shape for a row and cannot be opened.
+  h.store.setConnectionSecret(FOUNDER_A, GHL, new Uint8Array(200).fill(7), new Uint8Array(12).fill(3));
+
+  const res = await h.app.inject({ method: 'POST', url: '/api/setup/ghl/verify', headers: { cookie } });
+  const body = res.json<{ error?: string; message?: string }>();
+  assert.equal(res.statusCode, 400, 'an unopenable token is the founder\'s next step, not a server crash');
+  assert.equal(body.error, 'token_unreadable');
+  assert.match(body.message ?? '', /paste yours in again/);
+  assert.match(body.message ?? '', /Nothing else is affected/, 'they need to know the rest of their work is fine');
+  assert.doesNotMatch(body.message ?? '', /[—–]/, 'founder facing, so the house style applies');
+});
+
+test('A FAILED SAVE DOES NOT TELL A FOUNDER THEIR GOOD TOKEN IS BAD', async (t) => {
+  // The check passed, so the token works. Reporting a write failure as a connection
+  // failure sends somebody back to GoHighLevel to make another token for no reason.
+  const setup = await import('./setup.ts');
+  const copy = setup.SETUP_ERRORS.couldNotSave.message;
+  assert.match(copy, /Your token works/, 'it has to say the token is good before anything else');
+  assert.match(copy, /our problem and not yours/);
+  assert.doesNotMatch(copy, /[—–]/);
+});
