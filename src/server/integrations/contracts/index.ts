@@ -108,6 +108,11 @@ export const FEATURE_CONTRACTS: Readonly<Record<string, readonly unknown[]>> = {
  * the ninth writes copy a founder pastes at the clinic by hand, because no API
  * creates a GoHighLevel workflow.
  *
+ * AND THAT IS NOW THE SHAPE ON PURPOSE RATHER THAN THE SHAPE SO FAR. The app makes a
+ * founder's inputs correct and writes their assets. The vendors' own MCP servers, on
+ * the founder's own accounts, do the sending and the publishing. Two of the entries
+ * below are closed because of that decision rather than waiting on a spike.
+ *
  * WHY EVERY OTHER FEATURE IS OFF, one line each, so nobody has to reconstruct it:
  *
  *   csvExport         S-05 has never run, so nobody knows the header row GoHighLevel
@@ -116,11 +121,20 @@ export const FEATURE_CONTRACTS: Readonly<Record<string, readonly unknown[]>> = {
  *                     header row out of. This entry was marked on in an earlier
  *                     version of this file and was not true when it was written.
  *   ghlConnect        S-02. No host, no base URL, no header names.
- *   ghlPublishDrafts  S-02. No create call, no read back, and every write is read
- *                     back before it is believed.
- *   ghlSchedule       S-03 as well as S-02. Four encodings are candidates for what a
- *                     schedule value means, and a post at the wrong hour for 130
- *                     people is worse than a post they scheduled by hand.
+ *   ghlPublishDrafts  NOT PENDING ANY MORE. DECIDED AGAINST, 1 September 2026.
+ *                     Publishing is GoHighLevel's own MCP server, connected to the
+ *                     founder's Claude account, working on their own location. This
+ *                     product writes the 30 pieces and stops. It was never going to be
+ *                     a better publisher than the vendor's own tool, and building one
+ *                     would have meant owning a create call, a read back, and a schedule
+ *                     encoding for 130 people's live accounts.
+ *                     The holes stay in ghl.ts rather than being deleted, because the
+ *                     day somebody argues for publishing from here again, the reasons it
+ *                     was hard are the argument.
+ *   ghlSchedule       Decided against with the above, and it was the worse half. Four
+ *                     encodings were candidates for what a schedule value means and a
+ *                     post at the wrong hour for 130 people is worse than a post they
+ *                     scheduled by hand. Their MCP knows its own encoding.
  *   ghlContacts       A2. The contacts read is not merely unverified, it is unknown.
  *   apollo            The Apollo spike, all of it.
  *
