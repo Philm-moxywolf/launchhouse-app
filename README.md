@@ -1,20 +1,46 @@
 # launchhouse-app
 
-The runtime. One Fastify process on a Replit Reserved VM. Founders sign in, talk to the app,
-and the nine engines run server side. No terminal, no plugin, no install.
+The runtime. One Fastify process on a Replit Reserved VM. A founder signs in, talks to the
+app, and the nine engines run server side. No terminal and nothing to install.
 
-**This repository is private and stays private.** It holds an API key funding 130 people, 130
-GoHighLevel tokens, Apollo credentials, and 130 founders' real business data including named
-prospects with email addresses. The engine content lives in the public repo and is
-vendored into `vendor/`, pinned by commit in `vendor/content-pin.json`. It was a submodule
-and is not any more: a founder remixing this into their own Replit account has no GitHub
-credential, and a submodule they cannot fetch is an app that does not start. Prose is edited
-in the content repo and moved here with `npm run engine:bump -- --to <ref>`. The app never
-edits it.
+**This repository is public, and it holds no founder data and no credentials.** That is worth
+saying plainly, because an earlier version of this file said the opposite and it is the first
+thing anybody reads.
 
-The full specification is `planning/REPLIT-BUILD.md` in the Launchhouse working folder. This
-file is how to run what is in this repository. Where the two disagree, the build document
-wins and this file is out of date.
+**Every founder remixes this into their own Replit account.** They get their own database,
+their own passphrase and their own keys. There is no roster, no shared seat, and no
+deployment of ours that 130 people log into. So this repository is the source they copy, and
+their work never comes back to it. `auth/owner.ts` carries the reasoning; it replaced a magic
+link and a roster of 130.
+
+Founder work is kept out by `.gitignore`, deliberately and with the reason written there:
+25 to 35 real named people per founder, none of whom agreed to be in a git history. People go
+to Apollo, which is the founder's own CRM, and to Claude's local memory. Never here.
+
+## What this app is for, and what it is not for
+
+It gets a founder's inputs right and writes their assets: the Brain, the track, the voice, the
+30 pieces, the openers, the ops workflow, the 90 day plan. The rules are enforced in code
+here, so a file that invents a number or offers cold DM automation is held before it is saved.
+
+It does not send anything and it does not publish. That work belongs to the vendors' own MCP
+servers, connected to the founder's Claude account, running on their own GoHighLevel and
+Apollo accounts. `integrations/contracts/index.ts` records that decision and why.
+
+So the shape is: **this app makes the work, and Claude runs it.** The handover is the
+download-everything button on the Files screen, and `docs/WORKING-IN-CLAUDE.md` in the content
+repo tells founders what to do with it.
+
+## The content repo
+
+Engine prose lives in the public content repo and is vendored into `vendor/`, pinned by commit
+in `vendor/content-pin.json`. It was a submodule and is not any more: a founder remixing this
+has no GitHub credential, and a submodule they cannot fetch is an app that does not start.
+
+Prose is edited in the content repo and moved here with `npm run engine:bump -- --to <ref>`.
+That script moves the tree and deliberately does not port changes into `app/content/skills/`,
+which is a reading job for a person. `app/tests/skill-diff.test.ts` fails the build if a ported
+copy differs from its original in a way that is not on a written allowlist.
 
 ---
 
