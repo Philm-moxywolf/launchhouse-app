@@ -105,7 +105,20 @@ export const APOLLO_ENRICH_DOCUMENTED = {
  */
 export const APOLLO_CREATE_SEQUENCE_DOCUMENTED = {
   method: 'POST',
-  path: '/api/v1/sequences',
+  /**
+   * THE REFERENCE AND THE KEY SCREEN DISAGREE, AND THE KEY SCREEN WINS.
+   *
+   * Apollo's published reference describes this as `/api/v1/sequences`. The endpoint
+   * list on the create-key screen of a real account says `api/v1/sequences/create`.
+   * A key is scoped by that second spelling, so a call to the first would be scoped
+   * against something that is not in the list and answer 403 for a reason nobody
+   * would find.
+   *
+   * Both are written down rather than one being quietly picked, because the first
+   * real call is what settles it and whoever makes it needs to know there were two.
+   */
+  path: '/api/v1/sequences/create',
+  pathInPublishedReference: '/api/v1/sequences',
 } as const;
 
 /**
@@ -129,6 +142,53 @@ export const APOLLO_ADD_TO_SEQUENCE_DOCUMENTED = {
   costsCredits: false,
   rateLimitPerHour: 600,
   needsMasterOrScopedKey: true,
+} as const;
+
+/**
+ * READ OFF THE CREATE-KEY SCREEN of a real Apollo account, 1 September 2026.
+ *
+ * That screen lists every endpoint a key on that account may be scoped to, so it is
+ * better evidence of existence and availability than the reference is. It says nothing
+ * about method, parameters or response shape, and none of those are guessed here.
+ *
+ * THREE OF THESE CLOSE HOLES THAT HAD BEEN OPEN SINCE THIS FILE WAS WRITTEN.
+ *
+ *   `usage_stats/credit_usage_stats` is the credit balance. A batch can now say what it
+ *   will cost before it runs, which is the thing that made enrichment a commit.
+ *
+ *   `usage_stats/api_usage_stats` is the rate ceiling, read rather than assumed.
+ *
+ *   `email_accounts/index` is where `send_email_from_email_account_id` comes from. That
+ *   parameter had no source and a founder cannot be asked to find an internal id by
+ *   hand.
+ *
+ * TWO OF THEM CHANGE WHAT THE ENGINE SHOULD DO.
+ *
+ *   `people/bulk_match` enriches many in one call. Twenty five people is one request,
+ *   not twenty five, which matters against a rate limit and against a founder watching
+ *   a screen.
+ *
+ *   `email_domain_diagnosis/authentication_status` reads whether a domain's SPF, DKIM
+ *   and DMARC are actually right. PRE-WORK marks that time critical for every B2B
+ *   founder and today the only check is the founder believing they did it. This turns
+ *   the most expensive silent failure on the track into something the app can see.
+ */
+export const APOLLO_ENDPOINTS_ON_KEY_SCREEN = {
+  search: 'api/v1/mixed_people/api_search',
+  enrich: 'api/v1/people/match',
+  enrichMany: 'api/v1/people/bulk_match',
+  createContact: 'api/v1/contacts/create',
+  createContacts: 'api/v1/contacts/bulk_create',
+  createSequence: 'api/v1/sequences/create',
+  updateSequence: 'api/v1/sequences/update',
+  addToSequence: 'api/v1/emailer_campaigns/add_contact_ids',
+  stopForContacts: 'api/v1/emailer_campaigns/remove_or_stop_contact_ids',
+  approveSequence: 'api/v1/emailer_campaigns/approve',
+  abortSequence: 'api/v1/emailer_campaigns/abort',
+  sendingMailboxes: 'api/v1/email_accounts/index',
+  domainAuthStatus: 'api/v1/email_domain_diagnosis/authentication_status',
+  creditBalance: 'api/v1/usage_stats/credit_usage_stats',
+  apiUsage: 'api/v1/usage_stats/api_usage_stats',
 } as const;
 
 export const APOLLO = {
@@ -189,13 +249,17 @@ export const APOLLO = {
     'S-06',
     'the field names in a real enrichment response, and what comes back when Apollo has no email for that person.',
   ),
-  creditsRemaining: pending<{ method: string; path: string }>(
+  /**
+   * The path exists, the shape does not.
+   *
+   * `usage_stats/credit_usage_stats` and `usage_stats/api_usage_stats` are both on the
+   * key screen, so the old question, whether a balance can be read at all, is answered
+   * yes. What comes back from either has not been seen, and a balance rendered from a
+   * guessed field name would be a number in front of a founder that nobody checked.
+   */
+  usageResponses: pending<{ creditsKey: string; limitKey: string }>(
     'S-06',
-    'whether the remaining credit balance can be read at all. Without it a batch cannot say what it will cost before it runs.',
-  ),
-  rateLimit: pending<{ requestsPerSecond: number; burst: number }>(
-    'S-06',
-    'the real rate ceiling, and what a refusal looks like when the account runs out of credit rather than out of rate.',
+    'what credit_usage_stats and api_usage_stats actually return. Both endpoints are confirmed to exist.',
   ),
   /**
    * WHICH PLAN MAY CREATE A KEY THAT CAN DO THE ABOVE. The one thing left that
@@ -210,9 +274,25 @@ export const APOLLO = {
    * This is a pricing page and an account, not a call. It stays a hole until
    * somebody has made a master key on the plan we actually recommend.
    */
-  sequenceKeyPermission: pending<{ plan: string; keyKind: string }>(
+  /**
+   * NARROWED ON 1 SEPTEMBER 2026, NOT CLOSED.
+   *
+   * The emailer endpoints are present and selectable on the create-key screen of a real
+   * Apollo account, checked by Phil. So they are not a paid add on that has to be bought
+   * separately, and they are not absent from the API the way a missing feature would be.
+   *
+   * WHAT IS STILL OPEN IS THE TIER, and it is the whole of what matters. That screen
+   * lists what THAT account's plan allows. The programme recommends the 65 USD plan to
+   * 65 B2B founders, and unless the account checked is on that plan, what was seen was
+   * one person's entitlement rather than the cohort's.
+   *
+   * The cost of being wrong has not changed: a founder buys the plan we named, books the
+   * weekend on it, and meets a 403 in session 3 with no way to tell a plan limit from a
+   * bad key.
+   */
+  sequenceKeyPermissionOnTheRecommendedPlan: pending<{ plan: string; keyKind: string }>(
     'S-06',
-    'which Apollo plan may create a key that add_contact_ids accepts. 403 otherwise, and the docs do not say.',
+    'whether the 65 USD plan lists the emailer endpoints on its create-key screen. Confirmed present on one real account; the plan that account is on is what is unconfirmed.',
   ),
 } as const;
 

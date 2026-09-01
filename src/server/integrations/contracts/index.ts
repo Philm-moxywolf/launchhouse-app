@@ -92,7 +92,12 @@ export const FEATURE_CONTRACTS: Readonly<Record<string, readonly unknown[]>> = {
    * list. What is left is what a real call would settle: the field names that come
    * back, and whether a sequence can be written to at all.
    */
-  apollo: [APOLLO.enrichResponse, APOLLO.pagination, APOLLO.sequenceKeyPermission],
+  apollo: [
+    APOLLO.enrichResponse,
+    APOLLO.pagination,
+    APOLLO.usageResponses,
+    APOLLO.sequenceKeyPermissionOnTheRecommendedPlan,
+  ],
 };
 
 /**
