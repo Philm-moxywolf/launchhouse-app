@@ -104,9 +104,51 @@ export const APOLLO = {
    * the shape in prose, and a field name taken from prose is a guess wearing the clothes
    * of a fact, which is the one thing this directory is for.
    */
-  searchResponse: pending<{ peopleKey: string; idKey: string; pagination: unknown }>(
+  /**
+   * VERIFIED, from a real call on 1 September 2026. The rest of this object is not.
+   *
+   * WHAT SEARCH ACTUALLY RETURNS, and it is less than the name suggests. A person
+   * comes back as `id`, `first_name`, `title` and their organisation's `name`. The
+   * surname is `last_name_obfuscated` and arrives as "Ni***l". There is no email
+   * field at all, only `has_email: true` saying one exists.
+   *
+   * THAT IS THE DESIGN, NOT A LIMIT WE HIT. Search is free because it hands back a
+   * catalogue rather than contact details, and enrichment is what costs. So a
+   * founder cannot write to anybody on search results alone: 25 people means 25
+   * enrichments, and the cost is real and per person.
+   *
+   * WATCH `has_direct_phone`. Every other `has_` field is a boolean and that one is
+   * the string "Yes". Reading it as a boolean would make every person look
+   * reachable by phone, which is exactly the kind of field that is right in testing
+   * and wrong in front of a founder.
+   */
+  searchResponseVerified: {
+    totalKey: 'total_entries',
+    peopleKey: 'people',
+    person: {
+      id: 'id',
+      firstName: 'first_name',
+      /** Obfuscated at this endpoint. "Ni***l". The real surname needs enrichment. */
+      lastNameObfuscated: 'last_name_obfuscated',
+      title: 'title',
+      lastRefreshedAt: 'last_refreshed_at',
+      /** Booleans, except hasDirectPhone, which is the string "Yes". */
+      hasEmail: 'has_email',
+      hasDirectPhone: 'has_direct_phone',
+      organization: 'organization',
+    },
+    organization: { name: 'name' },
+  },
+  /**
+   * How to ask for page two.
+   *
+   * The verified call sent `per_page` and got two people back, so that parameter is
+   * real. Nothing in that response named a page, a cursor or a total page count, so
+   * how to walk past the first page is still unknown and is not going to be guessed.
+   */
+  pagination: pending<{ requestKey: string; responseKey: string }>(
     'S-06',
-    'the field names in a real people search response. One call with one real key settles it.',
+    'how to ask for page two. per_page is verified; nothing in the response named a page or a cursor.',
   ),
   enrichResponse: pending<{ personKey: string; emailKey: string }>(
     'S-06',
