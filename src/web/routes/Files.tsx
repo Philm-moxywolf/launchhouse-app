@@ -126,6 +126,8 @@ export function Files({ founder }: { readonly founder: Founder }): ReactElement 
         </a>
       </section>
 
+      <HandingItToClaude track={founder.track} />
+
       <details className="state-files">
         <summary>The notes the app keeps for itself</summary>
         <p className="quiet">
@@ -230,4 +232,70 @@ function useAllowedFileNames(founder: Founder): readonly string[] | null {
     };
   }, [founder.track]);
   return names;
+}
+
+/**
+ * What to do with the download, on the screen where they just pressed the button.
+ *
+ * WHY IT IS HERE AND NOT A PAGE OF ITS OWN. This is the handover, and it is session
+ * 3. A founder is standing on this screen the moment it becomes relevant, because
+ * downloading is step one of it. A separate page would be a page nobody opens at
+ * the moment they need it.
+ *
+ * STEP THREE IS THE WHOLE THING. Claude looks for a folder called growth-engine
+ * inside wherever it was opened. Open growth-engine itself and it looks inside
+ * itself, finds nothing, and says they have not started. Their entire Brain is one
+ * level up. Every other step here is a link somebody can follow; this one is a
+ * mistake nobody would ever guess they had made, so it says what going wrong looks
+ * like as well as what to do.
+ *
+ * IT IS FOLDED SHUT BY DEFAULT. A founder in session 1 is not doing this and does
+ * not need a wall of instructions under their files for a fortnight.
+ *
+ * RULE 1: the Apollo step is B2B only, and a B2C founder is not shown the word.
+ */
+export function HandingItToClaude({ track }: { readonly track: Founder["track"] }): ReactElement {
+  return (
+    <details className="handover">
+      <summary>Giving this to Claude, in Session 3</summary>
+      <p className="quiet">
+        From Session 3 you work in Claude rather than here. This is how your work gets there. We do it
+        together in the session, so there is nothing to get right on your own.
+      </p>
+      <ol>
+        <li>
+          <strong>Press Download everything, above.</strong> You get one file.
+        </li>
+        <li>
+          <strong>Unzip it.</strong> You now have a folder called <code>growth-engine</code>.
+        </li>
+        <li>
+          <strong>Put that folder inside another folder.</strong> Make one called anything you like, and drop{" "}
+          <code>growth-engine</code> into it. Then open the outer folder in Claude, not{" "}
+          <code>growth-engine</code> itself.
+          <br />
+          <span className="quiet">
+            This is the step people get wrong. If Claude says you have not started yet, this is why: it is
+            looking inside your work rather than at it. Go up one level and open that.
+          </span>
+        </li>
+        <li>
+          <strong>Install the toolkit</strong> in Claude, from the marketplace{" "}
+          <code>Philm-moxywolf/Atlanta</code>. That is what teaches it your track, your voice and the rules.
+        </li>
+        <li>
+          <strong>Connect GoHighLevel</strong> to your Claude account, so it can post for you.
+          {track === "b2b" ? " And connect Apollo, so it can find people and send." : ""}
+        </li>
+        <li>
+          <strong>Say &quot;where am I up to&quot;.</strong> If it tells you what you have built, it can read
+          your Brain and you are done.
+        </li>
+      </ol>
+      <p className="quiet">
+        Download this again whenever you rebuild something here. It is a copy, not a live link, and a stale
+        copy is how you publish last month&apos;s offer.
+      </p>
+    </details>
+  );
 }

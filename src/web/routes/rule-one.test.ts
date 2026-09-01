@@ -27,6 +27,7 @@ import { founder, homeState, screenText, setupState } from "../test-fixtures.ts"
 import { Home } from "./Home.tsx";
 import { Setup } from "./Setup.tsx";
 import { Thread } from "./Thread.tsx";
+import { HandingItToClaude } from "./Files.tsx";
 
 /** Words that belong to the B2B programme and must never reach a B2C founder. */
 const B2B_WORDS = ["apollo", "outreach", "sequence", "cold email", "first lines", "prospect"];
@@ -133,4 +134,25 @@ test("and it never says that to a founder who has not pasted their key yet", () 
   );
   assert.ok(!text.includes("You are done for now"), "a founder with no key is not done for now");
   assert.ok(text.includes("Paste your key here"), "the box they need is on the screen instead");
+});
+
+test("the handover steps name Apollo for an outreach founder and never for an audience one", () => {
+  // The handover sits under the download button on Files and tells a founder which
+  // connectors to add to Claude. Apollo is the outreach track's, so the line that
+  // names it is conditional. A conditional is exactly the kind of guard that reads
+  // correctly and renders wrong, which is why it is asserted rather than trusted.
+  const b2b = screenText(createElement(HandingItToClaude, { track: "b2b" as const }));
+  assert.match(b2b.toLowerCase(), /apollo/, "an outreach founder needs to be told to connect it");
+
+  const b2c = screenText(createElement(HandingItToClaude, { track: "b2c" as const }));
+  assertAbsent(b2c, B2B_WORDS, "the handover steps on an audience founder's Files screen");
+
+  // Both are told about GoHighLevel, which belongs to neither track alone.
+  assert.match(b2c.toLowerCase(), /gohighlevel/);
+  assert.match(b2b.toLowerCase(), /gohighlevel/);
+});
+
+test("a founder with no track yet is not offered either track's connector", () => {
+  const none = screenText(createElement(HandingItToClaude, { track: null }));
+  assertAbsent(none, B2B_WORDS, "the handover steps before a track is chosen");
 });
