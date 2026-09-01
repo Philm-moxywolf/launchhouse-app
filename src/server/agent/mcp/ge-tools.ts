@@ -52,6 +52,7 @@ import {
 import { z } from 'zod';
 import { searchPeople } from '../../integrations/apollo-search.ts';
 import { enrichPeople, ENRICH_CAP } from '../../integrations/apollo-enrich.ts';
+import { prepareSequence } from '../../integrations/apollo-sequences.ts';
 
 /** The MCP server name. Tool names the model sees are mcp__ge__<tool>. */
 export const GE_SERVER_NAME = 'ge';
@@ -66,6 +67,7 @@ export const GE_TOOL_NAMES = [
 const APOLLO_TOOL_NAMES = [
   `mcp__${GE_SERVER_NAME}__apollo_search`,
   `mcp__${GE_SERVER_NAME}__apollo_enrich`,
+  `mcp__${GE_SERVER_NAME}__apollo_sequence_prepare`,
 ] as const;
 
 /**
@@ -376,6 +378,105 @@ export function createGeTools(ctx: FounderContext, deps: GeToolDeps) {
     },
   );
 
+  /**
+   * Building the sequence and putting the founder's people in it. PAUSED, ALWAYS.
+   *
+   * THIS IS THE CLOSEST THING TO A SEND VERB IN THIS PRODUCT AND IT IS STILL NOT ONE.
+   * Apollo creates a sequence inactive unless asked otherwise, and activating is a
+   * separate call that has no client here and must not get one. So the app writes the
+   * words and fills the list, and a person decides to send them, in their own Apollo
+   * account, looking at the messages.
+   *
+   * The description says that to the model in as many words, because the model will be
+   * asked "is it sending?" and the answer has to be the same every time.
+   */
+  const apolloSequence = tool(
+    'apollo_sequence_prepare',
+    "Build a sequence in the founder's Apollo account and put their chosen people into it, PAUSED. It does not send anything and it cannot: activating a sequence is a button in Apollo that only the founder can press, and this tool has no way to press it. Use it after apollo_enrich, with people who have an email address. Tell the founder plainly that it is paused, where to find it in Apollo, and that they should read the messages before starting it.",
+    {
+      sequence_name: z
+        .string()
+        .min(1)
+        .max(120)
+        .describe("What the founder wants it called. They will look for this name in Apollo, so use their words"),
+      people: z
+        .array(
+          z.object({
+            first_name: z.string().min(1).max(80),
+            last_name: z.string().min(1).max(80),
+            email: z.string().min(3).max(254),
+            title: z.string().max(160).optional(),
+            company: z.string().max(160).optional(),
+          }),
+        )
+        .min(1)
+        .max(ENRICH_CAP)
+        .describe('The people, with the addresses apollo_enrich found. Never invent one'),
+    },
+    async (args) => {
+      const outcome = await prepareSequence(
+        ctx.founderId,
+        args.sequence_name,
+        args.people.map((p) => ({
+          firstName: p.first_name,
+          lastName: p.last_name,
+          email: p.email,
+          title: p.title,
+          company: p.company,
+        })),
+      );
+      deps.log.info(
+        { founderId: ctx.founderId, kind: outcome.kind, asked: args.people.length },
+        'apollo sequence prepare called from a model tool',
+      );
+
+      if (outcome.kind === 'no_key') {
+        return {
+          content: [{ type: 'text' as const, text: 'This founder has not connected Apollo yet. Ask them to open Setup and paste their Apollo key. Nothing was created.' }],
+          isError: true,
+        };
+      }
+      if (outcome.kind === 'no_mailbox') {
+        // The real one, found on a real account: Apollo answered an empty list.
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: 'Apollo has no mailbox connected, so a sequence would have nothing to send from. Nothing was created. Tell the founder to connect their work email inside Apollo first, under Settings, Mailboxes, and then ask again.',
+            },
+          ],
+          isError: true,
+        };
+      }
+      if (outcome.kind === 'no_schedule') {
+        return {
+          content: [{ type: 'text' as const, text: 'Apollo has no sending schedule on this account. Nothing was created. Tell the founder to open Apollo and check their sending schedule.' }],
+          isError: true,
+        };
+      }
+      if (outcome.kind !== 'ok') {
+        return {
+          content: [{ type: 'text' as const, text: `Apollo refused that (${outcome.kind}). Tell the founder plainly. Nothing is sending, and check with them before trying again.` }],
+          isError: true,
+        };
+      }
+
+      return {
+        content: [
+          {
+            type: 'text' as const,
+            text:
+              `Built "${args.sequence_name}" in Apollo with ${String(outcome.added)} people in it. It is PAUSED and nothing has been sent.\n` +
+              (outcome.skipped.length === 0
+                ? ''
+                : `Apollo would not take these, so they are not in it: ${outcome.skipped.join(', ')}.\n`) +
+              'Tell the founder it is paused, that they open Apollo to read the messages, and that starting it is their button and not ours. Also tell them to check the sending schedule: a new Apollo account defaults to United States business hours.',
+          },
+        ],
+      };
+    },
+  );
+
   return createSdkMcpServer({
     name: GE_SERVER_NAME,
     version: '1.0.0',
@@ -385,6 +486,9 @@ export function createGeTools(ctx: FounderContext, deps: GeToolDeps) {
     // gain from deferring them behind a search, and a tool the model cannot see is a
     // tool it works around by writing the file by hand.
     alwaysLoad: true,
-    tools: ctx.track === 'b2b' ? [remember, personAdd, apolloSearch, apolloEnrich] : [remember, personAdd],
+    tools:
+      ctx.track === 'b2b'
+        ? [remember, personAdd, apolloSearch, apolloEnrich, apolloSequence]
+        : [remember, personAdd],
   });
 }

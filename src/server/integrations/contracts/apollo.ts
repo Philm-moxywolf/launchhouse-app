@@ -97,35 +97,6 @@ export const APOLLO_ENRICH_DOCUMENTED = {
 } as const;
 
 /**
- * Creating a sequence. DOCUMENTED.
- *
- * Apollo calls the same object a sequence in one endpoint and an emailer campaign in
- * the other, and both names are theirs. Written down rather than tidied, because a
- * caller reading only one of them would look for the wrong word in a response.
- */
-export const APOLLO_CREATE_SEQUENCE_DOCUMENTED = {
-  method: 'POST',
-  /**
-   * THE KEY SCREEN LISTS SCOPE NAMES, NOT URLS, AND I HAD THIS BACKWARDS.
-   *
-   * An earlier version of this file said the create-key screen's spelling won, because
-   * it said `api/v1/sequences/create` where the reference said `/api/v1/sequences`, and
-   * a key is scoped by what that screen lists.
-   *
-   * A second endpoint settled it. Contacts appear on the key screen as
-   * `api/v1/contacts/create` and the reference documents `POST /api/v1/contacts`. Two
-   * resources with the same shape is a naming convention, not a disagreement: the screen
-   * names the operation, the URL is the resource. Calling `/sequences/create` would have
-   * been a 404 that read like a scope problem.
-   *
-   * Both spellings stay written down. The scope name is what a founder ticks, and the
-   * path is what gets called, and somebody will need to match them up again.
-   */
-  path: '/api/v1/sequences',
-  scopeNameOnKeyScreen: 'api/v1/sequences/create',
-} as const;
-
-/**
  * Putting people into it. DOCUMENTED, and the one with a gate on it.
  *
  * It answers 403 unless the key is a master key or scoped to this endpoint, which is
@@ -227,7 +198,16 @@ export const APOLLO_ENRICH_PARAMS_DOCUMENTED = {
  * is on the key screen. A founder cannot be asked to find an internal id by hand.
  */
 export const APOLLO_SEQUENCE_DOCUMENTED = {
-  createPath: '/api/v1/sequences/create',
+  method: 'POST',
+  /**
+   * THE URL, NOT THE SCOPE NAME. The create-key screen lists this as
+   * `api/v1/sequences/create` and that is what a founder ticks. The path is RESTful,
+   * confirmed by contacts having exactly the same pair. There were two constants for
+   * this endpoint for about an hour and one of them still held the scope name as a URL,
+   * which is the drift this directory exists to prevent. One now.
+   */
+  createPath: '/api/v1/sequences',
+  scopeNameOnKeyScreen: 'api/v1/sequences/create',
   requiredOnCreate: ['name', 'emailer_schedule_id'],
   /** Never sent. Absent means inactive, which is the whole safety property. */
   activateKey: 'active',
@@ -253,6 +233,52 @@ export const APOLLO_CREATE_CONTACT_DOCUMENTED = {
   dedupeParam: 'run_dedupe',
   responseKey: 'contact',
   responseIdKey: 'id',
+} as const;
+
+/**
+ * The sending schedule. VERIFIED from a real call, 1 September 2026.
+ *
+ * A NEW ACCOUNT ALREADY HAS ONE, and it is marked `default: true`. So this app never has
+ * to ask a founder to make a schedule or to find its id, which is the sort of step that
+ * loses people. Pick the default, fall back to the first.
+ *
+ * THE DEFAULT IS AMERICA/LOS_ANGELES, 8 TO 17, WEEKDAYS. On a UK founder's account that
+ * sends at four in the afternoon their time. `use_contacts_time_zone` is true on it,
+ * which should mean it follows the recipient rather than the schedule, and that has not
+ * been proven. Either way a founder should look at it once, and the setup copy says so
+ * rather than leaving it to be discovered by a prospect at 4pm.
+ */
+export const APOLLO_SCHEDULES_VERIFIED = {
+  method: 'GET',
+  path: '/api/v1/emailer_schedules',
+  scopeNameOnKeyScreen: 'api/v1/emailer_schedules/index',
+  responseKey: 'emailer_schedules',
+  idKey: 'id',
+  nameKey: 'name',
+  defaultKey: 'default',
+} as const;
+
+/**
+ * The mailbox a sequence sends from. VERIFIED as an address, EMPTY as a shape.
+ *
+ * The call answered `{"email_accounts": []}` on a real account, so the path and the top
+ * level key are real and no row has been seen. The id field inside is therefore assumed
+ * to be `id`, in line with every other Apollo object here, and a caller must cope with
+ * being wrong rather than crashing.
+ *
+ * THE EMPTY ARRAY IS THE FINDING, NOT A DISAPPOINTMENT. A founder with no mailbox
+ * connected in Apollo cannot send from a sequence at all, and nothing before this told
+ * them that. `add_contact_ids` needs `send_email_from_email_account_id` and there is no
+ * value to give it. So connecting a mailbox is a setup step, it belongs in the pre work,
+ * and a sequence tool must say so plainly rather than failing on a missing parameter.
+ */
+export const APOLLO_MAILBOXES = {
+  method: 'GET',
+  path: '/api/v1/email_accounts',
+  scopeNameOnKeyScreen: 'api/v1/email_accounts/index',
+  responseKey: 'email_accounts',
+  /** ASSUMED. No row has been seen. Every other object here uses `id`. */
+  idKeyAssumed: 'id',
 } as const;
 
 export const APOLLO = {

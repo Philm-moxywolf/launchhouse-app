@@ -21,10 +21,26 @@ describe('which tool names each track is allowed', () => {
     assert.ok(geToolNamesFor('b2b').some((n) => n.endsWith('__apollo_enrich')));
   });
 
-  test('an audience founder is offered neither, and the word is not in their list', () => {
+  test('an outreach founder may prepare a sequence, which is as close to sending as this gets', () => {
+    assert.ok(geToolNamesFor('b2b').some((n) => n.endsWith('__apollo_sequence_prepare')));
+  });
+
+  test('there is no tool anywhere that activates or approves a sequence', () => {
+    // The line this product does not cross. Apollo creates a sequence inactive and
+    // activating is a separate call, so the founder pressing start in their own account
+    // is the only way anything sends. A tool named for it would be the whole safety
+    // property undone by one registration.
+    for (const track of ['b2b', 'b2c'] as const) {
+      const names = geToolNamesFor(track).join(' ');
+      assert.doesNotMatch(names, /approve|activate|send_now|start_sequence/i);
+    }
+  });
+
+  test('an audience founder is offered none of them, and the word is not in their list', () => {
     const names = geToolNamesFor('b2c');
     assert.ok(!names.some((n) => n.endsWith('__apollo_search')));
     assert.ok(!names.some((n) => n.endsWith('__apollo_enrich')));
+    assert.ok(!names.some((n) => n.endsWith('__apollo_sequence_prepare')));
     assert.doesNotMatch(names.join(' '), /apollo/i, 'the other track\'s vendor is not named in their allowlist');
   });
 
