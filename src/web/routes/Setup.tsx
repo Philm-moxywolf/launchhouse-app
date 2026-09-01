@@ -51,6 +51,7 @@ import type { ReactElement } from "react";
 import type { StepState } from "../../../app/content/ghl-walk.ts";
 import type { AnthropicKeyState, Founder, KeyProblem, KeyResult, Result, SetupState } from "../lib/api.ts";
 import { checkAnthropicKey, forgetAnthropicKey, saveAnthropicKey } from "../lib/api.ts";
+import { hrefFor } from "../lib/nav.ts";
 import { formatWhen } from "../lib/format.ts";
 import { railRows, setupSummary } from "../lib/setup-rail.ts";
 import type { RailRow } from "../lib/setup-rail.ts";
@@ -169,6 +170,7 @@ function AnthropicKeyBox({
   readonly onChanged: (next: AnthropicKeyState) => void;
 }): ReactElement {
   const [typed, setTyped] = useState("");
+  const [justSaved, setJustSaved] = useState(false);
   const [mode, setMode] = useState<KeyMode>("resting");
   const [problem, setProblem] = useState<KeyProblem | null>(null);
   const [reachUs, setReachUs] = useState<string | null>(null);
@@ -186,6 +188,9 @@ function AnthropicKeyBox({
     setMode("resting");
     if (result.saved) {
       setProblem(null);
+      // ONLY AFTER A SAVE THAT WORKED, so the next step appears for the founder who just
+      // did the thing and not for one who opened this screen to look at it.
+      setJustSaved(true);
       // Emptied here rather than on submit, so a founder whose key was refused still has
       // what they typed and can see for themselves that they pasted the short one.
       setTyped("");
@@ -258,6 +263,26 @@ function AnthropicKeyBox({
           )}
         </Notice>
       )}
+
+      {/*
+        WHERE TO GO NEXT, SAID ONCE, HERE.
+
+        A founder pasting this key is at the end of setting the app up. It worked, the
+        screen showed a tick, and nothing told them that the next thing is to start
+        building. They stayed on this screen, or wandered into the GoHighLevel walk,
+        which is Session 2 and not theirs yet.
+
+        The tick is not the instruction. This is.
+      */}
+      {justSaved ? (
+        <Notice tone="plain" title="That is the app set up." lines={["Your key works and it is stored for you. Nothing else here is needed before Session 1."]}>
+          <p className="notice-line">
+            <a className="button" href={hrefFor({ kind: "home" })}>
+              Go to your engines
+            </a>
+          </p>
+        </Notice>
+      ) : null}
 
       {state.set ? (
         mode === "confirming removal" ? (
