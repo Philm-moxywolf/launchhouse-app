@@ -575,6 +575,19 @@ function Connected({ ghl, onDone }: { readonly ghl: GhlState; readonly onDone: (
       {ghl.contacts === "readable" ? null : (
         <p className="quiet">{GHL_CONTACTS_READ_PENDING.founderReadsWhilePending}</p>
       )}
+      <section className="choice">
+        <h3>{GHL_WALK_CONNECTED.mcp.title}</h3>
+        {GHL_WALK_CONNECTED.mcp.body.map((line) => (
+          <p key={line} className="quiet">
+            {line}
+          </p>
+        ))}
+        <p>
+          <a href={GHL_WALK_CONNECTED.mcp.linkHref} target="_blank" rel="noreferrer">
+            {GHL_WALK_CONNECTED.mcp.linkLabel}
+          </a>
+        </p>
+      </section>
       <button type="button" className="button" onClick={onDone}>
         {GHL_WALK_CONNECTED.action}
       </button>

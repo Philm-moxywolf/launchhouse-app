@@ -360,6 +360,32 @@ export const GHL_WALK_CONNECTED = {
   },
   contactsReadable: "readable",
   action: "Done",
+  /**
+   * The other half of connecting GoHighLevel, and it is not this app.
+   *
+   * WHY IT IS HERE AND NOT IN THE PRE WORK. GoHighLevel is bought at the clinic on 23
+   * September, so a founder reading the pre work in early September has nothing to
+   * connect it to yet. This screen is the moment it exists and is working, which is the
+   * only moment the next step makes sense.
+   *
+   * WHAT IT IS FOR. The token above lets this app publish for them. It does nothing for
+   * Claude anywhere else. Connecting GoHighLevel's own MCP server to their Claude
+   * account is what lets them ask Claude to check a contact or post something while they
+   * are working in Cowork, away from here.
+   *
+   * IT IS OPTIONAL AND IT IS SAID TO BE. Nothing in the three sessions needs it, and a
+   * founder who skips it loses nothing before Atlanta.
+   */
+  mcp: {
+    title: "Optional: let Claude reach GoHighLevel too",
+    body: [
+      "The token you just pasted lets this app publish for you. It does nothing for Claude when you are working somewhere else.",
+      "If you want to ask Claude about your contacts or your posts while you are working in Cowork, GoHighLevel has its own connector you add to your Claude account. It takes a few minutes and nothing here needs it.",
+    ],
+    linkLabel: "How to set up the GoHighLevel connector",
+    linkHref:
+      "https://help.gohighlevel.com/support/solutions/articles/155000005741-how-to-setup-and-use-the-highlevel-mcp-server",
+  },
 };
 
 export interface WalkFailure {
