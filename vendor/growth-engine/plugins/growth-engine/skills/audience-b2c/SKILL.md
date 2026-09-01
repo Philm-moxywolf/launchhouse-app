@@ -1,6 +1,6 @@
 ---
 name: audience-b2c
-description: Build the B2C audience engine. Defines the target audience and platform, builds a hook bank, writes 25 manual DM openers for live sending, and writes the inbound comment-to-DM and conversion scripts that run in GoHighLevel. B2C track only. Trigger on "build my audience engine", "instagram outreach", "DM scripts", "my hooks", "comment to DM", or Session 3 homework for B2C founders.
+description: Build the B2C audience engine. Defines the target audience and platform, builds a hook bank, writes 25 manual DM openers for live sending, and writes the inbound comment-to-DM and conversion scripts that run in GoHighLevel. B2C track only. Trigger on "build my audience engine", "instagram outreach", "DM scripts", "my hooks", "comment to DM", or Session 2 homework for B2C founders.
 ---
 
 # Audience Engine, B2C

@@ -6,8 +6,13 @@ Which gate each file counts towards, and what each gate actually asks for. One
 source, so the label a founder sees in their index and the list a mentor checks
 against cannot say two different things.
 
-There are three gates, one after each of the three sessions. They exist so that
-nobody arrives in Atlanta unable to build.
+There are three gates. Each one is checked at the start of the next session, so
+what a founder did as homework is looked at while there is still time to fix it.
+They exist so that nobody arrives in Atlanta unable to build.
+
+  Gate A   the Founder Brain, built in session 1 and checked at the end of it
+  Gate B   session 1 homework, the content engine, checked at session 2
+  Gate C   session 2 homework, engine 2 and the ops workflow, checked at session 3
 
 ## Who writes it
 
@@ -36,21 +41,21 @@ never sees the other track's rows.
 | file | gate | track | session |
 |---|---|---|---|
 | founder-brain.md | gate A | both | 1 |
-| content-30.md | gate B | both | 2 |
-| content-30.csv | gate B | both | 2 |
-| rss-feeds.md | gate B | both | 2 |
-| outreach-sequence.md | gate C | b2b | 3 |
-| outreach-firstlines.csv | gate C | b2b | 3 |
-| dm-openers.md | gate C | b2c | 3 |
-| hook-bank.md | gate C | b2c | 3 |
-| inbound-scripts.md | gate C | b2c | 3 |
-| ops-workflow.md | gate C | both | 3 |
+| content-30.md | gate B | both | 1 |
+| content-30.csv | gate B | both | 1 |
+| rss-feeds.md | gate B | both | 1 |
+| outreach-sequence.md | gate C | b2b | 2 |
+| outreach-firstlines.csv | gate C | b2b | 2 |
+| dm-openers.md | gate C | b2c | 2 |
+| hook-bank.md | gate C | b2c | 2 |
+| inbound-scripts.md | gate C | b2c | 2 |
+| ops-workflow.md | gate C | both | 2 |
 | 90-day-plan.md | - | both | the weekend |
 | playbook-insert.md | - | both | before the print deadline |
 | ledger.md | - | both | any |
 | memory.md | - | both | any |
 | ops-log.md | - | both | any |
-| people/ | gate B or C | both | 2 and 3 |
+| people/ | gate B or C | both | 1 and 2 |
 
 A dash in the gate column means the file is real work but no gate counts it.
 
@@ -67,7 +72,7 @@ Never mark something done because the founder says it is done, when a file could
 have proved it. Check the file exists and has real content. If a file exists but
 is nearly empty, say so.
 
-## Gate A, after session 1
+## Gate A, at the end of session 1
 
 | item | proved by | which file |
 |---|---|---|
@@ -81,7 +86,7 @@ For B2B, the flag that matters most is the domain: how old it is, and whether SP
 DKIM and DMARC are set. For B2C it is the Instagram account type. Both are
 time-critical and both are self-reported at this gate.
 
-## Gate B, after session 2
+## Gate B, session 1 homework, checked at session 2
 
 | item | proved by | which file |
 |---|---|---|
@@ -95,7 +100,7 @@ Approval is what makes a piece publishable, and it is recorded in the ledger by
 `ge ledger approve`. A piece the founder has read but never approved counts as not
 done, and that is on purpose.
 
-## Gate C, after session 3, B2B
+## Gate C, session 2 homework, checked at session 3, B2B
 
 | item | proved by | which file |
 |---|---|---|
@@ -109,7 +114,7 @@ done, and that is on purpose.
 Twenty five messages, low volume, sent to a list the founder built and can
 explain. This is not a volume machine, and nothing anywhere counts replies.
 
-## Gate C, after session 3, B2C
+## Gate C, session 2 homework, checked at session 3, B2C
 
 | item | proved by | which file |
 |---|---|---|

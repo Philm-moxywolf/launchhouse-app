@@ -2,7 +2,9 @@
 
 Sent 4 September. Everything here must be done before Session 1 in the week of 7 September.
 
-Three of these items are time-critical and cannot wait for the sessions. They are marked.
+Two of these items are time-critical and cannot wait for the first session. They are marked.
+
+**This is only the app.** Apollo, GoHighLevel and your sending domain are set up with us, in the sessions where you use them. [docs/SESSIONS.md](SESSIONS.md) is what happens when.
 
 You are setting up one thing: your own copy of the Launchhouse app. It runs in your browser, it holds your work for you, and nobody else can see inside it. Setting it up takes about twenty minutes and needs no technical knowledge. It does need a card.
 
@@ -87,27 +89,13 @@ Two things to know before you do.
 
 If you are unsure which you are, ask in the Slack channel before Session 1 rather than guessing and switching later.
 
-## 8. TIME-CRITICAL if you sell to businesses
-
-Work out whether you have a business domain that already sends email regularly.
-
-**If you do not, buy one now.** You are sending 25 messages, which is low volume, so this is straightforward. What matters is that the domain is set up correctly rather than warmed for months.
-
-Three records to get right, and your registrar or email provider will walk you through them: SPF, DKIM and DMARC. Without them your mail gets filtered regardless of how long the domain has existed.
-
-Then send a small amount of normal email from it every weekday between now and Atlanta. Ten to twenty a day, real messages to real people. That is enough at this volume.
-
-A fresh domain needs at least three weeks of this. If you are buying one after roughly 8 September, use an existing domain with real sending history instead, even if the name is less tidy. An older domain that already sends beats a perfect new one that does not.
-
-Reply to the Slack thread if you are unsure and we will sort it individually.
-
-## 9. TIME-CRITICAL if you sell to consumers
+## 8. TIME-CRITICAL if you sell to consumers
 
 Convert your Instagram to a Business or Creator account and link it to a Facebook Page.
 
 Two minutes. Nothing publishes or captures inbound without it.
 
-## 10. Collect your pictures and clips. Start now, finish before Atlanta
+## 9. Collect your pictures and clips. Start now, finish before Atlanta
 
 This is the one people leave and then cannot fix on the day.
 
@@ -159,21 +147,23 @@ This is the one thing the engine cannot generate and cannot do without: **it is 
 
 ## Costs, so nothing surprises you
 
+Only the first three are needed before Session 1. The rest arrive in the session where you actually use them, which is deliberate: nobody sets a tool up three weeks early and still remembers how it works.
+
 | What | When | Cost |
 |---|---|---|
-| Replit Core | Now | 20 USD/month. Runs your app |
-| Keeping your app running | Now | From 15 USD/month. Set at the size your app needs when you publish it, and we do this together |
-| Anthropic API credit | Now | Billed by what you use. Put roughly 20 USD on to start and top it up when it runs low |
-| Domain, if needed | Now | Roughly 15 USD/year |
-| Apollo, B2B only | Free from Session 3, then 65 USD/month | Start on the free plan. It connects to the app in full, so nothing is held back while you build. Upgrade to 65 USD at the setup clinic on 23 September, which is what actually sends your messages. Works with Gmail and Google Workspace. On Microsoft 365 you will send by hand instead, which costs nothing and works fine at 25 messages |
-| GoHighLevel Starter | Setup clinic, 23 September | 97 USD/month plus usage |
-| Claude paid plan | Before Atlanta | Monthly. Not needed to set up or to run Session 1. It is what you will use to work alongside the app afterwards |
+| Replit Core | **Before Session 1** | 20 USD/month. Runs your app |
+| Keeping your app running | **Before Session 1** | From 15 USD/month. Set at the size your app needs when you publish it, and we do this together |
+| Anthropic API credit | **Before Session 1** | Billed by what you use. Put roughly 20 USD on to start and top it up when it runs low |
+| A domain, B2B only | Session 1 | Roughly 15 USD/year. You can buy it through Apollo in the session, which is the simplest route because it connects itself |
+| Apollo, B2B only | Session 1 | Free to start. The 65 USD/month plan comes in Session 2, when you set up sending |
+| GoHighLevel Starter | Session 2 | 97 USD/month plus usage |
+| Claude paid plan | Session 3 | Monthly. This is the one you will use every day afterwards |
 
 Two of those need saying plainly rather than being left in a table.
 
 **The API credit is not a subscription.** It is a balance that goes down as you use it. If the app stops working mid session, that is the first thing to check.
 
-**GoHighLevel is your CRM, your social publishing and your automation.** Required for both tracks. Pay for it at the clinic rather than starting a trial, because a trial will expire during the weekend.
+**GoHighLevel is your CRM, your social publishing and your automation.** Required for both tracks, and set up together in Session 2. Buy the plan rather than starting a trial: a trial started in September expires during the weekend you need it.
 
 ## Updates
 

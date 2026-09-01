@@ -1,6 +1,6 @@
 ---
 name: content-engine
-description: Build the content engine. Defines content pillars from the Founder Brain, then generates 30 posts (B2B) or 30 short-form scripts and hooks (B2C) in the founder's captured voice, and writes them so they can be posted to GoHighLevel. Trigger on "build my content engine", "generate my posts", "write my content", "content pillars", "my 30 posts", or Session 2 homework.
+description: Build the content engine. Defines content pillars from the Founder Brain, then generates 30 posts (B2B) or 30 short-form scripts and hooks (B2C) in the founder's captured voice, and writes them so they can be posted to GoHighLevel. Trigger on "build my content engine", "generate my posts", "write my content", "content pillars", "my 30 posts", or Session 1 homework.
 ---
 
 # Content Engine

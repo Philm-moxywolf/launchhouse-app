@@ -1,6 +1,6 @@
 ---
 name: outreach-b2b
-description: Build the B2B outreach engine. Turns the ICP into Apollo search criteria, writes a four to five touch sequence in the founder's voice, and writes a personalised first line for every person on the list. B2B track only. Trigger on "build my outreach", "write my sequence", "apollo filters", "cold email", "first lines", or Session 3 homework for B2B founders.
+description: Build the B2B outreach engine. Turns the ICP into Apollo search criteria, writes a four to five touch sequence in the founder's voice, and writes a personalised first line for every person on the list. B2B track only. Trigger on "build my outreach", "write my sequence", "apollo filters", "cold email", "first lines", or Session 2 homework for B2B founders.
 ---
 
 # Outreach Engine, B2B

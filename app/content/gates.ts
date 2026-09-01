@@ -27,26 +27,26 @@ import type { Gate, GateFileRow, GateId, GateTrack, ProvedBy } from "./gates-par
 export type { Gate, GateFileRow, GateId, GateTrack, ProvedBy };
 
 /** sha256 of the gates.md this was generated from. The test recomputes it. */
-export const GATES_MD_SHA256 = "2e6619cc19084742416d4d1b051914dc76887783506e62efe41d6096c64bc64e";
+export const GATES_MD_SHA256 = "1e9dfb3b71875b3e275ceb35df8e24d814a88cbf916c9f5dbd4d030e5285f67e";
 
 /** The table `ge index` reads, in its own order. */
 export const GATE_FILES: readonly GateFileRow[] = [
   { file: "founder-brain.md", gateLabel: "gate A", gates: ["A"], track: "both", session: "1" },
-  { file: "content-30.md", gateLabel: "gate B", gates: ["B"], track: "both", session: "2" },
-  { file: "content-30.csv", gateLabel: "gate B", gates: ["B"], track: "both", session: "2" },
-  { file: "rss-feeds.md", gateLabel: "gate B", gates: ["B"], track: "both", session: "2" },
-  { file: "outreach-sequence.md", gateLabel: "gate C", gates: ["C"], track: "b2b", session: "3" },
-  { file: "outreach-firstlines.csv", gateLabel: "gate C", gates: ["C"], track: "b2b", session: "3" },
-  { file: "dm-openers.md", gateLabel: "gate C", gates: ["C"], track: "b2c", session: "3" },
-  { file: "hook-bank.md", gateLabel: "gate C", gates: ["C"], track: "b2c", session: "3" },
-  { file: "inbound-scripts.md", gateLabel: "gate C", gates: ["C"], track: "b2c", session: "3" },
-  { file: "ops-workflow.md", gateLabel: "gate C", gates: ["C"], track: "both", session: "3" },
+  { file: "content-30.md", gateLabel: "gate B", gates: ["B"], track: "both", session: "1" },
+  { file: "content-30.csv", gateLabel: "gate B", gates: ["B"], track: "both", session: "1" },
+  { file: "rss-feeds.md", gateLabel: "gate B", gates: ["B"], track: "both", session: "1" },
+  { file: "outreach-sequence.md", gateLabel: "gate C", gates: ["C"], track: "b2b", session: "2" },
+  { file: "outreach-firstlines.csv", gateLabel: "gate C", gates: ["C"], track: "b2b", session: "2" },
+  { file: "dm-openers.md", gateLabel: "gate C", gates: ["C"], track: "b2c", session: "2" },
+  { file: "hook-bank.md", gateLabel: "gate C", gates: ["C"], track: "b2c", session: "2" },
+  { file: "inbound-scripts.md", gateLabel: "gate C", gates: ["C"], track: "b2c", session: "2" },
+  { file: "ops-workflow.md", gateLabel: "gate C", gates: ["C"], track: "both", session: "2" },
   { file: "90-day-plan.md", gateLabel: "-", gates: [], track: "both", session: "the weekend" },
   { file: "playbook-insert.md", gateLabel: "-", gates: [], track: "both", session: "before the print deadline" },
   { file: "ledger.md", gateLabel: "-", gates: [], track: "both", session: "any" },
   { file: "memory.md", gateLabel: "-", gates: [], track: "both", session: "any" },
   { file: "ops-log.md", gateLabel: "-", gates: [], track: "both", session: "any" },
-  { file: "people/", gateLabel: "gate B or C", gates: ["B","C"], track: "both", session: "2 and 3" },
+  { file: "people/", gateLabel: "gate B or C", gates: ["B","C"], track: "both", session: "1 and 2" },
 ];
 
 /** The three gates. Gate C has one list per track. */
@@ -54,7 +54,7 @@ export const GATES: readonly Gate[] = [
   {
     id: "A",
     track: "both",
-    heading: "Gate A, after session 1",
+    heading: "Gate A, at the end of session 1",
     items: [
       { item: "the Brain exists and is locked", provedBy: "file-backed", which: "founder-brain.md, its Locked line" },
       { item: "a track is chosen", provedBy: "file-backed", which: "founder-brain.md, its Track line" },
@@ -66,7 +66,7 @@ export const GATES: readonly Gate[] = [
   {
     id: "B",
     track: "both",
-    heading: "Gate B, after session 2",
+    heading: "Gate B, session 1 homework, checked at session 2",
     items: [
       { item: "thirty pieces are written", provedBy: "file-backed", which: "content-30.md" },
       { item: "the upload sheet is exported", provedBy: "file-backed", which: "content-30.csv" },
@@ -78,7 +78,7 @@ export const GATES: readonly Gate[] = [
   {
     id: "C",
     track: "b2b",
-    heading: "Gate C, after session 3, B2B",
+    heading: "Gate C, session 2 homework, checked at session 3, B2B",
     items: [
       { item: "the sequence is approved", provedBy: "file-backed", which: "outreach-sequence.md" },
       { item: "the list criteria are written down", provedBy: "file-backed", which: "outreach-sequence.md" },
@@ -91,7 +91,7 @@ export const GATES: readonly Gate[] = [
   {
     id: "C",
     track: "b2c",
-    heading: "Gate C, after session 3, B2C",
+    heading: "Gate C, session 2 homework, checked at session 3, B2C",
     items: [
       { item: "twenty five openers are written", provedBy: "file-backed", which: "people/, targets with an opener" },
       { item: "the openers sheet is exported", provedBy: "file-backed", which: "dm-openers.md" },

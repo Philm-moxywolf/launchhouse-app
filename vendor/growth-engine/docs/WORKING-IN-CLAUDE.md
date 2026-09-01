@@ -1,10 +1,10 @@
 # Working in Claude, after the app
 
-Sent before Session 3. Nothing here is needed for Sessions 1 or 2.
+Sent before Session 3, and this is what Session 3 is. We do it together, so read it first if you like but do not worry if something does not work on your own.
 
-By now the app has your Founder Brain, your voice, your 30 pieces and your engine. This is the other half: getting Claude on your own machine to use all of that, and to talk to the tools that actually send things.
+By now the app has your Founder Brain, your voice, your 30 pieces and your engine, and your Apollo and GoHighLevel accounts are set up from Session 2. This is the handover: getting Claude on your own machine to use all of it.
 
-The app is where the work gets made. Claude is where you run it, from Session 3 onwards and for as long as you keep going after Atlanta.
+**After this session you work in Claude, not in the app.** That is where you will be in Atlanta and every week after it. The app made the work. Claude is where you use it.
 
 ## Why bother, when the app already works
 
@@ -34,6 +34,8 @@ If it does not appear, quit and reopen the app, then try again. That fixes it ne
 
 ## 3. Connect Apollo, if you sell to businesses
 
+You already have an Apollo account from Session 1 and it is set up to send from Session 2. This step is different: it gives Claude access to it.
+
 Apollo has a connector you add to your Claude account. It is a few clicks and there is nothing to paste.
 
 Once it is on, Claude can search for people, get their email addresses, and build a sequence in your Apollo account.
@@ -48,7 +50,7 @@ https://help.gohighlevel.com/support/solutions/articles/155000005741-how-to-setu
 
 Once it is on, Claude can post your content, read your contacts, and check what has gone out. This is the one that saves the most time, because it is the difference between reading your 30 pieces and publishing them.
 
-Do this after the clinic on 23 September, not before. You will not have a GoHighLevel account to connect until then.
+You set GoHighLevel up in Session 2, so the account is already there. This connects Claude to it.
 
 ## 5. Give Claude your work
 

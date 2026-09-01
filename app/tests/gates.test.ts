@@ -202,8 +202,8 @@ test("the parser refuses rather than guessing", () => {
     () =>
       parseGatesMarkdown(
         src.replace(
-          "| content-30.md | gate B | both | 2 |",
-          "| content-30.md | gate B | both | 2 |\n| content-30.md | gate C | both | 3 |",
+          "| content-30.md | gate B | both | 1 |",
+          "| content-30.md | gate B | both | 1 |\n| content-30.md | gate C | both | 2 |",
         ),
       ),
     /twice in the file table/,

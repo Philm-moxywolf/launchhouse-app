@@ -90,12 +90,21 @@ export interface ParsedGates {
   readonly gates: readonly Gate[];
 }
 
-/** The four gate sections, by their exact headings in gates.md. */
+/**
+ * The four gate sections, by their exact headings in gates.md.
+ *
+ * THE HEADINGS ARE THE KEY, so changing one in the schema breaks this parser and
+ * the build stops. That is the intended behaviour and it caught a real change on
+ * 1 September: the sessions were resequenced, gates moved from being checked
+ * after a session to being checked at the start of the next one, and the headings
+ * had to say so. A parser that matched loosely would have carried on reading a
+ * file that no longer meant what it used to.
+ */
 const GATE_SECTIONS: readonly { heading: string; id: GateId; track: GateTrack }[] = [
-  { heading: "## Gate A, after session 1", id: "A", track: "both" },
-  { heading: "## Gate B, after session 2", id: "B", track: "both" },
-  { heading: "## Gate C, after session 3, B2B", id: "C", track: "b2b" },
-  { heading: "## Gate C, after session 3, B2C", id: "C", track: "b2c" },
+  { heading: "## Gate A, at the end of session 1", id: "A", track: "both" },
+  { heading: "## Gate B, session 1 homework, checked at session 2", id: "B", track: "both" },
+  { heading: "## Gate C, session 2 homework, checked at session 3, B2B", id: "C", track: "b2b" },
+  { heading: "## Gate C, session 2 homework, checked at session 3, B2C", id: "C", track: "b2c" },
 ];
 
 const FILE_TABLE_SECTION = "## The table `ge index` reads";

@@ -8,11 +8,13 @@ Claude plugin for Launchhouse Atlanta, 25 to 27 September 2026.
 
 Founders use two things, in this order, and knowing which is which saves a lot of confusion.
 
-**The Launchhouse app, for Sessions 1 to 3.** Each founder takes their own copy of it. It asks them the questions, writes their Founder Brain, their 30 pieces, their openers and their workflow copy, and holds all of it for them. There is nothing to install and no folder to choose. That is where the work gets made, and [docs/PRE-WORK.md](docs/PRE-WORK.md) is how to set it up.
+**The Launchhouse app, for Sessions 1 and 2.** Each founder takes their own copy of it. It asks them the questions, writes their Founder Brain, their 30 pieces, their openers and their workflow copy, and holds all of it for them. There is nothing to install and no folder to choose. That is where the work gets made, and [docs/PRE-WORK.md](docs/PRE-WORK.md) is how to set it up.
 
-**This plugin, for everything after that.** Once a founder has their work, they download it and open it in Claude on their own machine. This plugin is what teaches Claude their track, their voice and the rules the programme runs on, so it writes as them rather than as anybody. Alongside it they connect Apollo and GoHighLevel, which are what actually send and publish. [docs/WORKING-IN-CLAUDE.md](docs/WORKING-IN-CLAUDE.md) is that setup, and it is sent before Session 3.
+**This plugin, from Session 3 onwards.** Session 3 is the handover: a founder downloads their work and opens it in Claude on their own machine, and that is where they work from then on. This plugin is what teaches Claude their track, their voice and the rules the programme runs on, so it writes as them rather than as anybody. Alongside it they connect Apollo and GoHighLevel, which are what actually send and publish. [docs/WORKING-IN-CLAUDE.md](docs/WORKING-IN-CLAUDE.md) is that setup, and it is sent before Session 3.
 
 So the app makes the work and Claude runs it. Neither half replaces the other.
+
+[docs/SESSIONS.md](docs/SESSIONS.md) is what happens in each session and what the homework is.
 
 ## Install the plugin
 
