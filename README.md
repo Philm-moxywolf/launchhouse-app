@@ -7,8 +7,8 @@ app, and the nine engines run server side. No terminal and nothing to install.
 saying plainly, because an earlier version of this file said the opposite and it is the first
 thing anybody reads.
 
-**Every founder remixes this into their own Replit account.** They get their own database,
-their own passphrase and their own keys. There is no roster, no shared seat, and no
+**Every founder brings this into their own Replit account from GitHub.** They get their own
+database, their own passphrase and their own keys. There is no roster, no shared seat, and no
 deployment of ours that 130 people log into. So this repository is the source they copy, and
 their work never comes back to it. `auth/owner.ts` carries the reasoning; it replaced a magic
 link and a roster of 130.
@@ -34,8 +34,9 @@ repo tells founders what to do with it.
 ## The content repo
 
 Engine prose lives in the public content repo and is vendored into `vendor/`, pinned by commit
-in `vendor/content-pin.json`. It was a submodule and is not any more: a founder remixing this
-has no GitHub credential, and a submodule they cannot fetch is an app that does not start.
+in `vendor/content-pin.json`. It was a submodule and is not any more: a founder bringing this
+in has no GitHub credential of their own, and a submodule they cannot fetch is an app that does
+not start. Vendored, the content arrives with the code.
 
 Prose is edited in the content repo and moved here with `npm run engine:bump -- --to <ref>`.
 That script moves the tree and deliberately does not port changes into `app/content/skills/`,

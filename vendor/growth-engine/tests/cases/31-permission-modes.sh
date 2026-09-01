@@ -625,6 +625,19 @@ pm_nofolder() {                         # <mode> <clears|settles> <label> <ge ar
     printf 'the command in it:\n  %s\n' "$pm_n_cmd" >> "$CASEWORK/diff.txt"
     printf 'running that exited %s and said:\n' "$pm_n_wrc" >> "$CASEWORK/diff.txt"
     sed 's/^/  /' "$CASEWORK/recovery.out" >> "$CASEWORK/diff.txt"
+    # AND TO THE LOG. See the same block in pm_drive: diff.txt does not survive to
+    # the artifact step on a runner, so a failure that only writes there says
+    # nothing to whoever reads the log.
+    #
+    # THIS IS THE FUNCTION THAT ACTUALLY FAILS, and the first attempt instrumented
+    # pm_drive instead, because the two have near identical branches and only one
+    # was read. The failing labels all say "with nothing in it", which is this one.
+    printf '      the way out ge printed: %s\n' "$pm_n_cmd" >&2
+    printf '      running it exited %s and it said:\n' "$pm_n_wrc" >&2
+    sed 's/^/        /' "$CASEWORK/recovery.out" >&2
+    printf '      HOME was: %s\n' "${HOME:-<unset>}" >&2
+    printf '      the refusal in full:\n' >&2
+    sed 's/^/        /' "$CASEWORK/nofolder.out" >&2 2>/dev/null || true
     t_fail "$pm_n_lbl: the way out exits $pm_n_wrc"
     return 0
   fi

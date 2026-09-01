@@ -18,11 +18,11 @@ Sign up on the email address you will bring to Atlanta and stay on it. Your work
 
 ## 2. Take your own copy of the app
 
-We will send you one link on 4 September. Open it and press **Remix**.
+We will send you one address on 4 September. In Replit, create a new app and choose the option to bring one in from GitHub, then paste that address in.
 
-That gives you your own private copy. Not a shared login, not an account on our system: your app, in your account, with a database only you can reach. Nothing you write in it is visible to us or to any other founder.
+That gives you your own copy. Not a shared login, not an account on our system: your app, in your account, with a database only you can reach. Nothing you write in it is visible to us or to any other founder.
 
-Remixing takes about a minute.
+It takes about a minute, and you do not need a GitHub account of your own to do it.
 
 ## 3. Give it a database
 
@@ -169,7 +169,9 @@ Two of those need saying plainly rather than being left in a table.
 
 We will improve the app during the programme, and updates are not automatic.
 
-When there is one worth taking, we will post the exact steps in Slack. It is a few clicks in your own copy and it never touches your work: your files and your database are yours and stay where they are.
+Because your copy came from GitHub, taking an update is pulling the newer version into it. When there is one worth taking, we will post the exact steps in Slack.
+
+**It never touches your work.** Your Brain, your content and everything else live in your database, not in the code. Updating the app is like updating any other app on your phone: the thing changes, your stuff does not.
 
 Do not go looking for updates on your own. Take them when we say, so that a room of 130 people is running the same thing.
 
