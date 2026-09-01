@@ -39,18 +39,34 @@ import { hrefFor } from "../lib/nav.ts";
 export function Apollo(): ReactElement {
   return (
     <div className="page page-narrow">
-      <h1>Two ways to do this</h1>
-      <p className="lede">Both end in the same place. Nothing sends until you press send.</p>
+      <h1>Your Apollo account</h1>
+      <p className="lede">
+        Two things happen here. You check your key works, so nothing is a surprise later. Then, in Session 3,
+        Claude gets its own access and does the work.
+      </p>
 
       <ConnectApollo />
 
       <section className="choice">
-        <h2>Do it by hand</h2>
+        <h2>Then Claude does the rest, from Session 3</h2>
+        <p>
+          Apollo has a connector you add to your Claude account. Once it is on, you can ask Claude to find
+          people, get their addresses, and build your sequence in your Apollo account. It builds it paused, and
+          starting it is a button you press in Apollo having read the messages.
+        </p>
+        <p className="quiet">
+          That connector is separate from the key above. The key proves your account works. The connector is
+          what lets Claude use it. We set it up together in Session 3.
+        </p>
+      </section>
+
+      <section className="choice">
+        <h2>Or do it by hand</h2>
         <p>We give you a spreadsheet. You upload it to Apollo yourself. Twenty five rows, about ten minutes.</p>
         <a className="button" href={downloadUrl("outreach-firstlines.csv")}>
           Download the spreadsheet
         </a>
-        <p className="quiet">It appears here once you have built your outreach engine in session 3.</p>
+        <p className="quiet">It appears here once you have built your outreach engine.</p>
       </section>
 
       <p className="crumb">
@@ -110,9 +126,10 @@ function ConnectApollo(): ReactElement {
 
   return (
     <section className="choice">
-      <h2>Connect Apollo</h2>
+      <h2>Check your key works</h2>
       <p>
-        We put your 25 contacts and your opening lines straight into a sequence, paused, for you to check and start.
+        This does one thing: it asks Apollo whether your account is live and your key is good. It is the check
+        you would rather fail today than in Session 3.
       </p>
 
       {connected ? (
