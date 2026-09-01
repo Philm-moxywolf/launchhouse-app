@@ -360,6 +360,15 @@ export const GHL_PATH_PROVENANCE: Readonly<Record<string, string>> = {
     'n8n workflow "Moxywolf Blog and Social Posting Automation to Blog and GHL Socials 2.0", node "Get Social ID\'s from GHL", 31 August 2026.',
   '/social-media-posting/{locationId}/posts':
     'Same workflow, node "Post to Social LinkedIn Image3". Runs on a schedule against a real account.',
+
+  // APOLLO. Documented, not called. Every one of these came from Apollo's own published
+  // reference on 1 September 2026 and none has been sent, which is why the constants in
+  // apollo.ts are named _DOCUMENTED rather than being treated as settled.
+  '/api/v1': 'Apollo published reference, API overview, read 1 September 2026. Documented base path for every call.',
+  '/api/v1/mixed_people/api_search':
+    'Apollo published reference, People API Search, read 1 September 2026. Documented as consuming no credits, 100 per page. NOT /mixed_people/search, which answers 403 on lower plans and is the mistake this line exists to stop.',
+  '/api/v1/people/match':
+    'Apollo published reference, People Enrichment, read 1 September 2026. Consumes credits, so any screen that calls it names the cost first.',
 };
 
 /** The API version header value. Sent on every call in the source workflow. */

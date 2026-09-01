@@ -84,8 +84,15 @@ export const FEATURE_CONTRACTS: Readonly<Record<string, readonly unknown[]>> = {
   ghlSchedule: [GHL.hosts, GHL.baseUrl, GHL.headerNames, GHL.createPost, GHL.readPost, GHL.scheduleEncoding],
   /** Pushing the founder's people into the CRM. */
   ghlContacts: [GHL.hosts, GHL.baseUrl, GHL.headerNames, GHL.readContacts, GHL.createContact],
-  /** Apollo, all of it. */
-  apollo: [APOLLO.hosts, APOLLO.auth, APOLLO.search, APOLLO.enrich],
+  /**
+   * Apollo, all of it.
+   *
+   * The host, the auth header and both endpoint paths are documented now and are
+   * exported as `_DOCUMENTED` constants rather than holes, so they are not in this
+   * list. What is left is what a real call would settle: the field names that come
+   * back, and whether a sequence can be written to at all.
+   */
+  apollo: [APOLLO.searchResponse, APOLLO.enrichResponse, APOLLO.sequences],
 };
 
 /**

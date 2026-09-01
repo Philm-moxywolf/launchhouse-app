@@ -168,6 +168,11 @@ export const VENDOR_ALLOWLIST: Readonly<Record<string, readonly string[]>> = {
   // founder's key is real before it is stored. The agent loop itself does not come
   // through here, because the CLI holds its own connection.
   'api.anthropic.com': ['/v1/models', '/v1/messages'],
+  // Apollo. One prefix covering both documented calls, people search and people
+  // enrichment. See contracts/apollo.ts: the paths are documented and have never been
+  // sent, and no client calls them yet. The entry is here so the first real call is a
+  // call and not also an allowlist argument.
+  'api.apollo.io': ['/api/v1/'],
 };
 
 /** Why a request was refused by the allowlist, or null when it is allowed. */

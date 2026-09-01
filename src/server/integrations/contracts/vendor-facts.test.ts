@@ -338,11 +338,26 @@ test('every recorded provenance names a real source, not a shrug', () => {
   // to actually say something, and it has to say where.
   for (const [path, source] of Object.entries(GHL_PATH_PROVENANCE)) {
     assert.ok(source.trim().length >= 30, `${path} has provenance too short to be a source: "${source}"`);
+    // THE VOCABULARY GREW ON 1 SEPTEMBER AND IT IS WORTH SAYING WHY. Every source
+    // this list knew about was something observed: a workflow that runs, a spike, a
+    // response somebody read off a real call. Apollo's endpoints came from the
+    // vendor's own published reference, which is a real source and a weaker one, so
+    // it gets its own word rather than being dressed up as one of the others.
+    //
+    // "published reference" must always carry a date, because documentation changes
+    // under you and an undated citation cannot be rechecked.
     assert.match(
       source,
-      /workflow|spike|Allowlist prefix|read off|response from/i,
+      /workflow|spike|Allowlist prefix|read off|response from|published reference/i,
       `${path} does not say where it came from: "${source}"`,
     );
+    if (/published reference/i.test(source)) {
+      assert.match(
+        source,
+        /\b(19|20)\d{2}\b/,
+        `${path} cites documentation with no date, so nobody can recheck it: "${source}"`,
+      );
+    }
   }
 });
 
