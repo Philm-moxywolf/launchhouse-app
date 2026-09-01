@@ -18,7 +18,7 @@ Sign up on the email address you will bring to Atlanta and stay on it. Your work
 
 ## 2. Take your own copy of the app
 
-We will send you one address on 4 September. In Replit, create a new app and choose the option to bring one in from GitHub, then paste that address in.
+We will send you one address on 4 September. Go to **https://replit.com/import**, paste that address in, and let it bring the app across.
 
 That gives you your own copy. Not a shared login, not an account on our system: your app, in your account, with a database only you can reach. Nothing you write in it is visible to us or to any other founder.
 
@@ -54,6 +54,8 @@ If anything is missing, the first screen tells you what and what to do about it.
 Inside the app, go to **Setup** and paste an Anthropic API key.
 
 Get one at console.anthropic.com. This is not the same thing as a Claude subscription, and having one does not give you the other. It is billed by usage, and you will need to put a small amount of credit on it, around 20 USD to start.
+
+**Paste it into the app, not into Replit's settings.** Replit can store keys for you, at https://replit.com/repls?settings.show=true&settings.tab=integrations, and a key kept there works. What it does not do is check the key. Pasting it into the app asks Anthropic two questions first: is this a real key, and does this account have credit on it. The second one is the one that catches a key that looks perfect and does nothing.
 
 Do this before Session 1. Without it the app can hold your work but cannot write anything, and that is the whole of Session 1.
 
