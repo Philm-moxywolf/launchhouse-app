@@ -40,11 +40,18 @@ import { vendorFetch, type VendorAnswer } from './http.ts';
 /**
  * The most people one call may enrich.
  *
- * The programme is 25 messages, and this is that number with nothing added for comfort.
- * Raising it is a decision somebody has to make in this file, on purpose, having read
- * the sentence above it.
+ * NOT THE PROGRAMME'S 25, AND IT WAS FOR ABOUT AN HOUR, WHICH WAS WRONG. Twenty five is
+ * the promise made to a founder about what they will have done by the Saturday. It is a
+ * floor under the programme, not a ceiling on a person, and their Apollo account and
+ * their credits are their own. A founder who wants sixty is not misusing this.
+ *
+ * WHAT THIS NUMBER IS INSTEAD: one batch. It matches Apollo's own per-page maximum, so
+ * it is a size the vendor already thinks in, and it exists for one reason only, which is
+ * that a model that has misread a conversation asks for ten thousand rather than for
+ * sixty. Anything above this comes back as too_many with the number in it, so the
+ * founder is asked rather than charged.
  */
-export const ENRICH_CAP = 25;
+export const ENRICH_CAP = 100;
 
 export interface EnrichedPerson {
   readonly id: string;

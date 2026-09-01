@@ -12,10 +12,14 @@ import assert from 'node:assert/strict';
 import { ENRICH_CAP, enrichWithKey } from './apollo-enrich.ts';
 
 describe('the cap', () => {
-  test('is the programme number, not a comfortable one above it', () => {
-    // 25 messages is the programme. If this ever reads 50, somebody raised it without
-    // reading why it was 25, which is the thing this test is for.
-    assert.equal(ENRICH_CAP, 25);
+  test('is a batch size, not the programme number', () => {
+    // IT WAS 25 AND THAT WAS A MISREADING. Twenty five is what a founder is promised
+    // they will have done by the Saturday, a floor under the programme rather than a
+    // ceiling on a person, and the Apollo account is theirs. This is one batch, matching
+    // Apollo's own per-page maximum, and it exists only to catch a model that has
+    // misread a conversation and asked for ten thousand.
+    assert.equal(ENRICH_CAP, 100);
+    assert.ok(ENRICH_CAP > 25, 'a founder who wants more than the promise is not misusing this');
   });
 });
 

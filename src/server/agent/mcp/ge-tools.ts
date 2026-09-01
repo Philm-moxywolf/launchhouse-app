@@ -323,7 +323,7 @@ export function createGeTools(ctx: FounderContext, deps: GeToolDeps) {
    */
   const apolloEnrich = tool(
     'apollo_enrich',
-    `Get the email addresses for people you found with apollo_search. THIS SPENDS THE FOUNDER'S MONEY: Apollo charges one credit per person, every time, whether or not it finds an address. Agree the exact list with the founder before you call this, say how many people that is, and never call it to explore. At most ${String(ENRICH_CAP)} people in one go. It returns work email addresses only, and some people will have none, which is normal.`,
+    `Get the email addresses for people you found with apollo_search. THIS SPENDS THE FOUNDER'S MONEY: Apollo charges one credit per person, every time, whether or not it finds an address. It is their account and their credits, so the number is theirs to choose, but agree the exact list with them first and say how many people that is. Never call it to explore. At most ${String(ENRICH_CAP)} in one go, which is a batch size and not a limit on them: ask again for more. It returns work email addresses only, and some people will have none, which is normal.`,
     {
       apollo_ids: z
         .array(z.string().min(1).max(64))
