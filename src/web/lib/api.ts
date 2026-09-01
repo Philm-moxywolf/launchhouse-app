@@ -424,6 +424,24 @@ export type GhlVerifyResult =
   | { readonly ok: true; readonly ghl: GhlState }
   | { readonly ok: false; readonly kind: GhlFailureKind; readonly call: GhlVerifyCall; readonly scope?: GhlScope };
 
+/**
+ * What the Apollo key check answered.
+ *
+ * `forbidden` IS ITS OWN KIND AND MUST STAY THAT WAY. Apollo returns 403 both when the
+ * plan does not carry the endpoint and when the key was not scoped to it, and a founder
+ * fixes those in two different places. Collapsing it into a rejected key sends them back
+ * to Apollo to make another key that fails identically.
+ */
+export type ApolloFailureKind =
+  | "auth_rejected"
+  | "forbidden"
+  | "rate_limited"
+  | "vendor_unavailable";
+
+export type ApolloConnectResult =
+  | { readonly ok: true; readonly apollo: { readonly connected: boolean; readonly keyMadeAt: string } }
+  | { readonly ok: false; readonly kind: ApolloFailureKind; readonly call: "search" };
+
 export interface SetupState {
   readonly profile: { readonly name: string | null; readonly timezone: string | null };
   /** Keyed by the step slug in `app/content/ghl-walk.ts`, plus our own rail slugs. */
@@ -563,6 +581,17 @@ export function connectGhl(token: string): Promise<Result<GhlVerifyResult>> {
  */
 export function verifyGhl(): Promise<Result<GhlVerifyResult>> {
   return post<GhlVerifyResult>("/api/setup/ghl/verify");
+}
+
+/**
+ * Paste the Apollo key. B2B only, and the server refuses it for anybody else.
+ *
+ * The key crosses the wire once and is never sent back to the browser, the same rule the
+ * GoHighLevel token follows. The check behind this is a search, which is the one Apollo
+ * call that costs no credits, so pressing this button never spends a founder's money.
+ */
+export function connectApollo(key: string): Promise<Result<ApolloConnectResult>> {
+  return post<ApolloConnectResult>("/api/setup/apollo/key", { key });
 }
 
 /** ASSUMED path. Deletes our copy. It does not switch the token off, and the screen says so. */

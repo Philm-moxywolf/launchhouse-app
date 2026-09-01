@@ -74,6 +74,8 @@ import { GHL_WALK_STEPS } from '../../../app/content/ghl-walk.ts';
 import { GHL_TOKEN_PREFIX_GUESS } from '../integrations/contracts/ghl.ts';
 import { fetchSocialAccounts } from '../integrations/ghl-accounts.ts';
 import { openGhlToken, readStoredAccounts, saveGhlToken } from '../integrations/ghl-token-store.ts';
+import { checkApolloKey } from '../integrations/apollo-key-check.ts';
+import { saveApolloKey } from '../integrations/apollo-token-store.ts';
 import { checkAnthropicKey, problemOf, readPastedKey, type KeyProblem } from '../agent/anthropic-check.ts';
 import { anthropicKeyFor, describeAnthropicKey } from '../agent/anthropic-key.ts';
 import { forgetStoredAnthropicKey, saveAnthropicKey } from '../agent/anthropic-key-store.ts';
@@ -191,6 +193,24 @@ export const SETUP_ERRORS = {
     status: 500,
     code: 'could_not_save',
     message: 'Your token works. We could not write the connection down, which is our problem and not yours. Press Check the connection again in a moment, and tell a mentor if it happens twice.',
+  },
+  badApolloKey: {
+    status: 400,
+    code: 'bad_apollo_key',
+    message: 'That did not arrive as a key we can read. Copy it again from Settings, Integrations, API Keys in Apollo and paste it in.',
+  },
+  /**
+   * Rule 1, as a refusal.
+   *
+   * IT NAMES NOTHING. A founder on the audience track who is told this step belongs to
+   * the outreach track has still been told the outreach track has a step here, and
+   * `apolloRowExists` in the browser is built so that word never reaches their screen.
+   * So it reads as an address that is not theirs, which is also true.
+   */
+  notYourTrack: {
+    status: 404,
+    code: 'not_yours',
+    message: 'That is not one of your steps. Open Setup and carry on from where you were.',
   },
   noTokenYet: {
     status: 400,
@@ -678,6 +698,64 @@ export async function registerSetupRoutes(app: FastifyInstance, deps: RouteDeps)
       },
     });
   };
+
+  /**
+   * Paste the Apollo key, check it, and keep it if it works.
+   *
+   * SAME ORDER AS GOHIGHLEVEL, AND FOR THE SAME REASON: call, then save, then say
+   * connected. A row written before the check is a credential nobody is watching,
+   * and the founder still has the key in front of them to paste again.
+   *
+   * RULE 1 IS THE FIRST THING IN IT. Apollo belongs to the outreach track. A B2C
+   * founder reaching this address gets the same answer as for a route that does not
+   * exist, because telling them Apollo is not for their track still tells them Apollo
+   * exists, and `apolloRowExists` in the browser is built so they never read the word.
+   *
+   * THE CHECK COSTS NOTHING. It is a search, and search is the one Apollo call
+   * verified to spend no credits.
+   */
+  app.post('/api/setup/apollo/key', async (request, reply) => {
+    if (!(await deps.auth.requireFounder(request, reply))) return reply;
+    const founder = deps.auth.founderOf(request);
+
+    if (trackOf(founder) !== 'b2b') {
+      return reply.code(SETUP_ERRORS.notYourTrack.status).send(errorBody(SETUP_ERRORS.notYourTrack));
+    }
+
+    const key = readString(request.body, 'key', MAX_TOKEN_CHARACTERS);
+    if (key === null) {
+      return reply.code(SETUP_ERRORS.badApolloKey.status).send(errorBody(SETUP_ERRORS.badApolloKey));
+    }
+
+    const outcome = await checkApolloKey(key);
+
+    if (outcome.kind === 'unreadable') {
+      // Our problem, not theirs, and logged as one. `why` never carries the key:
+      // apollo-key-check.test.ts holds that.
+      deps.log.error({ founderId: founder.id, why: outcome.why }, 'the Apollo key check could not be understood');
+      return reply.code(200).send({ ok: false, kind: 'vendor_unavailable', call: 'search' });
+    }
+    if (outcome.kind !== 'ok') {
+      // `forbidden` reaches the screen as its own kind on purpose. It means either the
+      // plan does not carry the endpoint or the key was not scoped to it, and those are
+      // fixed in two different places. See contracts/apollo.ts.
+      deps.log.warn({ founderId: founder.id, kind: outcome.kind }, 'an Apollo key was refused');
+      return reply.code(200).send({ ok: false, kind: outcome.kind, call: 'search' });
+    }
+
+    const now = deps.clock.now();
+    try {
+      await saveApolloKey(founder.id, key, now);
+    } catch (err: unknown) {
+      deps.log.error(
+        { founderId: founder.id, why: err instanceof Error ? err.message : String(err) },
+        'the Apollo key check passed but the connection could not be written down',
+      );
+      return reply.code(SETUP_ERRORS.couldNotSave.status).send(errorBody(SETUP_ERRORS.couldNotSave));
+    }
+
+    return reply.code(200).send({ ok: true, apollo: { connected: true, keyMadeAt: now.toISOString() } });
+  });
 
   app.post('/api/setup/ghl/token', runGhlCheck(true));
   app.post('/api/setup/ghl/verify', runGhlCheck(false));
