@@ -515,11 +515,13 @@ export const GHL_WALK_REVOKE = {
  */
 export const GHL_CONTACTS_READ_PENDING = {
   pending: true,
-  spikeReference: "planning/spike-findings.md, and REPLIT-BUILD.md section 9 item A2",
+  spikeReference: "Decided 1 September 2026. Not a spike any more, see the note below.",
   why:
-    "The name of the contacts read is not known at all. The screen copy is written and the " +
-    "call is not. Until the spike lands, step 6 runs the first two reads and reports the " +
-    "third as not yet checked rather than reporting a pass it did not make.",
+    "NOT A GAP WAITING TO BE FILLED ANY MORE. Reading a founder's contacts is GoHighLevel's " +
+    "own MCP server's job, connected to their Claude account and working on their own " +
+    "location. This app connects the token so it can be used, and it does not read contacts " +
+    "itself. So step 6 checks the two things it actually needs, which is that the token works " +
+    "and that it belongs to the right location, and says so.",
   founderReadsWhilePending:
-    "We have checked two of the three. The contacts check is not switched on yet. We will run it for you before session 3 and tell you either way.",
+    "We have checked the two that matter: your token works, and it belongs to this business. We do not read your contacts from here, and there is nothing else for you to do.",
 };
