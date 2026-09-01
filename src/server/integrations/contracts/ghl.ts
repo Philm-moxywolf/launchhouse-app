@@ -370,7 +370,9 @@ export const GHL_PATH_PROVENANCE: Readonly<Record<string, string>> = {
   '/api/v1/people/match':
     'Apollo published reference, People Enrichment, read 1 September 2026. Consumes credits, so any screen that calls it names the cost first.',
   '/api/v1/sequences':
-    'Apollo published reference, Create a Sequence, read 1 September 2026.',
+    'Apollo published reference, Create a Sequence, read 1 September 2026. The create-key screen names the scope api/v1/sequences/create; that is a scope name and not a URL, confirmed by contacts having the same shape.',
+  '/api/v1/contacts':
+    'Apollo published reference, Create a Contact, read 1 September 2026. Scope name on the key screen is api/v1/contacts/create.',
   '/api/v1/emailer_campaigns/{sequenceId}/add_contact_ids':
     'Apollo published reference, Add Contacts to a Sequence, read 1 September 2026. Answers 403 without a master or scoped key, and 600 calls per hour.',
 

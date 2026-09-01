@@ -106,19 +106,23 @@ export const APOLLO_ENRICH_DOCUMENTED = {
 export const APOLLO_CREATE_SEQUENCE_DOCUMENTED = {
   method: 'POST',
   /**
-   * THE REFERENCE AND THE KEY SCREEN DISAGREE, AND THE KEY SCREEN WINS.
+   * THE KEY SCREEN LISTS SCOPE NAMES, NOT URLS, AND I HAD THIS BACKWARDS.
    *
-   * Apollo's published reference describes this as `/api/v1/sequences`. The endpoint
-   * list on the create-key screen of a real account says `api/v1/sequences/create`.
-   * A key is scoped by that second spelling, so a call to the first would be scoped
-   * against something that is not in the list and answer 403 for a reason nobody
-   * would find.
+   * An earlier version of this file said the create-key screen's spelling won, because
+   * it said `api/v1/sequences/create` where the reference said `/api/v1/sequences`, and
+   * a key is scoped by what that screen lists.
    *
-   * Both are written down rather than one being quietly picked, because the first
-   * real call is what settles it and whoever makes it needs to know there were two.
+   * A second endpoint settled it. Contacts appear on the key screen as
+   * `api/v1/contacts/create` and the reference documents `POST /api/v1/contacts`. Two
+   * resources with the same shape is a naming convention, not a disagreement: the screen
+   * names the operation, the URL is the resource. Calling `/sequences/create` would have
+   * been a 404 that read like a scope problem.
+   *
+   * Both spellings stay written down. The scope name is what a founder ticks, and the
+   * path is what gets called, and somebody will need to match them up again.
    */
-  path: '/api/v1/sequences/create',
-  pathInPublishedReference: '/api/v1/sequences',
+  path: '/api/v1/sequences',
+  scopeNameOnKeyScreen: 'api/v1/sequences/create',
 } as const;
 
 /**
@@ -228,6 +232,26 @@ export const APOLLO_SEQUENCE_DOCUMENTED = {
   /** Never sent. Absent means inactive, which is the whole safety property. */
   activateKey: 'active',
   responseKey: 'emailer_campaign',
+  responseIdKey: 'id',
+} as const;
+
+/**
+ * Turning an enriched person into a contact. DOCUMENTED, and a required middle step.
+ *
+ * Apollo separates a person in its database from a contact the team has added, and only
+ * contacts go into sequences. So the chain is search, enrich, create contact, sequence,
+ * and skipping the third leaves a founder with addresses and nowhere to put them.
+ *
+ * `run_dedupe` IS SET. Apollo's default is to create a second contact for somebody who is
+ * already there, which at 25 people across a few sessions means the same person entering
+ * a sequence twice and receiving the opening message twice.
+ */
+export const APOLLO_CREATE_CONTACT_DOCUMENTED = {
+  method: 'POST',
+  path: '/api/v1/contacts',
+  scopeNameOnKeyScreen: 'api/v1/contacts/create',
+  dedupeParam: 'run_dedupe',
+  responseKey: 'contact',
   responseIdKey: 'id',
 } as const;
 
