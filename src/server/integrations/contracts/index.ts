@@ -96,7 +96,7 @@ export const FEATURE_CONTRACTS: Readonly<Record<string, readonly unknown[]>> = {
     APOLLO.enrichResponse,
     APOLLO.pagination,
     APOLLO.usageResponses,
-    APOLLO.sequenceKeyPermissionOnTheRecommendedPlan,
+    APOLLO.planLimits,
   ],
 };
 

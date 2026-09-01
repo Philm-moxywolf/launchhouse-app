@@ -275,24 +275,25 @@ export const APOLLO = {
    * somebody has made a master key on the plan we actually recommend.
    */
   /**
-   * NARROWED ON 1 SEPTEMBER 2026, NOT CLOSED.
+   * WHAT IS PAID FOR IS NOT ACCESS. Closed 1 September 2026.
    *
-   * The emailer endpoints are present and selectable on the create-key screen of a real
-   * Apollo account, checked by Phil. So they are not a paid add on that has to be bought
-   * separately, and they are not absent from the API the way a missing feature would be.
+   * The endpoint list above was read off a FREE account and carries the whole emailer
+   * set: sequences, add_contact_ids, approve, abort, send_now. So the question this
+   * entry used to ask, whether the recommended plan may create a key that
+   * add_contact_ids accepts, is answered by the free tier already having it.
    *
-   * WHAT IS STILL OPEN IS THE TIER, and it is the whole of what matters. That screen
-   * lists what THAT account's plan allows. The programme recommends the 65 USD plan to
-   * 65 B2B founders, and unless the account checked is on that plan, what was seen was
-   * one person's entitlement rather than the cohort's.
+   * THAT MOVES THE REASON FOR THE 65 USD PLAN, and the copy has to move with it. It is
+   * not bought for API access. It is bought for what the account may then do: credits,
+   * sending limits, mailboxes. A founder who reads "you need the plan to connect it" and
+   * then finds the free one connects fine has been told something untrue by us, and
+   * every other number we gave them is worth less afterwards.
    *
-   * The cost of being wrong has not changed: a founder buys the plan we named, books the
-   * weekend on it, and meets a 403 in session 3 with no way to tell a plan limit from a
-   * bad key.
+   * The limits themselves are unread, which is the entry below. Nothing may state a
+   * sending cap or a credit allowance until somebody has.
    */
-  sequenceKeyPermissionOnTheRecommendedPlan: pending<{ plan: string; keyKind: string }>(
+  planLimits: pending<{ creditsPerMonth: number; sendingCap: number }>(
     'S-06',
-    'whether the 65 USD plan lists the emailer endpoints on its create-key screen. Confirmed present on one real account; the plan that account is on is what is unconfirmed.',
+    'what the free tier actually allows in credits, sending and mailboxes, against the 65 USD plan. Access is confirmed identical; the limits are what differ and none of them are read.',
   ),
 } as const;
 
