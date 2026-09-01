@@ -142,7 +142,7 @@ import { sql } from 'drizzle-orm';
 import pino from 'pino';
 
 import { Budget } from './agent/budget.ts';
-import { createGeTools, GE_TOOL_NAMES } from './agent/mcp/ge-tools.ts';
+import { createGeTools, geToolNamesFor } from './agent/mcp/ge-tools.ts';
 import type { GeResult, GeRunner } from './agent/ports.ts';
 import { systemClock as agentClock } from './agent/ports.ts';
 import { TurnQueue } from './agent/queue.ts';
@@ -586,7 +586,7 @@ export async function buildServer(options: BuildOptions): Promise<BuiltServer> {
     config: runnerConfig,
     makeGeTools: (ctx: FounderContext) => ({
       servers: { ge: createGeTools(ctx, { ge: geRunnerFor(ctx), log: logger }) },
-      toolNames: GE_TOOL_NAMES,
+      toolNames: geToolNamesFor(ctx.track),
     }),
     sessionStore: createSessionStore(transcripts, logger),
     /**

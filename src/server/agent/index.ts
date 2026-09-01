@@ -16,7 +16,7 @@
  */
 
 import { Budget, type BudgetConfig } from './budget.js';
-import { createGeTools, GE_TOOL_NAMES } from './mcp/ge-tools.js';
+import { createGeTools, geToolNamesFor } from './mcp/ge-tools.js';
 import { createIntentClassifier, type IntentConfig } from './intent.js';
 import { createSessionStore } from './session-store.js';
 import { DEFAULT_POOL_CONFIG, SessionPool, type PoolConfig } from './session-pool.js';
@@ -87,7 +87,7 @@ export function createAgentModule(
     config: cfg.runner,
     makeGeTools: (ctx: FounderContext) => ({
       servers: { ge: createGeTools(ctx, { ge: deps.ge, log: deps.log }) },
-      toolNames: GE_TOOL_NAMES,
+      toolNames: geToolNamesFor(ctx.track),
     }),
     sessionStore,
     onCheckpoint: deps.onCheckpoint,

@@ -50,6 +50,7 @@ import {
   type TargetPlatform,
 } from './ge-argv.js';
 import { z } from 'zod';
+import { searchPeople } from '../../integrations/apollo-search.ts';
 
 /** The MCP server name. Tool names the model sees are mcp__ge__<tool>. */
 export const GE_SERVER_NAME = 'ge';
@@ -59,6 +60,22 @@ export const GE_TOOL_NAMES = [
   `mcp__${GE_SERVER_NAME}__remember`,
   `mcp__${GE_SERVER_NAME}__person_add`,
 ] as const;
+
+/** Apollo belongs to the outreach track, so its tool name does too. */
+const APOLLO_TOOL_NAME = `mcp__${GE_SERVER_NAME}__apollo_search`;
+
+/**
+ * The allowed tool names for one founder, forked the same way the tools are.
+ *
+ * An allowlist naming a tool that is not registered would be harmless in itself: it
+ * permits something that does not exist. It is forked anyway, because this file already
+ * holds that the other track's tool does not exist for this founder, and a list that
+ * says apollo to an audience founder is a list somebody later reads as permission to
+ * register it for them.
+ */
+export function geToolNamesFor(track: FounderContext['track']): readonly string[] {
+  return track === 'b2b' ? [...GE_TOOL_NAMES, APOLLO_TOOL_NAME] : [...GE_TOOL_NAMES];
+}
 
 export interface GeToolDeps {
   readonly ge: GeRunner;
@@ -197,15 +214,100 @@ export function createGeTools(ctx: FounderContext, deps: GeToolDeps) {
             ),
         );
 
+  /**
+   * Looking for people in Apollo. B2B only, and a read.
+   *
+   * WHY THIS ONE MAY BE MODEL CALLABLE WHEN THE REST OF APOLLO MAY NOT.
+   * Search costs no credits, contacts nobody, and hands back a catalogue rather than
+   * contact details: a first name, a hidden surname, a title and a company, with no
+   * email. `contracts/apollo.ts` has that from a real response. So the worst a wrong
+   * search does is waste a minute.
+   *
+   * Enrichment spends the founder's money per person and a sequence writes to real
+   * people. Neither is here, and this file staying a registry with no send verb in it
+   * is the reason. Adding search does not change that property.
+   *
+   * IT DOES NOT SHELL OUT TO ge. Every other tool here does, because ge owns the
+   * founder's files. ge is POSIX sh with no network, so this one calls the integration
+   * directly, and the founder's key is opened inside the server for one call and never
+   * reaches the model, the transcript or a log line.
+   */
+  const apolloSearch = tool(
+    'apollo_search',
+    "Look for people in Apollo who match a description. Free, and it contacts nobody. It gives back first names, job titles and companies, with surnames hidden and no email addresses: Apollo only releases those when a person is enriched, which costs the founder money and is not something you can do. Use it to show the founder who is out there before they choose 25.",
+    {
+      titles: z.array(z.string().min(1).max(120)).max(10).optional().describe('Job titles to match'),
+      locations: z.array(z.string().min(1).max(120)).max(10).optional().describe('Places, for example "London, UK"'),
+      employee_ranges: z
+        .array(z.string().min(1).max(20))
+        .max(10)
+        .optional()
+        .describe('Company sizes, for example "11,50"'),
+      per_page: z.number().int().min(1).max(100).optional().describe('How many to bring back. 10 is usually plenty'),
+    },
+    async (args) => {
+      const outcome = await searchPeople(ctx.founderId, {
+        titles: args.titles,
+        locations: args.locations,
+        employeeRanges: args.employee_ranges,
+        perPage: args.per_page,
+      });
+      deps.log.info({ founderId: ctx.founderId, kind: outcome.kind }, 'apollo search called from a model tool');
+
+      if (outcome.kind === 'no_key') {
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: 'This founder has not connected Apollo yet. Ask them to open Setup and paste their Apollo key, then try again. Do not invent names in the meantime.',
+            },
+          ],
+          isError: true,
+        };
+      }
+      if (outcome.kind !== 'ok') {
+        // Every one of these is the founder's to fix or Apollo's to recover from, and
+        // none of them is a reason to make up people. The model is told that outright,
+        // because rule 5 is easiest to break when a tool has just failed.
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: `Apollo could not answer that (${outcome.kind}). Tell the founder plainly and do not invent names or companies.`,
+            },
+          ],
+          isError: true,
+        };
+      }
+
+      const lines = outcome.people.map(
+        (p) =>
+          `${p.firstName} ${p.lastNameObfuscated}, ${p.title || 'title not given'}, ${p.company || 'company not given'}` +
+          `${p.hasEmail ? '' : ', no email on file'}`,
+      );
+      return {
+        content: [
+          {
+            type: 'text' as const,
+            text:
+              `${String(outcome.total)} people match. Showing ${String(outcome.people.length)}.\n` +
+              `${lines.join('\n')}\n` +
+              'Surnames are hidden and there are no email addresses, which is normal: Apollo releases those only on enrichment, which spends the founder\'s credits. Show these to the founder and let them choose.',
+          },
+        ],
+      };
+    },
+  );
+
   return createSdkMcpServer({
     name: GE_SERVER_NAME,
     version: '1.0.0',
     instructions:
-      "These two tools write into the founder's own growth-engine folder. Nothing here contacts anybody.",
-    // Both tools are always in the prompt. There are two of them, so there is
-    // nothing to gain from deferring them behind a search, and a tool the model
-    // cannot see is a tool it works around by writing the file by hand.
+      "These tools write into the founder's own growth-engine folder, or look things up for them. Nothing here contacts anybody.",
+    // Every tool is always in the prompt. There are few enough that there is nothing to
+    // gain from deferring them behind a search, and a tool the model cannot see is a
+    // tool it works around by writing the file by hand.
     alwaysLoad: true,
-    tools: [remember, personAdd],
+    tools: ctx.track === 'b2b' ? [remember, personAdd, apolloSearch] : [remember, personAdd],
   });
 }
