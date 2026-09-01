@@ -191,6 +191,46 @@ export const APOLLO_ENDPOINTS_ON_KEY_SCREEN = {
   apiUsage: 'api/v1/usage_stats/api_usage_stats',
 } as const;
 
+/**
+ * Enrichment. DOCUMENTED, and the only call here that spends a founder's money.
+ *
+ * TWO PARAMETERS ARE DELIBERATELY NOT USED AND MUST NOT BECOME TOOL ARGUMENTS.
+ * `reveal_personal_emails` and `reveal_phone_number` both exist. This programme sends 25
+ * business emails to people at work. A personal address or a mobile number is a
+ * different act with a different consent question behind it, they cost more, and the
+ * phone one needs a webhook this app does not run. Hard off, and not offered.
+ */
+export const APOLLO_ENRICH_PARAMS_DOCUMENTED = {
+  byId: 'id',
+  revealPersonalEmails: false,
+  revealPhoneNumber: false,
+} as const;
+
+/**
+ * Creating a sequence, and the reason this product can offer it at all.
+ *
+ * APOLLO CREATES A SEQUENCE INACTIVE UNLESS YOU ASK OTHERWISE. `active` defaults to
+ * false, and activating is a separate call. So this app can build a founder's sequence
+ * and fill it, and the thing that actually sends stays a button the founder presses in
+ * their own Apollo account.
+ *
+ * THAT IS THE LINE, AND IT IS NOT A LIMITATION WE HIT. `active: true` is never sent, and
+ * `emailer_campaigns/approve` has no client and must not get one. The Apollo screen has
+ * said "nothing sends until you press send" since before any of this was built, and this
+ * is what makes that sentence true rather than a hope.
+ *
+ * `emailer_schedule_id` is required, and it comes from `emailer_schedules/index`, which
+ * is on the key screen. A founder cannot be asked to find an internal id by hand.
+ */
+export const APOLLO_SEQUENCE_DOCUMENTED = {
+  createPath: '/api/v1/sequences/create',
+  requiredOnCreate: ['name', 'emailer_schedule_id'],
+  /** Never sent. Absent means inactive, which is the whole safety property. */
+  activateKey: 'active',
+  responseKey: 'emailer_campaign',
+  responseIdKey: 'id',
+} as const;
+
 export const APOLLO = {
   /**
    * What comes back, field by field, from either call.
@@ -245,10 +285,29 @@ export const APOLLO = {
     'S-06',
     'how to ask for page two. per_page is verified; nothing in the response named a page or a cursor.',
   ),
-  enrichResponse: pending<{ personKey: string; emailKey: string }>(
-    'S-06',
-    'the field names in a real enrichment response, and what comes back when Apollo has no email for that person.',
-  ),
+  /**
+   * DOCUMENTED, read 1 September 2026. Not yet seen from a real call, because a real
+   * call spends a credit and that is the founder's money.
+   *
+   * The one thing still genuinely unknown is what comes back when Apollo has no email
+   * for that person: whether `email` is absent, null, or a placeholder. Whatever it is
+   * must be treated as "no email" rather than written into a file, so the caller checks
+   * for a plausible address rather than trusting the key to be missing.
+   */
+  enrichResponseDocumented: {
+    personKey: 'person',
+    person: {
+      id: 'id',
+      firstName: 'first_name',
+      lastName: 'last_name',
+      email: 'email',
+      /** For example "verified". Worth carrying: an unverified address is a bounce. */
+      emailStatus: 'email_status',
+      title: 'title',
+      organizationName: 'organization_name',
+      linkedinUrl: 'linkedin_url',
+    },
+  },
   /**
    * The path exists, the shape does not.
    *

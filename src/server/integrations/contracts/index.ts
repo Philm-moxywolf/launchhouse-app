@@ -93,7 +93,6 @@ export const FEATURE_CONTRACTS: Readonly<Record<string, readonly unknown[]>> = {
    * back, and whether a sequence can be written to at all.
    */
   apollo: [
-    APOLLO.enrichResponse,
     APOLLO.pagination,
     APOLLO.usageResponses,
     APOLLO.planLimits,

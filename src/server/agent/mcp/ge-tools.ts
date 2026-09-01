@@ -51,6 +51,7 @@ import {
 } from './ge-argv.js';
 import { z } from 'zod';
 import { searchPeople } from '../../integrations/apollo-search.ts';
+import { enrichPeople, ENRICH_CAP } from '../../integrations/apollo-enrich.ts';
 
 /** The MCP server name. Tool names the model sees are mcp__ge__<tool>. */
 export const GE_SERVER_NAME = 'ge';
@@ -62,7 +63,10 @@ export const GE_TOOL_NAMES = [
 ] as const;
 
 /** Apollo belongs to the outreach track, so its tool name does too. */
-const APOLLO_TOOL_NAME = `mcp__${GE_SERVER_NAME}__apollo_search`;
+const APOLLO_TOOL_NAMES = [
+  `mcp__${GE_SERVER_NAME}__apollo_search`,
+  `mcp__${GE_SERVER_NAME}__apollo_enrich`,
+] as const;
 
 /**
  * The allowed tool names for one founder, forked the same way the tools are.
@@ -74,7 +78,7 @@ const APOLLO_TOOL_NAME = `mcp__${GE_SERVER_NAME}__apollo_search`;
  * register it for them.
  */
 export function geToolNamesFor(track: FounderContext['track']): readonly string[] {
-  return track === 'b2b' ? [...GE_TOOL_NAMES, APOLLO_TOOL_NAME] : [...GE_TOOL_NAMES];
+  return track === 'b2b' ? [...GE_TOOL_NAMES, ...APOLLO_TOOL_NAMES] : [...GE_TOOL_NAMES];
 }
 
 export interface GeToolDeps {
@@ -299,6 +303,79 @@ export function createGeTools(ctx: FounderContext, deps: GeToolDeps) {
     },
   );
 
+  /**
+   * Getting the email addresses. THE ONE TOOL HERE THAT SPENDS THE FOUNDER'S MONEY.
+   *
+   * Apollo charges a credit per person and there is no way to ask what an address is
+   * without paying for it. So the description tells the model to agree the list with the
+   * founder first, and says the number out loud, because a tool that quietly costs money
+   * is a tool that will one day cost somebody a lot of it.
+   *
+   * THE CAP IS NOT IN THIS SCHEMA, IT IS IN THE INTEGRATION. A ceiling written into a
+   * tool argument is a ceiling a prompt can talk its way around. `ENRICH_CAP` is a
+   * constant in apollo-enrich.ts and the call returns `too_many` before a single request
+   * goes out.
+   *
+   * PERSONAL EMAILS AND PHONE NUMBERS ARE NOT ARGUMENTS HERE and never will be. Apollo
+   * offers both. This programme sends business email to people at work.
+   */
+  const apolloEnrich = tool(
+    'apollo_enrich',
+    `Get the email addresses for people you found with apollo_search. THIS SPENDS THE FOUNDER'S MONEY: Apollo charges one credit per person, every time, whether or not it finds an address. Agree the exact list with the founder before you call this, say how many people that is, and never call it to explore. At most ${String(ENRICH_CAP)} people in one go. It returns work email addresses only, and some people will have none, which is normal.`,
+    {
+      apollo_ids: z
+        .array(z.string().min(1).max(64))
+        .min(1)
+        .max(ENRICH_CAP)
+        .describe('The ids from apollo_search, for the people the founder chose'),
+    },
+    async (args) => {
+      const outcome = await enrichPeople(ctx.founderId, args.apollo_ids);
+      deps.log.info(
+        // The count is the audit line. Never a name, never an address.
+        { founderId: ctx.founderId, kind: outcome.kind, asked: args.apollo_ids.length },
+        'apollo enrich called from a model tool',
+      );
+
+      if (outcome.kind === 'no_key') {
+        return {
+          content: [{ type: 'text' as const, text: 'This founder has not connected Apollo yet. Ask them to open Setup and paste their Apollo key. Nothing was charged.' }],
+          isError: true,
+        };
+      }
+      if (outcome.kind === 'too_many') {
+        return {
+          content: [{ type: 'text' as const, text: `That is ${String(outcome.asked)} people and the limit is ${String(outcome.cap)}. Nothing was charged. Ask the founder to narrow the list.` }],
+          isError: true,
+        };
+      }
+      if (outcome.kind !== 'ok') {
+        return {
+          content: [{ type: 'text' as const, text: `Apollo refused that (${outcome.kind}). Tell the founder plainly, and do not invent email addresses. If it says forbidden, their key or their plan may not cover enrichment.` }],
+          isError: true,
+        };
+      }
+
+      const withEmail = outcome.people.filter((p) => p.email !== null);
+      const without = outcome.people.filter((p) => p.email === null);
+      const lines = withEmail.map((p) => `${p.name}, ${p.title}, ${p.company}: ${p.email ?? ''}${p.emailStatus === null ? '' : ` (${p.emailStatus})`}`);
+      const missing = without.map((p) => `${p.name}, ${p.title}, ${p.company}: no address`);
+      return {
+        content: [
+          {
+            type: 'text' as const,
+            text:
+              `Charged for ${String(outcome.spentOn)}. Addresses found for ${String(withEmail.length)}.\n` +
+              [...lines, ...missing].join('\n') +
+              (without.length === 0
+                ? ''
+                : `\n${String(without.length)} of them have no address on file. Tell the founder which, so they can replace them rather than finding out on the Saturday.`),
+          },
+        ],
+      };
+    },
+  );
+
   return createSdkMcpServer({
     name: GE_SERVER_NAME,
     version: '1.0.0',
@@ -308,6 +385,6 @@ export function createGeTools(ctx: FounderContext, deps: GeToolDeps) {
     // gain from deferring them behind a search, and a tool the model cannot see is a
     // tool it works around by writing the file by hand.
     alwaysLoad: true,
-    tools: ctx.track === 'b2b' ? [remember, personAdd, apolloSearch] : [remember, personAdd],
+    tools: ctx.track === 'b2b' ? [remember, personAdd, apolloSearch, apolloEnrich] : [remember, personAdd],
   });
 }

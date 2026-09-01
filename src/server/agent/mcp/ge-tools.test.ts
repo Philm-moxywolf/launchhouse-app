@@ -17,9 +17,14 @@ describe('which tool names each track is allowed', () => {
     assert.ok(names.some((n) => n.endsWith('__apollo_search')));
   });
 
-  test('an audience founder is not offered it, and the word is not in their list', () => {
+  test('an outreach founder may also enrich, which is the one that costs', () => {
+    assert.ok(geToolNamesFor('b2b').some((n) => n.endsWith('__apollo_enrich')));
+  });
+
+  test('an audience founder is offered neither, and the word is not in their list', () => {
     const names = geToolNamesFor('b2c');
     assert.ok(!names.some((n) => n.endsWith('__apollo_search')));
+    assert.ok(!names.some((n) => n.endsWith('__apollo_enrich')));
     assert.doesNotMatch(names.join(' '), /apollo/i, 'the other track\'s vendor is not named in their allowlist');
   });
 
