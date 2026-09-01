@@ -96,6 +96,41 @@ export const APOLLO_ENRICH_DOCUMENTED = {
   costsCredits: true,
 } as const;
 
+/**
+ * Creating a sequence. DOCUMENTED.
+ *
+ * Apollo calls the same object a sequence in one endpoint and an emailer campaign in
+ * the other, and both names are theirs. Written down rather than tidied, because a
+ * caller reading only one of them would look for the wrong word in a response.
+ */
+export const APOLLO_CREATE_SEQUENCE_DOCUMENTED = {
+  method: 'POST',
+  path: '/api/v1/sequences',
+} as const;
+
+/**
+ * Putting people into it. DOCUMENTED, and the one with a gate on it.
+ *
+ * It answers 403 unless the key is a master key or scoped to this endpoint, which is
+ * `sequenceKeyPermission` below and is the open question for the whole feature.
+ *
+ * `send_email_from_email_account_id` means a mailbox must already be connected inside
+ * Apollo before any of this runs. The skill already tells founders to do that, so it is
+ * not new work, but nothing here can paper over it if they have not.
+ *
+ * A CONTACT IS NOT A SEARCH RESULT. Apollo distinguishes a person in its database from a
+ * contact the team has explicitly added, and only contacts go into sequences. So the
+ * flow is three steps, not two: search, add as contacts, then sequence.
+ */
+export const APOLLO_ADD_TO_SEQUENCE_DOCUMENTED = {
+  method: 'POST',
+  path: '/api/v1/emailer_campaigns/{sequenceId}/add_contact_ids',
+  queryParams: ['emailer_campaign_id', 'send_email_from_email_account_id', 'contact_ids[]'],
+  costsCredits: false,
+  rateLimitPerHour: 600,
+  needsMasterOrScopedKey: true,
+} as const;
+
 export const APOLLO = {
   /**
    * What comes back, field by field, from either call.
@@ -162,9 +197,22 @@ export const APOLLO = {
     'S-06',
     'the real rate ceiling, and what a refusal looks like when the account runs out of credit rather than out of rate.',
   ),
-  sequences: pending<{ method: string; path: string; body: unknown }>(
+  /**
+   * WHICH PLAN MAY CREATE A KEY THAT CAN DO THE ABOVE. The one thing left that
+   * decides whether any of it works for a founder.
+   *
+   * `add_contact_ids` answers 403 unless the key is a master key or is scoped to
+   * that endpoint, and Apollo's published reference does not say which subscription
+   * tiers may create either. The programme now recommends the 65 USD plan and the
+   * engine is built on Apollo doing the sending, so a founder on that plan who
+   * cannot create the key finds out in session 3 with the weekend already booked.
+   *
+   * This is a pricing page and an account, not a call. It stays a hole until
+   * somebody has made a master key on the plan we actually recommend.
+   */
+  sequenceKeyPermission: pending<{ plan: string; keyKind: string }>(
     'S-06',
-    'whether contacts can be added to a sequence over the API at all, and on which plans. The manual spreadsheet route exists because this answer is not known.',
+    'which Apollo plan may create a key that add_contact_ids accepts. 403 otherwise, and the docs do not say.',
   ),
 } as const;
 

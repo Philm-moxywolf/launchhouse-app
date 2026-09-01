@@ -369,6 +369,10 @@ export const GHL_PATH_PROVENANCE: Readonly<Record<string, string>> = {
     'Apollo published reference, People API Search, read 1 September 2026. Documented as consuming no credits, 100 per page. NOT /mixed_people/search, which answers 403 on lower plans and is the mistake this line exists to stop.',
   '/api/v1/people/match':
     'Apollo published reference, People Enrichment, read 1 September 2026. Consumes credits, so any screen that calls it names the cost first.',
+  '/api/v1/sequences':
+    'Apollo published reference, Create a Sequence, read 1 September 2026.',
+  '/api/v1/emailer_campaigns/{sequenceId}/add_contact_ids':
+    'Apollo published reference, Add Contacts to a Sequence, read 1 September 2026. Answers 403 without a master or scoped key, and 600 calls per hour.',
 };
 
 /** The API version header value. Sent on every call in the source workflow. */

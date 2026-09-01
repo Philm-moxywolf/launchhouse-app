@@ -21,13 +21,13 @@ Decide this before writing a word, because it changes the merge variables and th
 
 Ask one question: **is their work email on Google (Gmail or Google Workspace), or on Microsoft 365, or something else?**
 
-**If Google.** They build the list and send from Apollo. The free plan does this and carries the connection we use, so nobody is blocked by cost. Apollo does not run its own mail servers: every message leaves through their own connected mailbox by a two-minute sign-in, so their domain carries the reputation either way. Sequences handle the follow-up touches, and stop-on-reply is on by default, which is the whole reason to use a sequencer at this volume.
+**If Google.** They build the list and send from Apollo, on the 65 USD/month plan. Apollo does not run its own mail servers: every message leaves through their own connected mailbox by a two-minute sign-in, so their domain carries the reputation either way. Sequences handle the follow-up touches, and stop-on-reply is on by default, which is the whole reason to use a sequencer at this volume.
 
 **If Microsoft 365 or anything else.** They send by hand from their own mailbox and schedule the follow-ups with their mail app's own scheduled send. This is a real route, not a consolation. At 25 messages it meets the promise completely, costs nothing, needs no new account, and replies land where they already read email.
 
 Record the answer in the output file. Nobody chooses twice.
 
-The plan we recommend is 65 USD/month. Say that once, as a recommendation, and then leave it. The free plan sends 25 messages and carries the connection we use, so a founder who does not want another monthly cost is not missing anything they need this weekend. They are already carrying Claude, a domain and GoHighLevel. If Apollo will not serve them at all, they take the manual route.
+The plan is 65 USD/month and it is what this track is built on. Say it once, plainly, with the reason: it is the sending and sequence tool, not a research tool they could skip. Do not soften it and do not repeat it. They are already carrying Claude, a domain and GoHighLevel at 97 USD, so a founder who says the total is too much is doing arithmetic rather than hesitating. That founder takes the manual route, which is a real route and meets the promise at 25 messages.
 
 **On the manual route, schedule two touches at a time, never all four.** If someone replies, there are only two things to cancel, and cancelling is the job people forget.
 
