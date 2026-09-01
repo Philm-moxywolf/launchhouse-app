@@ -31,7 +31,7 @@ It is the one change that costs a founder work, so it takes one honest exchange 
 
 **Ask what changed.** Not to talk them out of it. "I picked wrong in session 1" is answered differently from "I want to serve schools as well as parents". The second one usually wants `hybrid: true` and the same track, and that distinction is worth thirty seconds of asking.
 
-**If they confirm, do it.** Rewrite the Track line in the file that is already there. Then reopen only the parts that fork on it: the audience capture, which is an ICP on B2B and a persona on B2C, and the channel question. Everything else in the file is still true, so do not re-ask it and do not re-run the full intake.
+**If they confirm, do it.** Rewrite the Track line in the file that is already there. Then reopen only the parts that fork on it, which are the audience capture and the channel question. Both are asked differently on each side, and the intake below already knows which. Everything else in the file is still true, so do not re-ask it and do not re-run the full intake.
 
 **Then say what to expect.** Their old track's files stay where they are and stop appearing in their list, because the list only shows the track they are on. The new track's gates start empty. Name which files they now need and which session covers each.
 
