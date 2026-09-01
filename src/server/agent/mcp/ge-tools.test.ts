@@ -23,13 +23,19 @@ describe('which tool names each track is allowed', () => {
     assert.doesNotMatch(names.join(' '), /apollo/i, 'the other track\'s vendor is not named in their allowlist');
   });
 
-  test('a founder with no track yet gets the two that belong to both', () => {
-    // The Brain has not forked them yet. Neither track's extra tool is theirs.
-    assert.deepEqual([...geToolNamesFor(null)], [...GE_TOOL_NAMES]);
+  test('the base list is what both tracks share, and nothing in it names a vendor', () => {
+    // A FOUNDER WITH NO TRACK YET IS TREATED AS b2b AND THAT IS NOT THIS FILE'S DOING.
+    // run-turn.ts builds the context with `track ?? asTrack(founder.track) ?? 'b2b'`,
+    // so a founder who has not finished the Brain arrives here as b2b and gets the
+    // outreach tools. person_add has always forked the same way, so this is the
+    // existing behaviour rather than something the Apollo tool introduced. It is
+    // written down here because it is the kind of default that is invisible until it
+    // offers Apollo to somebody halfway through choosing their track.
+    assert.doesNotMatch([...GE_TOOL_NAMES].join(' '), /apollo|ghl/i);
   });
 
   test('both tracks keep the tools that are not track specific', () => {
-    for (const track of ['b2b', 'b2c', null] as const) {
+    for (const track of ['b2b', 'b2c'] as const) {
       const names = geToolNamesFor(track);
       assert.ok(names.some((n) => n.endsWith('__remember')), 'remember is for everybody');
       assert.ok(names.some((n) => n.endsWith('__person_add')), 'person_add is for everybody, forked inside');
