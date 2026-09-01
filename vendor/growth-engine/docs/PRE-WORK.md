@@ -186,7 +186,7 @@ This is the one thing the engine cannot generate and cannot do without: **it is 
 |---|---|---|
 | Claude paid plan | Now | Monthly |
 | Domain, if needed | Now | Roughly 15 USD/year |
-| Apollo, B2B only | Session 3 | Free. Works with Gmail and Google Workspace. On Microsoft 365 you will send by hand instead, which costs nothing and works fine at 25 messages |
+| Apollo, B2B only | Session 3 | Free plan works and includes the connection we use. 65 USD/month is the one we recommend. Works with Gmail and Google Workspace. On Microsoft 365 you will send by hand instead, which costs nothing and works fine at 25 messages |
 | GoHighLevel Starter | Setup clinic, 23 September | 97 USD/month plus usage |
 
 GoHighLevel is your CRM, your social publishing and your automation. Required for both tracks. Pay for it at the clinic rather than starting a trial, because a trial will expire during the weekend.
