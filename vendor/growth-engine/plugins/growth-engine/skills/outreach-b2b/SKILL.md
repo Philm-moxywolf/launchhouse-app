@@ -1,6 +1,6 @@
 ---
 name: outreach-b2b
-description: Build the B2B outreach engine. Turns the ICP into Apollo search criteria, writes a four to five touch sequence in the founder's voice, and generates personalised first lines for a pasted lead list. B2B track only. Trigger on "build my outreach", "write my sequence", "apollo filters", "cold email", "first lines", or Session 3 homework for B2B founders.
+description: Build the B2B outreach engine. Turns the ICP into Apollo search criteria, writes a four to five touch sequence in the founder's voice, and writes a personalised first line for every person on the list. B2B track only. Trigger on "build my outreach", "write my sequence", "apollo filters", "cold email", "first lines", or Session 3 homework for B2B founders.
 ---
 
 # Outreach Engine, B2B
@@ -68,7 +68,9 @@ Rules that are not negotiable:
 - Written in the founder's captured voice, not in generic sales English.
 - No fake familiarity, no invented compliments, no "I noticed you..." unless it is genuinely specific.
 
-**Merge variables.** Only if they are sending through Apollo. Apollo uses `{{contact.first_name}}` and `{{account.name}}`. The older `{{first_name}}` and `{{company}}` still work. The personalised opening line is a custom variable: the founder inserts it from the `{ }` menu in the Apollo editor and never types the name by hand, because a typed variable that does not match renders as empty or as literal braces in front of a prospect.
+**Merge variables.** Only if they are sending through Apollo. Apollo uses `{{contact.first_name}}` and `{{account.name}}`. The older `{{first_name}}` and `{{company}}` still work.
+
+The personalised opening line is not one of those. It is a custom field on the contact, holding a different sentence for every person, referenced in the template by its own name. So the sequence has one body and each recipient reads a line written for them. Whoever builds the sequence sets that field per contact before anybody is enrolled.
 
 **On the manual route there are no merge variables at all.** Write all 25 messages out in full, finished, with the name and detail already in the text. There is nothing to substitute and nothing to go wrong.
 
@@ -86,7 +88,9 @@ A specific observation about the reader's own world reads as true. A number nobo
 
 ## Step 3: first lines
 
-The founder pastes in leads. For each, generate one opening line specific to that company or person.
+**Where the list comes from.** With the Apollo connector on their Claude account, they can ask for the search to be run and the addresses filled in, and the list arrives without anybody typing it. Without it, they run the search in Apollo themselves and paste the leads in. Either way what happens next is the same.
+
+For each person, generate one opening line specific to that company or that person.
 
 Ask for whatever they have: company name, website copy, a recent post, a job ad, a news item. Generate from the actual detail. If there is nothing specific, say so and write a line based on the segment rather than fabricating a detail. **A generic honest line beats an invented specific one.**
 
@@ -112,6 +116,8 @@ Write `./growth-engine/outreach-sequence.md` containing: the chosen route from S
 Write `./growth-engine/outreach-firstlines.csv` with columns `email`, `first_name`, `company`, `first_line`.
 
 `first_line` holds the generated opening line. Name it `first_line` rather than anything generic, so the CSV column, the Apollo custom field and the variable in the sequence all read the same. A mismatch here fails silently and takes the most valuable output of this skill with it.
+
+**Sending it.** With the connector, the sequence is built in their Apollo account with the copy already in it, paused, and starting it is a button they press in Apollo having read the messages. Nothing sends before that and nothing here can make it.
 
 **On the manual route, the CSV is a checklist, not an import.** It is the founder's running sheet for Saturday: who, what the opening line is, and a column to tick when sent.
 

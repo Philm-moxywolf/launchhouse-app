@@ -1,11 +1,11 @@
 ---
 name: content-engine
-description: Build the content engine. Defines content pillars from the Founder Brain, then generates 30 posts (B2B) or 30 short-form scripts and hooks (B2C) in the founder's captured voice, and exports them ready to load into GoHighLevel Social Planner. Trigger on "build my content engine", "generate my posts", "write my content", "content pillars", "my 30 posts", or Session 2 homework.
+description: Build the content engine. Defines content pillars from the Founder Brain, then generates 30 posts (B2B) or 30 short-form scripts and hooks (B2C) in the founder's captured voice, and writes them so they can be posted to GoHighLevel. Trigger on "build my content engine", "generate my posts", "write my content", "content pillars", "my 30 posts", or Session 2 homework.
 ---
 
 # Content Engine
 
-Produces the 30 pieces of content each founder loads into GHL Social Planner before Atlanta.
+Produces the 30 pieces of content each founder publishes before Atlanta.
 
 ## Prerequisites
 
@@ -96,13 +96,19 @@ Write two files.
 
 `./growth-engine/content-30.md` for the founder to read and edit. Numbered, grouped by pillar, with the format labelled.
 
-`./growth-engine/content-30.csv` for GHL Social Planner bulk upload. Columns: `content`, `platform`, `scheduled_date`, `media_note`.
+`./growth-engine/content-30.csv`, the same 30 as a table. Columns: `content`, `platform`, `scheduled_date`, `media_note`.
 
-Leave `scheduled_date` blank. Scheduling happens in GHL at the clinic, not here.
+Leave `scheduled_date` blank. When a piece goes out is decided later, and not here.
 
 `media_note` says which of their own clips or photos to use, by name, when they have one that fits. When they do not, it says what to make, plainly, for example "record talking head, 30 seconds" or "screenshot of dashboard".
 
-Confirm the exact column headers GHL expects at the time of build. Bulk upload formats change and a wrong header means 130 failed imports.
+## How these get published
+
+**Posting is GoHighLevel's job and the founder does it from Claude, not from here.** Once they have connected the GoHighLevel connector to their Claude account, they can ask for these to be posted, a few at a time, and read them first. Say that when you hand the files over, in one line, and do not walk them through it: `docs/WORKING-IN-CLAUDE.md` is where that lives.
+
+The CSV is the second way in and it stays. A founder who has not connected anything yet, or who would rather do it by hand, has a table they can import or work down. It is also the copy they keep if they ever leave.
+
+Do not tell a founder the exact import columns GoHighLevel expects. That format changes, nobody here has checked it lately, and a confident wrong answer costs them an afternoon.
 
 ## Step 4b: what they can actually post
 

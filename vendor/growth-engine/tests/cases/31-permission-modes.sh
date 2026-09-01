@@ -337,6 +337,21 @@ pm_drive() {                            # <kind> <target> <mode> <label> <ge arg
     printf 'the command in it:\n  %s\n' "$pm_cmd" >> "$CASEWORK/diff.txt"
     printf 'running that exited %s and said:\n' "$RL_RC" >> "$CASEWORK/diff.txt"
     sed 's/^/  /' "$CASEWORK/recovery.out" >> "$CASEWORK/diff.txt"
+    # AND TO THE LOG, WHICH IS THE ONLY PLACE THAT SURVIVES A RUNNER.
+    #
+    # Everything above goes into diff.txt, and on GitHub that file is gone before
+    # the artifact step looks for it: the run of 1 September reported "No files
+    # were found with the provided path: tests/.work/" while the failure line was
+    # telling a reader to cat a file inside it. So the log said this case failed
+    # and would not say why, three times, on every push since 29 August.
+    #
+    # The three lines below are the whole diagnosis: what ge offered the founder,
+    # what happened when it ran, and what it said. Cheap, and only ever printed on
+    # a failure that is already stopping the build.
+    printf '      the way out ge printed: %s\n' "$pm_cmd" >&2
+    printf '      running it exited %s and it said:\n' "$RL_RC" >&2
+    sed 's/^/        /' "$CASEWORK/recovery.out" >&2
+    printf '      HOME was: %s\n' "${HOME:-<unset>}" >&2
     t_fail "$pm_label: the way out exits $RL_RC"
     pm_open
     return 0

@@ -4,7 +4,17 @@ Claude plugin for Launchhouse Atlanta, 25 to 27 September 2026.
 
 > **Pre-release.** This is version 0.1.0 and is still being built and tested. Founders on the programme receive the finished version, with setup instructions, on 4 September. Nothing here is final until then.
 
-## Install
+## Two halves, and this repository is the second one
+
+Founders use two things, in this order, and knowing which is which saves a lot of confusion.
+
+**The Launchhouse app, for Sessions 1 to 3.** Each founder takes their own copy of it. It asks them the questions, writes their Founder Brain, their 30 pieces, their openers and their workflow copy, and holds all of it for them. There is nothing to install and no folder to choose. That is where the work gets made, and [docs/PRE-WORK.md](docs/PRE-WORK.md) is how to set it up.
+
+**This plugin, for everything after that.** Once a founder has their work, they download it and open it in Claude on their own machine. This plugin is what teaches Claude their track, their voice and the rules the programme runs on, so it writes as them rather than as anybody. Alongside it they connect Apollo and GoHighLevel, which are what actually send and publish. [docs/WORKING-IN-CLAUDE.md](docs/WORKING-IN-CLAUDE.md) is that setup, and it is sent before Session 3.
+
+So the app makes the work and Claude runs it. Neither half replaces the other.
+
+## Install the plugin
 
 You install once. Cowork and Claude Code share the same plugin, so it is available in both.
 
@@ -19,7 +29,7 @@ You install once. Cowork and Claude Code share the same plugin, so it is availab
 
 If the commands do not appear straight after installing, run `/reload-plugins` or restart the app, then check again.
 
-Full setup guide: [docs/PRE-WORK.md](docs/PRE-WORK.md)
+**Then open the right folder.** The plugin reads a folder called `growth-engine`, the one that comes out of the app's download. Put it inside another folder and open that outer folder in Claude, not `growth-engine` itself. This is the step people get wrong, and [docs/WORKING-IN-CLAUDE.md](docs/WORKING-IN-CLAUDE.md) says why.
 
 ## Commands
 
