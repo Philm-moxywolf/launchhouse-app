@@ -217,6 +217,41 @@ export const APOLLO = {
 } as const;
 
 /**
+ * HOW A FOUNDER MAKES THE KEY, AND WHY THIS IS THE GOHIGHLEVEL SCOPE PROBLEM AGAIN.
+ *
+ * Apollo keys are made at Settings, Integrations, API Keys, Create new key. The founder
+ * then either ticks endpoints one at a time or turns on "Set as master key", which
+ * selects all of them. DOCUMENTED, read 1 September 2026.
+ *
+ * A 403 HAS TWO CAUSES AND THEY LOOK THE SAME FROM HERE. Either the endpoint is not in
+ * that founder's plan, or their key was not scoped to it. Apollo's own reference says
+ * "all pricing plans include at least basic access to the Apollo API, but more advanced
+ * functionality is only available on certain plans" and never says which.
+ *
+ * THAT IS THE SAME FAILURE `ghl.ts` IS WRITTEN AROUND: a founder ticks a list of
+ * permissions from a screen we wrote, three weeks before the event, and one wrong tick
+ * surfaces in session 3 with no way to widen a key that already exists. It cost that
+ * file an essay and its own id scheme.
+ *
+ * SO THE WALK SHOULD TELL FOUNDERS TO USE THE MASTER TOGGLE, not a list of endpoints to
+ * tick. It is one switch instead of a hunt through a list, it cannot come out short, and
+ * the failure it removes is the expensive one. The cost is that the key can do anything
+ * the account can, which is why the paste screen must say so plainly and why the key is
+ * sealed the same way every other credential here is.
+ *
+ * WHAT THIS DOES NOT SETTLE, and it is the one that matters: whether the plan the
+ * programme now recommends includes the sequence endpoints at all. A master key on a
+ * plan without them still answers 403. That is `sequenceKeyPermission` above, it is a
+ * pricing page and an account rather than a call, and no screen may promise sequences
+ * until somebody has looked.
+ */
+export const APOLLO_KEY_CREATION_DOCUMENTED = {
+  where: 'Settings, Integrations, API Keys, Create new key',
+  masterToggleLabel: 'Set as master key',
+  forbiddenReasons: ['the endpoint is not in this plan', 'the key was not scoped to it'],
+} as const;
+
+/**
  * The client is not built, so the feature is off, and the screen says so.
  *
  * Knowing the endpoints is not the same as having called them. This stays true until a
