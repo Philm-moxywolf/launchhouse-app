@@ -109,7 +109,7 @@ Start collecting from Session 1. Have it done before you travel.
 
 That is where posts are published from, so a picture anywhere else has to be moved before it can be used. Put it in once and it is ready. The app can see what is in there, so it will write posts around the clips you actually have rather than inventing a shot list you never asked for.
 
-You set GoHighLevel up at the clinic on 23 September. Until then, keep what you shoot somewhere you can find it and move it across in one go.
+You set GoHighLevel up in Session 2, on 14 or 15 September. Until then, keep what you shoot somewhere you can find it and move it across in one go.
 
 Upload as you go after that. Twenty minutes a week beats an evening in September.
 
