@@ -30,8 +30,10 @@
  * Reads the setup state. The spreadsheet is a plain download link.
  */
 
+import { useState } from "react";
 import type { ReactElement } from "react";
-import { downloadUrl } from "../lib/api.ts";
+import { connectApollo, downloadUrl, PROBLEM_TEXT } from "../lib/api.ts";
+import type { ApolloFailureKind } from "../lib/api.ts";
 import { hrefFor } from "../lib/nav.ts";
 
 export function Apollo(): ReactElement {
@@ -40,15 +42,7 @@ export function Apollo(): ReactElement {
       <h1>Two ways to do this</h1>
       <p className="lede">Both end in the same place. Nothing sends until you press send.</p>
 
-      <section className="choice">
-        <h2>Connect Apollo</h2>
-        <p>
-          We put your 25 contacts and your opening lines straight into a sequence, paused, for you to check and start.
-        </p>
-        <p className="quiet">
-          This one is not switched on yet. We are still testing it, and we will tell you either way before session 3.
-        </p>
-      </section>
+      <ConnectApollo />
 
       <section className="choice">
         <h2>Do it by hand</h2>
@@ -63,5 +57,94 @@ export function Apollo(): ReactElement {
         <a href={hrefFor({ kind: "setup" })}>Back to setup</a>
       </p>
     </div>
+  );
+}
+
+/**
+ * What each refusal means, in the founder's terms.
+ *
+ * `forbidden` IS THE ONE THAT EARNS ITS PLACE. Apollo answers 403 both when the plan does
+ * not carry the endpoint and when the key was not scoped to it. A founder fixes those in
+ * two different places, so the sentence names both and puts the cheaper one first. Telling
+ * them the key is wrong would send them back to make another key that fails identically.
+ */
+const APOLLO_REFUSAL: Readonly<Record<ApolloFailureKind, string>> = {
+  auth_rejected:
+    "Apollo did not recognise that key. Copy it again from Settings, Integrations, API Keys, and check you copied the whole thing.",
+  forbidden:
+    "The key reached Apollo and was not allowed to do this. Two things cause that. Either the key was made without every endpoint ticked, which is fixed by making a new one with Set as master key turned on, or your plan does not carry it yet. Try the key first.",
+  rate_limited: "Apollo is asking us to slow down. Wait a minute and press it again.",
+  vendor_unavailable: "Apollo did not answer. That is their end, not yours. Try again in a few minutes.",
+};
+
+/**
+ * Paste the key.
+ *
+ * NOTHING IS STORED UNTIL APOLLO HAS ANSWERED, and the check behind this button is a
+ * search, which is the one Apollo call that costs no credits. So pressing it never spends
+ * a founder's money, and pressing it twice costs nothing either.
+ */
+function ConnectApollo(): ReactElement {
+  const [key, setKey] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+  const [connected, setConnected] = useState(false);
+
+  async function submit(event: React.FormEvent): Promise<void> {
+    event.preventDefault();
+    setBusy(true);
+    setProblem(null);
+    const result = await connectApollo(key.trim());
+    setBusy(false);
+    if (!result.ok) {
+      setProblem(PROBLEM_TEXT[result.problem.kind]);
+      return;
+    }
+    if (!result.value.ok) {
+      setProblem(APOLLO_REFUSAL[result.value.kind]);
+      return;
+    }
+    setKey("");
+    setConnected(true);
+  }
+
+  return (
+    <section className="choice">
+      <h2>Connect Apollo</h2>
+      <p>
+        We put your 25 contacts and your opening lines straight into a sequence, paused, for you to check and start.
+      </p>
+
+      {connected ? (
+        <p className="done">
+          Connected. Your key is stored for you and never shown again. You can paste a new one here whenever you like.
+        </p>
+      ) : (
+        <form onSubmit={submit}>
+          <label htmlFor="apollo-key">Your Apollo API key</label>
+          <p className="quiet">
+            In Apollo, go to Settings, Integrations, API Keys, and create one. Turn on Set as master key so it can do
+            everything this needs. A key made with only some endpoints ticked will stop halfway through session 3.
+          </p>
+          <input
+            id="apollo-key"
+            type="password"
+            value={key}
+            onChange={(e) => setKey(e.target.value)}
+            autoComplete="off"
+            spellCheck={false}
+          />
+          <button type="submit" disabled={busy || key.trim() === ""}>
+            {busy ? "Checking it" : "Check and save"}
+          </button>
+          <p className="quiet">
+            Checking it costs you nothing. We ask Apollo for one search, which is free, and we only keep the key if it
+            works.
+          </p>
+        </form>
+      )}
+
+      {problem === null ? null : <p className="problem">{problem}</p>}
+    </section>
   );
 }
