@@ -18,7 +18,7 @@ Use the email address you will bring to Atlanta.
 
 ## 2. Take your own copy of the app
 
-We will send you one address on 4 September. Open it. You are looking at our copy of the app.
+Open **https://github.com/Philm-moxywolf/launchhouse-app**. You are looking at our copy of the app.
 
 Press **Fork**, near the top right. Confirm it.
 
