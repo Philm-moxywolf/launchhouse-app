@@ -8,23 +8,41 @@ Two of these items are time-critical and cannot wait for the first session. They
 
 You are setting up one thing: your own copy of the Launchhouse app. It runs in your browser, it holds your work for you, and nobody else can see inside it. Setting it up takes about twenty minutes and needs no technical knowledge. It does need a card.
 
-## 1. Get a Replit account
+## 1. Get a GitHub account
+
+Go to github.com and sign up. It is free and it takes two minutes.
+
+This is where your copy of the app lives. Replit reads it from there, and later on Claude can look inside it for you if you want to understand or change anything.
+
+Use the email address you will bring to Atlanta.
+
+## 2. Take your own copy of the app
+
+We will send you one address on 4 September. Open it. You are looking at our copy of the app.
+
+Press **Fork**, near the top right. Confirm it.
+
+That makes your own copy, in your own GitHub account, and it is yours from that moment. Nothing you do to it affects ours, and nothing we do to ours changes yours until you ask for it.
+
+Ten seconds.
+
+## 3. Get a Replit account
 
 The app runs on Replit. Go to replit.com, sign up, and take the **Core** plan at 20 USD/month.
 
 You need the paid plan because the free one cannot keep an app running on its own, and yours has to stay up between sessions.
 
-Sign up on the email address you will bring to Atlanta and stay on it. Your work lives in this account.
+Sign up on the same email address, and stay on it. Your work lives in this account.
 
-## 2. Take your own copy of the app
+## 4. Bring your copy into Replit
 
-We will send you one address on 4 September. Go to **https://replit.com/import**, paste that address in, and let it bring the app across.
+Go to **https://replit.com/import** and give it the address of **your fork**, not ours.
 
-That gives you your own copy. Not a shared login, not an account on our system: your app, in your account, with a database only you can reach. Nothing you write in it is visible to us or to any other founder.
+Your fork's address is github.com, then your username, then the app name. It is in your browser's address bar when you are looking at it.
 
-It takes about a minute, and you do not need a GitHub account of your own to do it.
+That gives you your own running app. Not a shared login, not an account on our system: your app, your database, and nobody else can see inside it.
 
-## 3. Give it a database
+## 5. Give it a database
 
 Open the **Database** pane down the left of your new copy and create a Postgres database.
 
@@ -32,7 +50,7 @@ That is the whole step. One button. The app finds it on its own and sets itself 
 
 This is where your work is kept. Without it the app will tell you it cannot sign you in yet.
 
-## 4. Set your passphrase
+## 6. Set your passphrase
 
 Open the **Secrets** pane and add one secret:
 
@@ -43,13 +61,13 @@ This is how you get into your app, and it is the only way in. Put it in your pas
 
 We cannot reset it for you. It is in your account, not ours.
 
-## 5. Start it and sign in
+## 7. Start it and sign in
 
 Press **Run**, wait for it to finish starting, and open the app. Sign in with the passphrase you just set.
 
 If anything is missing, the first screen tells you what and what to do about it. It is written to be read by somebody who has never done this before.
 
-## 6. TIME-CRITICAL: add your Anthropic API key
+## 8. TIME-CRITICAL: add your Anthropic API key
 
 Inside the app, go to **Setup** and paste an Anthropic API key.
 
@@ -59,7 +77,7 @@ Get one at console.anthropic.com. This is not the same thing as a Claude subscri
 
 Do this before Session 1. Without it the app can hold your work but cannot write anything, and that is the whole of Session 1.
 
-## 7. Check you are ready
+## 9. Check you are ready
 
 In the app, open **Home**. It shows you every engine and what state it is in.
 
@@ -91,13 +109,13 @@ Two things to know before you do.
 
 If you are unsure which you are, ask in the Slack channel before Session 1 rather than guessing and switching later.
 
-## 8. TIME-CRITICAL if you sell to consumers
+## 10. TIME-CRITICAL if you sell to consumers
 
 Convert your Instagram to a Business or Creator account and link it to a Facebook Page.
 
 Two minutes. Nothing publishes or captures inbound without it.
 
-## 9. Collect your pictures and clips. Start now, finish before Atlanta
+## 11. Collect your pictures and clips. Start now, finish before Atlanta
 
 This is the one people leave and then cannot fix on the day.
 
@@ -171,7 +189,7 @@ Two of those need saying plainly rather than being left in a table.
 
 We will improve the app during the programme, and updates are not automatic.
 
-Because your copy came from GitHub, taking an update is pulling the newer version into it. When there is one worth taking, we will post the exact steps in Slack.
+Because your copy is a fork on GitHub, taking an update means pulling our newer version into your fork, then into Replit. When there is one worth taking, we will post the exact steps in Slack.
 
 **It never touches your work.** Your Brain, your content and everything else live in your database, not in the code. Updating the app is like updating any other app on your phone: the thing changes, your stuff does not.
 

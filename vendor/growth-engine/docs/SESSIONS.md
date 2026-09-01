@@ -12,7 +12,7 @@ Everything is built before you travel. The weekend itself is for writing, sendin
 | Clinic | Wed 23 September | Your workflow loaded, and your Brain proved | Nothing. Pack |
 | Atlanta | Fri 25 to Sun 27 September | Using all of it | |
 
-Before Session 1 you only need the app running. That is [docs/PRE-WORK.md](PRE-WORK.md) and it takes about twenty minutes.
+Before Session 1 you only need the app running: a GitHub account, your own copy of the app, a Replit account, and a key. That is [docs/PRE-WORK.md](PRE-WORK.md), and it takes about twenty minutes.
 
 ## Session 1: your Founder Brain
 
