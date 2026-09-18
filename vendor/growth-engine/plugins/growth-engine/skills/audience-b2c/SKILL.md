@@ -96,7 +96,7 @@ Every flow here starts with something the other person did. If you cannot name t
 
 **Comment-to-DM.** The founder posts, the caption invites a comment keyword, Instagram fires an automatic DM because the user initiated. Write the trigger keyword, the auto-DM message, and the follow-up.
 
-**DM qualify and book.** A short conversation flow that qualifies the inbound and routes to a booking link or product page. Three or four steps, no interrogation.
+**DM qualify and book.** A short conversation flow that qualifies the inbound and routes to a booking link or product page. Two questions, no interrogation. Instagram's interactive message holds two buttons, so write each question with exactly two answers: one that carries on, and one that means this is not for them. Make the second one comfortable to tap, such as Just looking. Then write one short, kind message for the person who taps it: thank them, say where they can find you anyway, no link and no question. Someone who taps the carry on answer twice gets the route message and the link.
 
 **Link in bio.** A GHL form or calendar destination.
 

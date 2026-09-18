@@ -122,7 +122,7 @@ export const SKILL_BODIES: Readonly<Record<string, string>> = {
     "",
     "**Comment-to-DM.** The founder posts, the caption invites a comment keyword, Instagram fires an automatic DM because the user initiated. Write the trigger keyword, the auto-DM message, and the follow-up.",
     "",
-    "**DM qualify and book.** A short conversation flow that qualifies the inbound and routes to a booking link or product page. Three or four steps, no interrogation.",
+    "**DM qualify and book.** A short conversation flow that qualifies the inbound and routes to a booking link or product page. Two questions, no interrogation. Instagram's interactive message holds two buttons, so write each question with exactly two answers: one that carries on, and one that means this is not for them. Make the second one comfortable to tap, such as Just looking. Then write one short, kind message for the person who taps it: thank them, say where they can find you anyway, no link and no question. Someone who taps the carry on answer twice gets the route message and the link.",
     "",
     "**Link in bio.** A GHL form or calendar destination.",
     "",
@@ -1294,7 +1294,7 @@ export const SKILL_BODIES: Readonly<Record<string, string>> = {
  * and if they do not, the prompt cache is not being shared and the bill says so.
  */
 export const SKILL_BODY_SHA256: Readonly<Record<string, string>> = {
-  "audience-b2c": "eb9aa9b221e342ac945e39478680479a9e5e786538b8a2e6a20b8b0c7cfc3770",
+  "audience-b2c": "b04a8aea8e858c50de27e5d0689db4f17370fea6354b77e2d2e943a24d4aeae4",
   "content-engine": "0d9e413e925e3064646c86e9841d1739e47c6ca56e1dd0a572495d8aaf18454b",
   "content-engine#unforked": "297bfc2d3a9e09cefe8728a62b6c3e3d3b62e5f6c03fa7c246b50b1f2f89569b",
   "founder-brain": "366ab96ec47252c0eb3761b1bd3849f828d089e05646be046d534b8591688987",
